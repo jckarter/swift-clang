@@ -3856,7 +3856,10 @@ namespace {
 class MinGWX86_32TargetInfo : public WindowsX86_32TargetInfo {
 public:
   MinGWX86_32TargetInfo(const llvm::Triple &Triple)
-      : WindowsX86_32TargetInfo(Triple) {}
+      : WindowsX86_32TargetInfo(Triple) {
+    LongDoubleWidth = LongDoubleAlign = 128;
+    LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
+  }
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override {
     WindowsX86_32TargetInfo::getTargetDefines(Opts, Builder);
@@ -4086,7 +4089,10 @@ public:
 class MinGWX86_64TargetInfo : public WindowsX86_64TargetInfo {
 public:
   MinGWX86_64TargetInfo(const llvm::Triple &Triple)
-      : WindowsX86_64TargetInfo(Triple) {}
+      : WindowsX86_64TargetInfo(Triple) {
+    LongDoubleWidth = LongDoubleAlign = 128;
+    LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
+  }
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override {
     WindowsX86_64TargetInfo::getTargetDefines(Opts, Builder);
@@ -5060,6 +5066,19 @@ public:
   }
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::CharPtrBuiltinVaList;
+  }
+  CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
+    switch (CC) {
+    case CC_X86StdCall:
+    case CC_X86ThisCall:
+    case CC_X86FastCall:
+    case CC_X86VectorCall:
+      return CCCR_Ignore;
+    case CC_C:
+      return CCCR_OK;
+    default:
+      return CCCR_Warning;
+    }
   }
 };
 

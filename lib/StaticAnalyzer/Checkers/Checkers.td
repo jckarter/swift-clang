@@ -456,6 +456,14 @@ def ObjCGenericsChecker : Checker<"ObjCGenerics">,
   HelpText<"Checks for type errors.">,
   DescFile<"ObjCGenericsChecker.cpp">;
 
+def NonLocalizedStringChecker : Checker<"NonLocalizedStringChecker">,
+  HelpText<"Warns about uses of non-localized NSStrings passed to UI methods expecting localized NSStrings">,
+  DescFile<"LocalizationChecker.cpp">;
+
+def EmptyLocalizationContextChecker : Checker<"EmptyLocalizationContextChecker">,
+  HelpText<"Check that NSLocalizedString macros include a comment for context">,
+  DescFile<"LocalizationChecker.cpp">;
+
 } // end "alpha.osx.cocoa"
 
 let ParentPackage = CoreFoundation in {
