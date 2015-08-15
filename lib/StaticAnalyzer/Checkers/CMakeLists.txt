@@ -85,5 +85,6 @@ add_clang_library(clangStaticAnalyzerCheckers
   clangAST
   clangAnalysis
   clangBasic
+  clangLex
   clangStaticAnalyzerCore
   )
