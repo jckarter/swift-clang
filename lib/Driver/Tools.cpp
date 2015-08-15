@@ -3266,14 +3266,14 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       {
         StringRef MArch, MCPU;
         getARMArchCPUFromArgs(Args, MArch, MCPU);
-        std::string CPUName = arm::getARMTargetCPU(MCPU, MArch, TT);
+        std::string CPUName = arm::getARMTargetCPU(MCPU, MArch, Triple);
         if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ)) {
           ABIName = A->getValue();
         } else {
-          if (TT.getEnvironment() == llvm::Triple::EABI ||
+          if (Triple.getEnvironment() == llvm::Triple::EABI ||
               StringRef(CPUName).startswith("cortex-m")) {
             ABIName = "aapcs";
-          } else if (TT.getArchName().endswith("v7k")) {
+          } else if (Triple.getArchName().endswith("v7k")) {
             ABIName = "apcs-vfp";
           } else {
             ABIName = "apcs-gnu";
@@ -3283,7 +3283,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         CmdArgs.push_back(ABIName);
 
         // Determine floating point ABI from the options & target defaults.
-        StringRef FloatABI = tools::arm::getARMFloatABI(D, Args, TT);
+        StringRef FloatABI = tools::arm::getARMFloatABI(D, Args, Triple);
         if (FloatABI == "soft") {
           CmdArgs.push_back("-msoft-float");
           CmdArgs.push_back("-mfloat-abi");
