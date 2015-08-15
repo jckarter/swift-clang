@@ -331,7 +331,7 @@ void CompilerInstance::createPreprocessor(TranslationUnitKind TUKind) {
 
   PP->setPreprocessedOutput(getPreprocessorOutputOpts().ShowCPP);
 
-  if (PP->getLangOpts().Modules)
+  if (PP->getLangOpts().Modules && PP->getLangOpts().ImplicitModules)
     PP->getHeaderSearchInfo().setModuleCachePath(getSpecificModuleCachePath());
 
   // Handle generating dependencies, if requested.
@@ -1159,6 +1159,7 @@ static void pruneModuleCache(const HeaderSearchOptions &HSOpts) {
   struct stat StatBuf;
   llvm::SmallString<128> TimestampFile;
   TimestampFile = HSOpts.ModuleCachePath;
+  assert(!TimestampFile.empty());
   llvm::sys::path::append(TimestampFile, "modules.timestamp");
 
   // Try to stat() the timestamp file.
@@ -1237,8 +1238,8 @@ void CompilerInstance::createModuleManager() {
 
     // If we're implicitly building modules but not currently recursively
     // building a module, check whether we need to prune the module cache.
-    if (getLangOpts().ImplicitModules &&
-        getSourceManager().getModuleBuildStack().empty() &&
+    if (getSourceManager().getModuleBuildStack().empty() &&
+        !getPreprocessor().getHeaderSearchInfo().getModuleCachePath().empty() &&
         getHeaderSearchOpts().ModuleCachePruneInterval > 0 &&
         getHeaderSearchOpts().ModuleCachePruneAfter > 0) {
       pruneModuleCache(getHeaderSearchOpts());
@@ -1605,6 +1606,8 @@ void CompilerInstance::makeModuleVisible(Module *Mod,
 
 GlobalModuleIndex *CompilerInstance::loadGlobalModuleIndex(
     SourceLocation TriggerLoc) {
+  if (getPreprocessor().getHeaderSearchInfo().getModuleCachePath().empty())
+    return nullptr;
   if (!ModuleManager)
     createModuleManager();
   // Can't do anything if we don't have the module manager.
