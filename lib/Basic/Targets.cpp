@@ -4335,17 +4335,14 @@ class ARMTargetInfo : public TargetInfo {
     ArchISA    = llvm::ARMTargetParser::parseArchISA(ArchName);
     DefaultCPU = getDefaultCPU(ArchName);
 
-    // SubArch is specified by the target triple
-    if (!DefaultCPU.empty()) 
-      setArchInfo(DefaultCPU);
-    else 
-      // FIXME ArchInfo should be based on ArchName from triple, not on 
-      // a hard-coded CPU name. Doing so currently causes regressions:
-      // test/Preprocessor/init.c: __ARM_ARCH_6J__ not defined
-      setArchInfo(CPU);
+    unsigned ArchKind = llvm::ARMTargetParser::parseArch(ArchName);
+    if (ArchKind == llvm::ARM::AK_INVALID)
+      // set arch of the CPU, either provided explicitly or hardcoded default
+      ArchKind = llvm::ARMTargetParser::parseCPUArch(CPU);
+    setArchInfo(ArchKind);
   }
 
-  void setArchInfo(StringRef CPU) {
+  void setArchInfo(unsigned Kind) {
     StringRef SubArch;
 
     // cache TargetParser info
@@ -4357,7 +4354,7 @@ class ARMTargetInfo : public TargetInfo {
     // combination.
     ArchKind = getTriple().getSubArch() == llvm::Triple::ARMSubArch_v7k
                    ? llvm::ARM::AK_ARMV7K
-                   : llvm::ARMTargetParser::parseCPUArch(CPU);
+                   : Kind;
     SubArch     = llvm::ARMTargetParser::getSubArch(ArchKind);
     ArchProfile = llvm::ARMTargetParser::parseArchProfile(SubArch);
     ArchVersion = llvm::ARMTargetParser::parseArchVersion(SubArch);
@@ -4660,10 +4657,11 @@ public:
   }
 
   bool setCPU(const std::string &Name) override {
-    unsigned ArchKind = llvm::ARMTargetParser::parseCPUArch(Name);
+    if (Name != "generic")
+      setArchInfo(llvm::ARMTargetParser::parseCPUArch(Name));
+
     if (ArchKind == llvm::ARM::AK_INVALID)
       return false;
-    setArchInfo(Name);
     setAtomic();
     CPU = Name;
     return true;
