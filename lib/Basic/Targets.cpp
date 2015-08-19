@@ -931,7 +931,7 @@ public:
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override;
 
-  void getDefaultFeatures(llvm::StringMap<bool> &Features) const override;
+  void initDefaultFeatures(llvm::StringMap<bool> &Features) const override;
 
   bool handleTargetFeatures(std::vector<std::string> &Features,
                             DiagnosticsEngine &Diags) override;
@@ -1330,7 +1330,7 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
   //   __NO_FPRS__
 }
 
-void PPCTargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
+void PPCTargetInfo::initDefaultFeatures(llvm::StringMap<bool> &Features) const {
   Features["altivec"] = llvm::StringSwitch<bool>(CPU)
     .Case("7400", true)
     .Case("g4", true)
@@ -1400,7 +1400,7 @@ bool PPCTargetInfo::hasFeature(StringRef Feature) const {
     -mcpu=pwr8 -mno-vsx (should disable vsx and everything that depends on it)
     -mcpu=pwr8 -mdirect-move -mno-vsx (should actually be diagnosed)
 
-NOTE: Do not call this from PPCTargetInfo::getDefaultFeatures
+NOTE: Do not call this from PPCTargetInfo::initDefaultFeatures
 */
 void PPCTargetInfo::setFeatureEnabled(llvm::StringMap<bool> &Features,
                                       StringRef Name, bool Enabled) const {
@@ -2376,10 +2376,10 @@ public:
     setFeatureEnabledImpl(Features, Name, Enabled);
   }
   // This exists purely to cut down on the number of virtual calls in
-  // getDefaultFeatures which calls this repeatedly.
+  // initDefaultFeatures which calls this repeatedly.
   static void setFeatureEnabledImpl(llvm::StringMap<bool> &Features,
                                     StringRef Name, bool Enabled);
-  void getDefaultFeatures(llvm::StringMap<bool> &Features) const override;
+  void initDefaultFeatures(llvm::StringMap<bool> &Features) const override;
   bool hasFeature(StringRef Feature) const override;
   bool handleTargetFeatures(std::vector<std::string> &Features,
                             DiagnosticsEngine &Diags) override;
@@ -2570,7 +2570,7 @@ bool X86TargetInfo::setFPMath(StringRef Name) {
   return false;
 }
 
-void X86TargetInfo::getDefaultFeatures(llvm::StringMap<bool> &Features) const {
+void X86TargetInfo::initDefaultFeatures(llvm::StringMap<bool> &Features) const {
   // FIXME: This *really* should not be here.
 
   // X86_64 always has SSE2.
@@ -4549,7 +4549,7 @@ public:
   }
 
   // FIXME: This should be based on Arch attributes, not CPU names.
-  void getDefaultFeatures(llvm::StringMap<bool> &Features) const override {
+  void initDefaultFeatures(llvm::StringMap<bool> &Features) const override {
     if (CPU == "arm1136jf-s" || CPU == "arm1176jzf-s" || CPU == "mpcore")
       Features["vfp2"] = true;
     else if (CPU == "cortex-a8" || CPU == "cortex-a9") {
@@ -6016,7 +6016,7 @@ public:
 
     return CPUKnown;
   }
-  void getDefaultFeatures(llvm::StringMap<bool> &Features) const override {
+  void initDefaultFeatures(llvm::StringMap<bool> &Features) const override {
     if (CPU == "zEC12")
       Features["transactional-execution"] = true;
     if (CPU == "z13") {
@@ -6383,7 +6383,7 @@ public:
         .Default(false);
   }
   const std::string& getCPU() const { return CPU; }
-  void getDefaultFeatures(llvm::StringMap<bool> &Features) const override {
+  void initDefaultFeatures(llvm::StringMap<bool> &Features) const override {
     if (CPU == "octeon")
       Features["mips64r2"] = Features["cnmips"] = true;
     else
@@ -7674,7 +7674,7 @@ TargetInfo::CreateTargetInfo(DiagnosticsEngine &Diags,
   // Compute the default target features, we need the target to handle this
   // because features may have dependencies on one another.
   llvm::StringMap<bool> Features;
-  Target->getDefaultFeatures(Features);
+  Target->initDefaultFeatures(Features);
 
   // Apply the user specified deltas.
   for (const auto &F : Opts->FeaturesAsWritten) {

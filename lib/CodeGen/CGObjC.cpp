@@ -467,7 +467,7 @@ RValue CodeGenFunction::EmitObjCMessageExpr(const ObjCMessageExpr *E,
 }
 
 namespace {
-struct FinishARCDealloc : EHScopeStack::Cleanup {
+struct FinishARCDealloc final : EHScopeStack::Cleanup {
   void Emit(CodeGenFunction &CGF, Flags flags) override {
     const ObjCMethodDecl *method = cast<ObjCMethodDecl>(CGF.CurCodeDecl);
 
@@ -1320,7 +1320,7 @@ void CodeGenFunction::GenerateObjCSetter(ObjCImplementationDecl *IMP,
 }
 
 namespace {
-  struct DestroyIvar : EHScopeStack::Cleanup {
+  struct DestroyIvar final : EHScopeStack::Cleanup {
   private:
     llvm::Value *addr;
     const ObjCIvarDecl *ivar;
@@ -1759,7 +1759,7 @@ llvm::Value *CodeGenFunction::EmitObjCProduceObject(QualType type,
 }
 
 namespace {
-  struct CallObjCRelease : EHScopeStack::Cleanup {
+  struct CallObjCRelease final : EHScopeStack::Cleanup {
     CallObjCRelease(llvm::Value *object) : object(object) {}
     llvm::Value *object;
 
@@ -2385,7 +2385,7 @@ void CodeGenFunction::destroyARCWeak(CodeGenFunction &CGF,
 }
 
 namespace {
-  struct CallObjCAutoreleasePoolObject : EHScopeStack::Cleanup {
+  struct CallObjCAutoreleasePoolObject final : EHScopeStack::Cleanup {
     llvm::Value *Token;
 
     CallObjCAutoreleasePoolObject(llvm::Value *token) : Token(token) {}
@@ -2394,7 +2394,7 @@ namespace {
       CGF.EmitObjCAutoreleasePoolPop(Token);
     }
   };
-  struct CallObjCMRRAutoreleasePoolObject : EHScopeStack::Cleanup {
+  struct CallObjCMRRAutoreleasePoolObject final : EHScopeStack::Cleanup {
     llvm::Value *Token;
 
     CallObjCMRRAutoreleasePoolObject(llvm::Value *token) : Token(token) {}
