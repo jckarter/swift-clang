@@ -452,10 +452,6 @@ def DirectIvarAssignmentForAnnotatedFunctions : Checker<"DirectIvarAssignmentFor
   HelpText<"Check for direct assignments to instance variables in the methods annotated with objc_no_direct_instance_variable_assignment">,
   DescFile<"DirectIvarAssignment.cpp">;
 
-def ObjCGenericsChecker : Checker<"ObjCGenerics">,
-  HelpText<"Checks for type errors.">,
-  DescFile<"ObjCGenericsChecker.cpp">;
-
 def NonLocalizedStringChecker : Checker<"NonLocalizedStringChecker">,
   HelpText<"Warns about uses of non-localized NSStrings passed to UI methods expecting localized NSStrings">,
   DescFile<"LocalizationChecker.cpp">;
