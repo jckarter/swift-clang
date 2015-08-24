@@ -159,31 +159,6 @@ namespace clang {
       Writer.AddSourceLocation(typeParams->getRAngleLoc(), Record);
     }
 
-<<<<<<< HEAD
-||||||| merged common ancestors
-    void AddFunctionDefinition(const FunctionDecl *FD) {
-      assert(FD->doesThisDeclarationHaveABody());
-      if (auto *CD = dyn_cast<CXXConstructorDecl>(FD)) {
-        Record.push_back(CD->NumCtorInitializers);
-        if (CD->NumCtorInitializers)
-          Writer.AddCXXCtorInitializersRef(
-              llvm::makeArrayRef(CD->init_begin(), CD->init_end()), Record);
-      }
-      Writer.AddStmt(FD->getBody());
-    }
-
-=======
-    void AddFunctionDefinition(const FunctionDecl *FD) {
-      assert(FD->doesThisDeclarationHaveABody());
-      if (auto *CD = dyn_cast<CXXConstructorDecl>(FD)) {
-        Record.push_back(CD->NumCtorInitializers);
-        if (CD->NumCtorInitializers)
-          Writer.AddCXXCtorInitializersRef(
-              llvm::makeArrayRef(CD->init_begin(), CD->init_end()), Record);
-      }
-      Writer.AddStmt(FD->getBody());
-    }
-
     /// Add to the record the first declaration from each module file that
     /// provides a declaration of D. The intent is to provide a sufficient
     /// set such that reloading this set will load all current redeclarations.
@@ -196,8 +171,6 @@ namespace clang {
       for (const auto &F : Firsts)
         Writer.AddDeclRef(F.second, Record);
     }
-
->>>>>>> fe4ae099f54be229f418d22e1e608c331d0fb17a
     /// Get the specialization decl from an entry in the specialization list.
     template <typename EntryType>
     typename RedeclarableTemplateDecl::SpecEntryTraits<EntryType>::DeclType *
