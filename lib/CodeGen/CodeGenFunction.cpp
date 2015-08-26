@@ -926,7 +926,13 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
       EmitCheck(std::make_pair(IsFalse, SanitizerKind::Return),
                 "missing_return", EmitCheckSourceLocation(FD->getLocation()),
                 None);
+    // Apple Internal: This is intentionally commented out as a workaround for
+    // rdar://problem/13102603.
+    // } else if (CGM.getCodeGenOpts().OptimizationLevel == 0) {
+    // EmitTrapCall(llvm::Intrinsic::trap);
     }
+    // Builder.CreateUnreachable();
+    // Builder.ClearInsertionPoint();
   }
 
   // Emit the standard function epilogue.
