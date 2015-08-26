@@ -11,15 +11,6 @@ void test_builtin(void) {
   __builtin_trap();
 }
 
-// TRAPFUNC-LABEL: define {{.*}}i32 @{{_Z13test_noreturnv|\"\\01\?test_noreturn@@YAHXZ\"}}
-// TRAPFUNC: call void @llvm.trap() [[ATTR0]]
-
-// NOOPTION-LABEL: define {{.*}}i32 @{{_Z13test_noreturnv|\"\\01\?test_noreturn@@YAHXZ\"}}
-// NOOPTION: call void @llvm.trap(){{$}}
-
-int test_noreturn(void) {
-}
-
 // TRAPFUNC-LABEL: define {{.*}}i32 @{{_Z17test_add_overflowii|\"\\01\?test_add_overflow@@YAHHH@Z\"}}
 // TRAPFUNC: call void @llvm.trap() [[ATTR1:#[0-9]+]]
 
