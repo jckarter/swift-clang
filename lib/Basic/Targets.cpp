@@ -3052,7 +3052,7 @@ bool X86TargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
     MMX3DNowLevel = std::max(MMX3DNowLevel, MMX);
 
   SimdDefaultAlign =
-      (getABI() == "avx512") ? 512 : (getABI() == "avx") ? 256 : 128;
+      hasFeature("avx512f") ? 512 : hasFeature("avx") ? 256 : 128;
   return true;
 }
 
@@ -3697,7 +3697,6 @@ public:
     LongDoubleWidth = 128;
     LongDoubleAlign = 128;
     SuitableAlign = 128;
-    MaxVectorAlign = 256;
     // The watchOS simulator uses the builtin bool type for Objective-C.
     llvm::Triple T = llvm::Triple(Triple);
     if (T.isWatchOS())
@@ -3708,6 +3707,16 @@ public:
     HasAlignMac68kSupport = true;
   }
 
+  bool handleTargetFeatures(std::vector<std::string> &Features,
+                            DiagnosticsEngine &Diags) override {
+    if (!DarwinTargetInfo<X86_32TargetInfo>::handleTargetFeatures(Features,
+                                                                  Diags))
+      return false;
+    // We now know the features we have: we can decide how to align vectors.
+    MaxVectorAlign =
+        hasFeature("avx512f") ? 512 : hasFeature("avx") ? 256 : 128;
+    return true;
+  }
 };
 
 // x86-32 Windows target
@@ -4058,12 +4067,22 @@ public:
   DarwinX86_64TargetInfo(const llvm::Triple &Triple)
       : DarwinTargetInfo<X86_64TargetInfo>(Triple) {
     Int64Type = SignedLongLong;
-    MaxVectorAlign = 256;
     // The 64-bit iOS simulator uses the builtin bool type for Objective-C.
     llvm::Triple T = llvm::Triple(Triple);
     if (T.isiOS())
       UseSignedCharForObjCBool = false;
     DataLayoutString = "e-m:o-i64:64-f80:128-n8:16:32:64-S128";
+  }
+
+  bool handleTargetFeatures(std::vector<std::string> &Features,
+                            DiagnosticsEngine &Diags) override {
+    if (!DarwinTargetInfo<X86_64TargetInfo>::handleTargetFeatures(Features,
+                                                                  Diags))
+      return false;
+    // We now know the features we have: we can decide how to align vectors.
+    MaxVectorAlign =
+        hasFeature("avx512f") ? 512 : hasFeature("avx") ? 256 : 128;
+    return true;
   }
 };
 
