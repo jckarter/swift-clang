@@ -1730,8 +1730,7 @@ static const Tool *selectToolForJob(Compilation &C, bool SaveTemps,
     // that's the case and update CollapsedCHA if we combine phases.
     CudaHostAction *CHA = dyn_cast<CudaHostAction>(*BackendInputs->begin());
     JobAction *CompileJA =
-        cast<CompileJobAction>(CHA ? *CHA->begin() : *BackendInputs->begin());
-    assert(CompileJA && "Backend job is not preceeded by compile job.");
+        cast<JobAction>(CHA ? *CHA->begin() : *BackendInputs->begin());
     const Tool *Compiler = TC->SelectTool(*CompileJA);
     if (!Compiler)
       return nullptr;
