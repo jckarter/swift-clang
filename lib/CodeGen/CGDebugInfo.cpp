@@ -46,8 +46,8 @@ using namespace clang::CodeGen;
 
 CGDebugInfo::CGDebugInfo(CodeGenModule &CGM)
     : CGM(CGM), DebugKind(CGM.getCodeGenOpts().getDebugInfo()),
-        DebugTypeExtRefs(CGM.getCodeGenOpts().DebugTypeExtRefs),
-        DBuilder(CGM.getModule()) {
+      DebugTypeExtRefs(CGM.getCodeGenOpts().DebugTypeExtRefs),
+      DBuilder(CGM.getModule()) {
   CreateCompileUnit();
 }
 
