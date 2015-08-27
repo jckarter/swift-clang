@@ -3530,6 +3530,7 @@ void CGDebugInfo::finalize() {
     if (auto MD = TypeCache[RT])
       DBuilder.retainType(cast<llvm::DIType>(MD));
   }
+
   DBuilder.finalize();
 }
 

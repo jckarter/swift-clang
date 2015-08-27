@@ -348,7 +348,7 @@ public:
   /// Emit an Objective-C interface type standalone debug info.
   llvm::DIType *getOrCreateInterfaceType(QualType Ty, SourceLocation Loc);
 
-  /// \brief - Emit standalone type debug info.
+  /// Emit standalone debug info for a type.
   llvm::DIType *getOrCreateStandaloneType(QualType Ty, SourceLocation Loc);
 
   void completeType(const EnumDecl *ED);
