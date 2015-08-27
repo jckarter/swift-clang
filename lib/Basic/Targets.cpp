@@ -931,7 +931,8 @@ public:
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override;
 
-  void initDefaultFeatures(llvm::StringMap<bool> &Features) const override;
+  void initDefaultFeatures(llvm::StringMap<bool> &Features,
+                           StringRef CPU) const override;
 
   bool handleTargetFeatures(std::vector<std::string> &Features,
                             DiagnosticsEngine &Diags) override;
@@ -1330,7 +1331,8 @@ void PPCTargetInfo::getTargetDefines(const LangOptions &Opts,
   //   __NO_FPRS__
 }
 
-void PPCTargetInfo::initDefaultFeatures(llvm::StringMap<bool> &Features) const {
+void PPCTargetInfo::initDefaultFeatures(llvm::StringMap<bool> &Features,
+                                        StringRef CPU) const {
   Features["altivec"] = llvm::StringSwitch<bool>(CPU)
     .Case("7400", true)
     .Case("g4", true)
@@ -2298,6 +2300,75 @@ class X86TargetInfo : public TargetInfo {
     //@}
   } CPU;
 
+  CPUKind getCPUKind(StringRef CPU) const {
+    return llvm::StringSwitch<CPUKind>(CPU)
+        .Case("i386", CK_i386)
+        .Case("i486", CK_i486)
+        .Case("winchip-c6", CK_WinChipC6)
+        .Case("winchip2", CK_WinChip2)
+        .Case("c3", CK_C3)
+        .Case("i586", CK_i586)
+        .Case("pentium", CK_Pentium)
+        .Case("pentium-mmx", CK_PentiumMMX)
+        .Case("i686", CK_i686)
+        .Case("pentiumpro", CK_PentiumPro)
+        .Case("pentium2", CK_Pentium2)
+        .Case("pentium3", CK_Pentium3)
+        .Case("pentium3m", CK_Pentium3M)
+        .Case("pentium-m", CK_PentiumM)
+        .Case("c3-2", CK_C3_2)
+        .Case("yonah", CK_Yonah)
+        .Case("pentium4", CK_Pentium4)
+        .Case("pentium4m", CK_Pentium4M)
+        .Case("prescott", CK_Prescott)
+        .Case("nocona", CK_Nocona)
+        .Case("core2", CK_Core2)
+        .Case("penryn", CK_Penryn)
+        .Case("bonnell", CK_Bonnell)
+        .Case("atom", CK_Bonnell) // Legacy name.
+        .Case("silvermont", CK_Silvermont)
+        .Case("slm", CK_Silvermont) // Legacy name.
+        .Case("nehalem", CK_Nehalem)
+        .Case("corei7", CK_Nehalem) // Legacy name.
+        .Case("westmere", CK_Westmere)
+        .Case("sandybridge", CK_SandyBridge)
+        .Case("corei7-avx", CK_SandyBridge) // Legacy name.
+        .Case("ivybridge", CK_IvyBridge)
+        .Case("core-avx-i", CK_IvyBridge) // Legacy name.
+        .Case("haswell", CK_Haswell)
+        .Case("core-avx2", CK_Haswell) // Legacy name.
+        .Case("broadwell", CK_Broadwell)
+        .Case("skylake", CK_Skylake)
+        .Case("skx", CK_Skylake) // Legacy name.
+        .Case("knl", CK_KNL)
+        .Case("k6", CK_K6)
+        .Case("k6-2", CK_K6_2)
+        .Case("k6-3", CK_K6_3)
+        .Case("athlon", CK_Athlon)
+        .Case("athlon-tbird", CK_AthlonThunderbird)
+        .Case("athlon-4", CK_Athlon4)
+        .Case("athlon-xp", CK_AthlonXP)
+        .Case("athlon-mp", CK_AthlonMP)
+        .Case("athlon64", CK_Athlon64)
+        .Case("athlon64-sse3", CK_Athlon64SSE3)
+        .Case("athlon-fx", CK_AthlonFX)
+        .Case("k8", CK_K8)
+        .Case("k8-sse3", CK_K8SSE3)
+        .Case("opteron", CK_Opteron)
+        .Case("opteron-sse3", CK_OpteronSSE3)
+        .Case("barcelona", CK_AMDFAM10)
+        .Case("amdfam10", CK_AMDFAM10)
+        .Case("btver1", CK_BTVER1)
+        .Case("btver2", CK_BTVER2)
+        .Case("bdver1", CK_BDVER1)
+        .Case("bdver2", CK_BDVER2)
+        .Case("bdver3", CK_BDVER3)
+        .Case("bdver4", CK_BDVER4)
+        .Case("x86-64", CK_x86_64)
+        .Case("geode", CK_Geode)
+        .Default(CK_Generic);
+  }
+
   enum FPMathKind {
     FP_Default,
     FP_SSE,
@@ -2371,7 +2442,8 @@ public:
   // initDefaultFeatures which calls this repeatedly.
   static void setFeatureEnabledImpl(llvm::StringMap<bool> &Features,
                                     StringRef Name, bool Enabled);
-  void initDefaultFeatures(llvm::StringMap<bool> &Features) const override;
+  void initDefaultFeatures(llvm::StringMap<bool> &Features,
+                           StringRef CPU) const override;
   bool hasFeature(StringRef Feature) const override;
   bool handleTargetFeatures(std::vector<std::string> &Features,
                             DiagnosticsEngine &Diags) override;
@@ -2386,72 +2458,7 @@ public:
     return "";
   }
   bool setCPU(const std::string &Name) override {
-    CPU = llvm::StringSwitch<CPUKind>(Name)
-      .Case("i386", CK_i386)
-      .Case("i486", CK_i486)
-      .Case("winchip-c6", CK_WinChipC6)
-      .Case("winchip2", CK_WinChip2)
-      .Case("c3", CK_C3)
-      .Case("i586", CK_i586)
-      .Case("pentium", CK_Pentium)
-      .Case("pentium-mmx", CK_PentiumMMX)
-      .Case("i686", CK_i686)
-      .Case("pentiumpro", CK_PentiumPro)
-      .Case("pentium2", CK_Pentium2)
-      .Case("pentium3", CK_Pentium3)
-      .Case("pentium3m", CK_Pentium3M)
-      .Case("pentium-m", CK_PentiumM)
-      .Case("c3-2", CK_C3_2)
-      .Case("yonah", CK_Yonah)
-      .Case("pentium4", CK_Pentium4)
-      .Case("pentium4m", CK_Pentium4M)
-      .Case("prescott", CK_Prescott)
-      .Case("nocona", CK_Nocona)
-      .Case("core2", CK_Core2)
-      .Case("penryn", CK_Penryn)
-      .Case("bonnell", CK_Bonnell)
-      .Case("atom", CK_Bonnell) // Legacy name.
-      .Case("silvermont", CK_Silvermont)
-      .Case("slm", CK_Silvermont) // Legacy name.
-      .Case("nehalem", CK_Nehalem)
-      .Case("corei7", CK_Nehalem) // Legacy name.
-      .Case("westmere", CK_Westmere)
-      .Case("sandybridge", CK_SandyBridge)
-      .Case("corei7-avx", CK_SandyBridge) // Legacy name.
-      .Case("ivybridge", CK_IvyBridge)
-      .Case("core-avx-i", CK_IvyBridge) // Legacy name.
-      .Case("haswell", CK_Haswell)
-      .Case("core-avx2", CK_Haswell) // Legacy name.
-      .Case("broadwell", CK_Broadwell)
-      .Case("skylake", CK_Skylake)
-      .Case("skx", CK_Skylake) // Legacy name.
-      .Case("knl", CK_KNL)
-      .Case("k6", CK_K6)
-      .Case("k6-2", CK_K6_2)
-      .Case("k6-3", CK_K6_3)
-      .Case("athlon", CK_Athlon)
-      .Case("athlon-tbird", CK_AthlonThunderbird)
-      .Case("athlon-4", CK_Athlon4)
-      .Case("athlon-xp", CK_AthlonXP)
-      .Case("athlon-mp", CK_AthlonMP)
-      .Case("athlon64", CK_Athlon64)
-      .Case("athlon64-sse3", CK_Athlon64SSE3)
-      .Case("athlon-fx", CK_AthlonFX)
-      .Case("k8", CK_K8)
-      .Case("k8-sse3", CK_K8SSE3)
-      .Case("opteron", CK_Opteron)
-      .Case("opteron-sse3", CK_OpteronSSE3)
-      .Case("barcelona", CK_AMDFAM10)
-      .Case("amdfam10", CK_AMDFAM10)
-      .Case("btver1", CK_BTVER1)
-      .Case("btver2", CK_BTVER2)
-      .Case("bdver1", CK_BDVER1)
-      .Case("bdver2", CK_BDVER2)
-      .Case("bdver3", CK_BDVER3)
-      .Case("bdver4", CK_BDVER4)
-      .Case("x86-64", CK_x86_64)
-      .Case("geode", CK_Geode)
-      .Default(CK_Generic);
+    CPU = getCPUKind(Name);
 
     // Perform any per-CPU checks necessary to determine if this CPU is
     // acceptable.
@@ -2562,14 +2569,15 @@ bool X86TargetInfo::setFPMath(StringRef Name) {
   return false;
 }
 
-void X86TargetInfo::initDefaultFeatures(llvm::StringMap<bool> &Features) const {
+void X86TargetInfo::initDefaultFeatures(llvm::StringMap<bool> &Features,
+                                        StringRef CPU) const {
   // FIXME: This *really* should not be here.
 
   // X86_64 always has SSE2.
   if (getTriple().getArch() == llvm::Triple::x86_64)
     setFeatureEnabledImpl(Features, "sse2", true);
 
-  switch (CPU) {
+  switch (getCPUKind(CPU)) {
   case CK_Generic:
   case CK_i386:
   case CK_i486:
@@ -4461,7 +4469,8 @@ public:
   }
 
   // FIXME: This should be based on Arch attributes, not CPU names.
-  void initDefaultFeatures(llvm::StringMap<bool> &Features) const override {
+  void initDefaultFeatures(llvm::StringMap<bool> &Features,
+                           StringRef CPU) const override {
     if (CPU == "arm1136jf-s" || CPU == "arm1176jzf-s" || CPU == "mpcore")
       Features["vfp2"] = true;
     else if (CPU == "cortex-a8" || CPU == "cortex-a9") {
@@ -5930,7 +5939,8 @@ public:
 
     return CPUKnown;
   }
-  void initDefaultFeatures(llvm::StringMap<bool> &Features) const override {
+  void initDefaultFeatures(llvm::StringMap<bool> &Features,
+                           StringRef CPU) const override {
     if (CPU == "zEC12")
       Features["transactional-execution"] = true;
     if (CPU == "z13") {
@@ -6297,7 +6307,8 @@ public:
         .Default(false);
   }
   const std::string& getCPU() const { return CPU; }
-  void initDefaultFeatures(llvm::StringMap<bool> &Features) const override {
+  void initDefaultFeatures(llvm::StringMap<bool> &Features,
+                           StringRef CPU) const override {
     if (CPU == "octeon")
       Features["mips64r2"] = Features["cnmips"] = true;
     else
@@ -7587,7 +7598,7 @@ TargetInfo::CreateTargetInfo(DiagnosticsEngine &Diags,
   // Compute the default target features, we need the target to handle this
   // because features may have dependencies on one another.
   llvm::StringMap<bool> Features;
-  Target->initDefaultFeatures(Features);
+  Target->initDefaultFeatures(Features, Opts->CPU);
 
   // Apply the user specified deltas.
   if (!Target->handleUserFeatures(Features, Opts->FeaturesAsWritten, Diags))
