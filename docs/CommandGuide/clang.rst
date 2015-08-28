@@ -280,12 +280,6 @@ Code Generation Options
   never emit type information for types that are not referenced at all by the
   program.
 
-.. option:: -gmodules
-
-  Generate debug information that references types defined in clang
-  modules. The resulting objects will have smaller debug info which will
-  speed up dsymutil and debugging with lldb.
-
 .. option:: -fexceptions
 
   Enable generation of unwind information. This allows exceptions to be thrown
