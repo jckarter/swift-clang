@@ -3280,6 +3280,10 @@ static std::string getMultiarchTriple(const llvm::Triple &TargetTriple,
     if (llvm::sys::fs::exists(SysRoot + "/lib/sparc64-linux-gnu"))
       return "sparc64-linux-gnu";
     break;
+  case llvm::Triple::systemz:
+    if (llvm::sys::fs::exists(SysRoot + "/lib/s390x-linux-gnu"))
+      return "s390x-linux-gnu";
+    break;
   }
   return TargetTriple.str();
 }
@@ -3623,6 +3627,8 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
       "/usr/include/sparc-linux-gnu"};
   const StringRef Sparc64MultiarchIncludeDirs[] = {
       "/usr/include/sparc64-linux-gnu"};
+  const StringRef SYSTEMZMultiarchIncludeDirs[] = {
+      "/usr/include/s390x-linux-gnu"};
   ArrayRef<StringRef> MultiarchIncludeDirs;
   switch (getTriple().getArch()) {
   case llvm::Triple::x86_64:
@@ -3667,6 +3673,9 @@ void Linux::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
     break;
   case llvm::Triple::sparcv9:
     MultiarchIncludeDirs = Sparc64MultiarchIncludeDirs;
+    break;
+  case llvm::Triple::systemz:
+    MultiarchIncludeDirs = SYSTEMZMultiarchIncludeDirs;
     break;
   default:
     break;
