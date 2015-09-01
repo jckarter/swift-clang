@@ -959,7 +959,7 @@ ASTDeclContextNameLookupTrait::ReadKey(const unsigned char *d, unsigned) {
 void ASTDeclContextNameLookupTrait::ReadDataInto(internal_key_type,
                                                  const unsigned char *d,
                                                  unsigned DataLen,
-                                                 data_type &Val) {
+                                                 data_type_builder &Val) {
   using namespace llvm::support;
   for (unsigned NumDecls = DataLen / 4; NumDecls; --NumDecls) {
     uint32_t LocalID = endian::readNext<uint32_t, little, unaligned>(d);
@@ -1058,11 +1058,12 @@ bool ASTReader::ParseLineTable(ModuleFile &F,
 
   // Parse the file names
   std::map<int, int> FileIDs;
-  for (int I = 0, N = Record[Idx++]; I != N; ++I) {
+  for (unsigned I = 0; Record[Idx]; ++I) {
     // Extract the file name
     auto Filename = ReadPath(F, Record, Idx);
     FileIDs[I] = LineTable.getLineTableFilenameID(Filename);
   }
+  ++Idx;
 
   // Parse the line entries
   std::vector<LineEntry> Entries;
@@ -1074,7 +1075,7 @@ bool ASTReader::ParseLineTable(ModuleFile &F,
 
     // Extract the line entries
     unsigned NumEntries = Record[Idx++];
-    assert(NumEntries && "Numentries is 00000");
+    assert(NumEntries && "no line entries for file ID");
     Entries.clear();
     Entries.reserve(NumEntries);
     for (unsigned I = 0; I != NumEntries; ++I) {
@@ -7268,8 +7269,7 @@ unsigned ASTReader::getModuleFileID(ModuleFile *F) {
   // files loaded beforehand will be the same on reload.
   // FIXME: Is this true even if we have an explicit module file and a PCH?
   if (F->isModule())
-    // FIXME: BaseSubmoduleID appears to be off by one.
-    return ((F->BaseSubmoduleID + 1) << 1) | 1;
+    return ((F->BaseSubmoduleID + NUM_PREDEF_SUBMODULE_IDS) << 1) | 1;
 
   auto PCHModules = getModuleManager().pch_modules();
   auto I = std::find(PCHModules.begin(), PCHModules.end(), F);
