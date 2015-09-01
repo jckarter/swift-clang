@@ -3691,19 +3691,23 @@ public:
   ExprResult BuildPossibleImplicitMemberExpr(const CXXScopeSpec &SS,
                                              SourceLocation TemplateKWLoc,
                                              LookupResult &R,
-                                const TemplateArgumentListInfo *TemplateArgs);
+                                const TemplateArgumentListInfo *TemplateArgs,
+                                             const Scope *S);
   ExprResult BuildImplicitMemberExpr(const CXXScopeSpec &SS,
                                      SourceLocation TemplateKWLoc,
                                      LookupResult &R,
                                 const TemplateArgumentListInfo *TemplateArgs,
-                                     bool IsDefiniteInstance);
+                                     bool IsDefiniteInstance,
+                                     const Scope *S);
   bool UseArgumentDependentLookup(const CXXScopeSpec &SS,
                                   const LookupResult &R,
                                   bool HasTrailingLParen);
 
-  ExprResult BuildQualifiedDeclarationNameExpr(
-      CXXScopeSpec &SS, const DeclarationNameInfo &NameInfo,
-      bool IsAddressOfOperand, TypeSourceInfo **RecoveryTSI = nullptr);
+  ExprResult
+  BuildQualifiedDeclarationNameExpr(CXXScopeSpec &SS,
+                                    const DeclarationNameInfo &NameInfo,
+                                    bool IsAddressOfOperand, const Scope *S,
+                                    TypeSourceInfo **RecoveryTSI = nullptr);
 
   ExprResult BuildDependentDeclRefExpr(const CXXScopeSpec &SS,
                                        SourceLocation TemplateKWLoc,
@@ -3820,6 +3824,7 @@ public:
       CXXScopeSpec &SS, SourceLocation TemplateKWLoc,
       NamedDecl *FirstQualifierInScope, const DeclarationNameInfo &NameInfo,
       const TemplateArgumentListInfo *TemplateArgs,
+      const Scope *S,
       ActOnMemberAccessExtraArgs *ExtraArgs = nullptr);
 
   ExprResult
@@ -3828,6 +3833,7 @@ public:
                            SourceLocation TemplateKWLoc,
                            NamedDecl *FirstQualifierInScope, LookupResult &R,
                            const TemplateArgumentListInfo *TemplateArgs,
+                           const Scope *S,
                            bool SuppressQualifierCheck = false,
                            ActOnMemberAccessExtraArgs *ExtraArgs = nullptr);
 

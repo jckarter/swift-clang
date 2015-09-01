@@ -3481,7 +3481,8 @@ BuildImplicitMemberInitializer(Sema &SemaRef, CXXConstructorDecl *Constructor,
                                          /*TemplateKWLoc=*/SourceLocation(),
                                          /*FirstQualifierInScope=*/nullptr,
                                          MemberLookup,
-                                         /*TemplateArgs=*/nullptr);
+                                         /*TemplateArgs=*/nullptr,
+                                         /*S*/nullptr);
     if (CtorArg.isInvalid())
       return true;
 
@@ -9631,7 +9632,7 @@ public:
   Expr *build(Sema &S, SourceLocation Loc) const override {
     return assertNotNull(S.BuildMemberReferenceExpr(
         Builder.build(S, Loc), Type, Loc, IsArrow, SS, SourceLocation(),
-        nullptr, MemberLookup, nullptr).get());
+        nullptr, MemberLookup, nullptr, nullptr).get());
   }
 
   MemberBuilder(const ExprBuilder &Builder, QualType Type, bool IsArrow,
@@ -9841,7 +9842,7 @@ buildSingleCopyAssignRecursively(Sema &S, SourceLocation Loc, QualType T,
                                    SS, /*TemplateKWLoc=*/SourceLocation(),
                                    /*FirstQualifierInScope=*/nullptr,
                                    OpLookup,
-                                   /*TemplateArgs=*/nullptr,
+                                   /*TemplateArgs=*/nullptr, /*S*/nullptr,
                                    /*SuppressQualifierCheck=*/true);
     if (OpEqualRef.isInvalid())
       return StmtError();
