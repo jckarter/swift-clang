@@ -216,5 +216,7 @@ def err_apinotes_message : Error<"%0">;
 def warn_apinotes_message : Warning<"%0">;
 def note_apinotes_message : Note<"%0">;
 
-
+// OpenMP
+def err_omp_more_one_clause : Error<
+  "directive '#pragma omp %0' cannot contain more than one '%1' clause%select{| with '%3' name modifier}2">;
 }
