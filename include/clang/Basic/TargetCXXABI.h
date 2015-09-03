@@ -327,12 +327,8 @@ public:
     // iOS on ARM64 and WebAssembly use the C++11 POD rules.  They do not honor
     // the Itanium exception about classes with over-large bitfields.
     case iOS64:
-<<<<<<< HEAD
     case iOSv7k:
-||||||| merged common ancestors
-=======
     case WebAssembly:
->>>>>>> llvm.org/master
       return UseTailPaddingUnlessPOD11;
 
     // MSVC always allocates fields in the tail-padding of a base class
