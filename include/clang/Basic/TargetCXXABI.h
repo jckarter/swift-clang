@@ -193,6 +193,7 @@ public:
     case GenericItanium:
     case iOS:
     case iOS64:
+    case iOSv7k:
     case Microsoft:
       return true;
     }
