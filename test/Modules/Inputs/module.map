@@ -328,6 +328,10 @@ module crash {
   header "crash.h"
 }
 
+module DebugModule {
+  header "DebugModule.h"
+}
+
 module DebugCXX {
   header "DebugCXX.h"
 }
