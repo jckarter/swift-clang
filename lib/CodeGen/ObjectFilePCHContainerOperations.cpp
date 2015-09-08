@@ -153,23 +153,23 @@ public:
   }
 
   bool HandleTopLevelDecl(DeclGroupRef D) override {
-    if (!Diags.hasErrorOccurred() &&
-        (CodeGenOpts.getDebugInfo() > CodeGenOptions::NoDebugInfo)) {
-      // Collect all the debug info.
-      for (auto *I : D) {
-        if (!I->isFromASTFile()) {
-          DebugTypeVisitor DTV(*Builder->getModuleDebugInfo(), *Ctx);
-          DTV.TraverseDecl(I);
-        }
+    if (Diags.hasErrorOccurred() ||
+        (CodeGenOpts.getDebugInfo() == CodeGenOptions::NoDebugInfo))
+      return true;
+
+    // Collect debug info for all decls in this group.
+    for (auto *I : D)
+      if (!I->isFromASTFile()) {
+        DebugTypeVisitor DTV(*Builder->getModuleDebugInfo(), *Ctx);
+        DTV.TraverseDecl(I);
       }
-    }
     return true;
   }
 
   void HandleTagDeclDefinition(TagDecl *D) override {
     if (Diags.hasErrorOccurred())
       return;
- 
+
     Builder->UpdateCompletedType(D);
   }
 
