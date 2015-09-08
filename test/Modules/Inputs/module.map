@@ -361,6 +361,6 @@ module TargetFeatures {
   }
 }
 
-module DebugCXX {
-  header "DebugCXX.h"
+module DebugCXX2 {
+  header "DebugCXX2.h"
 }
