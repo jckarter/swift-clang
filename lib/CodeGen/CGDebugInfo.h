@@ -282,7 +282,7 @@ public:
                          SourceLocation ScopeLoc, QualType FnType,
                          llvm::Function *Fn, CGBuilderTy &Builder);
 
-  /// \brief Emit debug info for a function declaration.
+  /// Emit debug info for a function declaration.
   void EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc, QualType FnType);
 
   /// Constructs the debug code for exiting a function.

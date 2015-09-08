@@ -2625,11 +2625,17 @@ llvm::DISubroutineType *CGDebugInfo::getOrCreateFunctionType(const Decl *D,
 
     Elts.push_back(getOrCreateType(ResultTy, F));
     // "self" pointer is always first argument.
-    QualType SelfDeclTy = OMethod->getSelfDecl()->getType();
-    Elts.push_back(CreateSelfType(SelfDeclTy, getOrCreateType(SelfDeclTy, F)));
+    QualType SelfDeclTy;
+    if (auto *SelfDecl = OMethod->getSelfDecl())
+      SelfDeclTy = SelfDecl->getType();
+    else if (auto *FPT = dyn_cast<FunctionProtoType>(FnType))
+      if (FPT->getNumParams() > 1)
+        SelfDeclTy = FPT->getParamType(0);
+    if (!SelfDeclTy.isNull())
+      Elts.push_back(CreateSelfType(SelfDeclTy, getOrCreateType(SelfDeclTy, F)));
     // "_cmd" pointer is always second argument.
     Elts.push_back(DBuilder.createArtificialType(
-        getOrCreateType(OMethod->getCmdDecl()->getType(), F)));
+        getOrCreateType(CGM.getContext().getObjCSelType(), F)));
     // Get rest of the arguments.
     for (const auto *PI : OMethod->params())
       Elts.push_back(getOrCreateType(PI->getType(), F));
@@ -2738,8 +2744,6 @@ void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
   StringRef Name;
   StringRef LinkageName;
 
-  FnBeginRegionCount.push_back(LexicalBlockStack.size());
-
   const Decl *D = GD.getDecl();
   if (!D)
     return;
@@ -2775,9 +2779,8 @@ void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
                           false /*internalLinkage*/, true /*definition*/,
                           ScopeLine, Flags, CGM.getLangOpts().Optimize, nullptr,
                           TParamsArray.get(),
-                          getFunctionDeclaration(D)); //, true /*forceOutput*/);
+                          getFunctionDeclaration(D));
 }
-
 
 void CGDebugInfo::EmitLocation(CGBuilderTy &Builder, SourceLocation Loc) {
   // Update our current location

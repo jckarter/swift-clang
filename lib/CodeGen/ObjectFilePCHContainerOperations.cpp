@@ -85,9 +85,10 @@ class PCHContainerGenerator : public ASTConsumer {
 
     bool VisitFunctionDecl(FunctionDecl *D) {
       if (isa<CXXMethodDecl>(D))
-        // Constructing the this argument mandates a CodeGenFunction.
+        // This is not yet supported. Constructing the `this' argument
+        // mandates a CodeGenFunction.
         return true;
- 
+
       SmallVector<QualType, 16> ArgTypes;
       for (auto i : D->params())
         ArgTypes.push_back(i->getType());
@@ -112,7 +113,7 @@ class PCHContainerGenerator : public ASTConsumer {
         ArgTypes.push_back(i->getType());
       QualType RetTy = D->getReturnType();
       QualType FnTy = Ctx.getFunctionType(RetTy, ArgTypes,
-                                            FunctionProtoType::ExtProtoInfo());
+                                          FunctionProtoType::ExtProtoInfo());
       if (CanRepresent(FnTy.getTypePtr()))
         DI.EmitFunctionDecl(D, D->getLocation(), FnTy);
       return true;
