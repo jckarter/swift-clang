@@ -35,7 +35,7 @@ typedef struct {
   double z;
 } BigStruct;
 
-// CHECK: define void @big_struct_indirect(%struct.BigStruct* align 8 %b)
+// CHECK: define void @big_struct_indirect(%struct.BigStruct* %b)
 void big_struct_indirect(BigStruct b) {}
 
 // CHECK: define void @return_big_struct_indirect(%struct.BigStruct* noalias sret
