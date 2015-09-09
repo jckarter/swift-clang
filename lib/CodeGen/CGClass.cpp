@@ -2326,8 +2326,25 @@ void CodeGenFunction::InitializeVTablePointers(const CXXRecordDecl *RD) {
     CGM.getCXXABI().initializeHiddenVirtualInheritanceMembers(*this, RD);
 }
 
+static bool isProvablyNonNull(llvm::Value *Ptr) {
+  Ptr = Ptr->stripInBoundsOffsets();
+  return  (isa<llvm::GlobalVariable>(Ptr) ||
+           isa<llvm::AllocaInst>(Ptr));
+}
+
 llvm::Value *CodeGenFunction::GetVTablePtr(Address This,
                                            llvm::Type *Ty) {
+  // Under -fapple-kext-vtable-mitigation, set the top bit of the
+  // pointer before loading the address.
+  if (CGM.getCodeGenOpts().AppleKextVTableMitigation &&
+      !isProvablyNonNull(This.getPointer())) {
+    llvm::Value *Ptr = Builder.CreatePtrToInt(This.getPointer(), IntPtrTy);
+    uint64_t Mask = 1ULL << (PointerWidthInBits - 1);
+    Ptr = Builder.CreateOr(Ptr, llvm::ConstantInt::get(IntPtrTy, Mask));
+    Ptr = Builder.CreateIntToPtr(Ptr, Ty->getPointerTo(This.getAddressSpace()));
+    This = Address(Ptr, This.getAlignment());
+  }
+
   Address VTablePtrSrc = Builder.CreateElementBitCast(This, Ty);
   llvm::Instruction *VTable = Builder.CreateLoad(VTablePtrSrc, "vtable");
   CGM.DecorateInstruction(VTable, CGM.getTBAAInfoForVTablePtr());

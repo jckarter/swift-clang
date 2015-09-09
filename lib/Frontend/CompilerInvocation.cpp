@@ -462,6 +462,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
       Args.hasFlag(OPT_fcoverage_mapping, OPT_fno_coverage_mapping, false);
   Opts.DumpCoverageMapping = Args.hasArg(OPT_dump_coverage_mapping);
   Opts.AsmVerbose = Args.hasArg(OPT_masm_verbose);
+  Opts.AppleKextVTableMitigation =
+      Args.hasArg(OPT_fapple_kext_vtable_mitigation);
   Opts.ObjCAutoRefCountExceptions = Args.hasArg(OPT_fobjc_arc_exceptions);
   Opts.ObjCARCUnsafeClaim = Args.hasArg(OPT_fobjc_arc_unsafeclaim);
   Opts.NewMSEH = Args.hasArg(OPT_fnew_ms_eh);
