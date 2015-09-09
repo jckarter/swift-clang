@@ -820,6 +820,14 @@ Address CodeGenFunction::EmitPointerWithAlignment(const Expr *E,
                          getNaturalPointeeTypeAlignment(E->getType(), Source));
         }
 
+        if (SanOpts.has(SanitizerKind::CFIUnrelatedCast)) {
+          if (auto PT = E->getType()->getAs<PointerType>())
+            EmitVTablePtrCheckForCast(PT->getPointeeType(), Addr.getPointer(),
+                                      /*MayBeNull=*/true,
+                                      CodeGenFunction::CFITCK_UnrelatedCast,
+                                      CE->getLocStart());
+        }
+
         return Builder.CreateBitCast(Addr, ConvertType(E->getType()));
       }
       break;
@@ -1160,7 +1168,8 @@ llvm::Value *CodeGenFunction::EmitLoadOfScalar(LValue lvalue,
   return EmitLoadOfScalar(lvalue.getAddress(), lvalue.isVolatile(),
                           lvalue.getType(), Loc, lvalue.getAlignmentSource(),
                           lvalue.getTBAAInfo(),
-                          lvalue.getTBAABaseType(), lvalue.getTBAAOffset());
+                          lvalue.getTBAABaseType(), lvalue.getTBAAOffset(),
+                          lvalue.isNontemporal());
 }
 
 static bool hasBooleanRepresentation(QualType Ty) {
@@ -1226,7 +1235,8 @@ llvm::Value *CodeGenFunction::EmitLoadOfScalar(Address Addr, bool Volatile,
                                                AlignmentSource AlignSource,
                                                llvm::MDNode *TBAAInfo,
                                                QualType TBAABaseType,
-                                               uint64_t TBAAOffset) {
+                                               uint64_t TBAAOffset,
+                                               bool isNontemporal) {
   // For better performance, handle vector loads differently.
   if (Ty->isVectorType()) {
     const llvm::Type *EltTy = Addr.getElementType();
@@ -1258,6 +1268,11 @@ llvm::Value *CodeGenFunction::EmitLoadOfScalar(Address Addr, bool Volatile,
   }
 
   llvm::LoadInst *Load = Builder.CreateLoad(Addr, Volatile);
+  if (isNontemporal) {
+    llvm::MDNode *Node = llvm::MDNode::get(
+        Load->getContext(), llvm::ConstantAsMetadata::get(Builder.getInt32(1)));
+    Load->setMetadata(CGM.getModule().getMDKindID("nontemporal"), Node);
+  }
   if (TBAAInfo) {
     llvm::MDNode *TBAAPath = CGM.getTBAAStructTagInfo(TBAABaseType, TBAAInfo,
                                                       TBAAOffset);
@@ -1330,7 +1345,8 @@ void CodeGenFunction::EmitStoreOfScalar(llvm::Value *Value, Address Addr,
                                         AlignmentSource AlignSource,
                                         llvm::MDNode *TBAAInfo,
                                         bool isInit, QualType TBAABaseType,
-                                        uint64_t TBAAOffset) {
+                                        uint64_t TBAAOffset,
+                                        bool isNontemporal) {
 
   // Handle vectors differently to get better performance.
   if (Ty->isVectorType()) {
@@ -1365,6 +1381,12 @@ void CodeGenFunction::EmitStoreOfScalar(llvm::Value *Value, Address Addr,
   }
 
   llvm::StoreInst *Store = Builder.CreateStore(Value, Addr, Volatile);
+  if (isNontemporal) {
+    llvm::MDNode *Node =
+        llvm::MDNode::get(Store->getContext(),
+                          llvm::ConstantAsMetadata::get(Builder.getInt32(1)));
+    Store->setMetadata(CGM.getModule().getMDKindID("nontemporal"), Node);
+  }
   if (TBAAInfo) {
     llvm::MDNode *TBAAPath = CGM.getTBAAStructTagInfo(TBAABaseType, TBAAInfo,
                                                       TBAAOffset);
@@ -1378,7 +1400,7 @@ void CodeGenFunction::EmitStoreOfScalar(llvm::Value *value, LValue lvalue,
   EmitStoreOfScalar(value, lvalue.getAddress(), lvalue.isVolatile(),
                     lvalue.getType(), lvalue.getAlignmentSource(),
                     lvalue.getTBAAInfo(), isInit, lvalue.getTBAABaseType(),
-                    lvalue.getTBAAOffset());
+                    lvalue.getTBAAOffset(), lvalue.isNontemporal());
 }
 
 /// EmitLoadOfLValue - Given an expression that represents a value lvalue, this
