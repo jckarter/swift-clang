@@ -1,4 +1,6 @@
 // RUN:  %clang_cc1 -std=c++14 -fconcepts-ts -x c++ -verify %s
+// REQUIRES: tls
+
 // XFAIL: *
 
 template<typename T> concept thread_local bool VCTL = true; // expected-error {{variable concept cannot be declared 'thread_local'}}
