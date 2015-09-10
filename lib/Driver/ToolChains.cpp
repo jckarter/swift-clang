@@ -671,13 +671,21 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
     assert(iOSVersion && "Unknown target platform!");
     if (!Driver::GetReleaseVersion(iOSVersion->getValue(), Major, Minor, Micro,
                                    HadExtra) ||
+#ifdef __OPEN_SOURCE__
+        HadExtra || Major >= 10 || Minor >= 100 || Micro >= 100)
+#else
         HadExtra || Major >= 100 || Minor >= 100 || Micro >= 100)
+#endif // !__OPEN_SOURCE__
       getDriver().Diag(diag::err_drv_invalid_version_number)
           << iOSVersion->getAsString(Args);
   } else if (Platform == TvOS) {
     if (!Driver::GetReleaseVersion(TvOSVersion->getValue(), Major, Minor,
                                    Micro, HadExtra) || HadExtra ||
+#ifdef __OPEN_SOURCE__
+        Major >= 10 || Minor >= 100 || Micro >= 100)
+#else
         Major >= 100 || Minor >= 100 || Micro >= 100)
+#endif // !__OPEN_SOURCE__
       getDriver().Diag(diag::err_drv_invalid_version_number)
           << TvOSVersion->getAsString(Args);
   } else if (Platform == WatchOS) {
