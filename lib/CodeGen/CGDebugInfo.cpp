@@ -347,13 +347,6 @@ void CGDebugInfo::CreateCompileUnit() {
     }
   }
 
-  // Save filename string.
-  StringRef Filename = internString(MainFileName);
-
-  // Save split dwarf file string.
-  std::string SplitDwarfFile = CGM.getCodeGenOpts().SplitDwarfFile;
-  StringRef SplitDwarfFilename = internString(SplitDwarfFile);
-
   llvm::dwarf::SourceLanguage LangTag;
   const LangOptions &LO = CGM.getLangOpts();
   if (LO.CPlusPlus) {
@@ -379,8 +372,9 @@ void CGDebugInfo::CreateCompileUnit() {
   // Create new compile unit.
   // FIXME - Eliminate TheCU.
   TheCU = DBuilder.createCompileUnit(
-      LangTag, Filename, getCurrentDirname(), Producer, LO.Optimize,
-      CGM.getCodeGenOpts().DwarfDebugFlags, RuntimeVers, SplitDwarfFilename,
+      LangTag, MainFileName, getCurrentDirname(), Producer, LO.Optimize,
+      CGM.getCodeGenOpts().DwarfDebugFlags, RuntimeVers,
+      CGM.getCodeGenOpts().SplitDwarfFile,
       DebugKind <= CodeGenOptions::DebugLineTablesOnly
           ? llvm::DIBuilder::LineTablesOnly
           : (CGM.getCodeGenOpts().ClangModule ?
@@ -786,9 +780,9 @@ llvm::DIType *CGDebugInfo::CreateType(const TemplateSpecializationType *Ty,
       Ty->getTemplateName().getAsTemplateDecl())->getTemplatedDecl();
 
   SourceLocation Loc = AliasDecl->getLocation();
-  return DBuilder.createTypedef(
-      Src, internString(OS.str()), getOrCreateFile(Loc), getLineNumber(Loc),
-      getDeclContextDescriptor(AliasDecl));
+  return DBuilder.createTypedef(Src, OS.str(), getOrCreateFile(Loc),
+                                getLineNumber(Loc),
+                                getDeclContextDescriptor(AliasDecl));
 }
 
 llvm::DIType *CGDebugInfo::CreateType(const TypedefType *Ty,
@@ -1498,14 +1492,8 @@ static bool shouldOmitDefinition(CodeGenOptions::DebugInfoKind DebugKind,
                                  const RecordDecl *RD,
                                  const LangOptions &LangOpts) {
   // Does the type exist in an imported clang module?
-  if (DebugTypeExtRefs && RD->isFromASTFile()) {
-    if (auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(RD))
-      if (CTSD->isExplicitInstantiationOrSpecialization())
-        // We may not assume that this type made it into the module.
-        return true;
-    if (RD->getDefinition())
+  if (DebugTypeExtRefs && RD->isFromASTFile() && RD->getDefinition())
       return true;
-  }
 
   if (DebugKind > CodeGenOptions::LimitedDebugInfo)
     return false;
@@ -1699,13 +1687,13 @@ CGDebugInfo::getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod) {
     }
   }
   llvm::DIBuilder DIB(CGM.getModule());
-  auto *CU = DIB.createCompileUnit(
-      TheCU->getSourceLanguage(), internString(Mod.ModuleName),
-      internString(Mod.Path), TheCU->getProducer(), true, StringRef(), 0,
-      internString(Mod.ASTFile), llvm::DIBuilder::FullDebug, Mod.Signature);
-  llvm::DIModule *M = DIB.createModule(
-      CU, Mod.ModuleName, ConfigMacros, internString(Mod.Path),
-      internString(CGM.getHeaderSearchOpts().Sysroot));
+  auto *CU = DIB.createCompileUnit(TheCU->getSourceLanguage(), Mod.ModuleName,
+                                   Mod.Path, TheCU->getProducer(), true,
+                                   StringRef(), 0, Mod.ASTFile,
+                                   llvm::DIBuilder::FullDebug, Mod.Signature);
+  llvm::DIModule *M =
+      DIB.createModule(CU, Mod.ModuleName, ConfigMacros, Mod.Path,
+                       CGM.getHeaderSearchOpts().Sysroot);
   DIB.finalize();
   ModRef.reset(M);
   return M;
@@ -2159,7 +2147,7 @@ ObjCInterfaceDecl *CGDebugInfo::getObjCInterfaceDecl(QualType Ty) {
 }
 
 llvm::DIModule *CGDebugInfo::getParentModuleOrNull(const Decl *D) {
-  if (!DebugTypeExtRefs || !D || !D->isFromASTFile())
+  if (!DebugTypeExtRefs || !D->isFromASTFile())
     return nullptr;
 
   llvm::DIModule *ModuleRef = nullptr;
