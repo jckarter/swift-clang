@@ -1494,8 +1494,19 @@ static bool hasExplicitMemberDefinition(CXXRecordDecl::method_iterator I,
 }
 
 static bool shouldOmitDefinition(CodeGenOptions::DebugInfoKind DebugKind,
+                                 bool DebugTypeExtRefs,
                                  const RecordDecl *RD,
                                  const LangOptions &LangOpts) {
+  // Does the type exist in an imported clang module?
+  if (DebugTypeExtRefs && RD->isFromASTFile()) {
+    if (auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(RD))
+      if (CTSD->isExplicitInstantiationOrSpecialization())
+        // We may not assume that this type made it into the module.
+        return true;
+    if (RD->getDefinition())
+      return true;
+  }
+
   if (DebugKind > CodeGenOptions::LimitedDebugInfo)
     return false;
 
@@ -1529,7 +1540,8 @@ static bool shouldOmitDefinition(CodeGenOptions::DebugInfoKind DebugKind,
 llvm::DIType *CGDebugInfo::CreateType(const RecordType *Ty) {
   RecordDecl *RD = Ty->getDecl();
   llvm::DIType *T = cast_or_null<llvm::DIType>(getTypeOrNull(QualType(Ty, 0)));
-  if (T || shouldOmitDefinition(DebugKind, RD, CGM.getLangOpts())) {
+  if (T || shouldOmitDefinition(DebugKind, DebugTypeExtRefs, RD,
+                                CGM.getLangOpts())) {
     if (!T)
       T = getOrCreateRecordFwdDecl(Ty, getDeclContextDescriptor(RD));
     return T;
@@ -1631,6 +1643,12 @@ llvm::DIType *CGDebugInfo::CreateType(const ObjCInterfaceType *Ty,
   ObjCInterfaceDecl *ID = Ty->getDecl();
   if (!ID)
     return nullptr;
+
+  // Return a forward declaration if this type was imported from a clang module.
+  if (DebugTypeExtRefs && ID->isFromASTFile() && ID->getDefinition())
+    return DBuilder.createForwardDecl(llvm::dwarf::DW_TAG_structure_type,
+                                      ID->getName(),
+                                      getDeclContextDescriptor(ID), Unit, 0);
 
   // Get overall information about the record type for the debug info.
   llvm::DIFile *DefUnit = getOrCreateFile(ID->getLocation());
@@ -1952,6 +1970,7 @@ llvm::DIType *CGDebugInfo::CreateType(const AtomicType *Ty, llvm::DIFile *U) {
 
 llvm::DIType *CGDebugInfo::CreateEnumType(const EnumType *Ty) {
   const EnumDecl *ED = Ty->getDecl();
+
   uint64_t Size = 0;
   uint64_t Align = 0;
   if (!ED->getTypeForDecl()->isIncompleteType()) {
@@ -1961,9 +1980,12 @@ llvm::DIType *CGDebugInfo::CreateEnumType(const EnumType *Ty) {
 
   SmallString<256> FullName = getUniqueTagTypeName(Ty, CGM, TheCU);
 
+  bool isImportedFromModule =
+      DebugTypeExtRefs && ED->isFromASTFile() && ED->getDefinition();
+
   // If this is just a forward declaration, construct an appropriately
   // marked node and just return it.
-  if (!ED->getDefinition()) {
+  if (isImportedFromModule || !ED->getDefinition()) {
     llvm::DIScope *EDContext = getDeclContextDescriptor(ED);
     llvm::DIFile *DefUnit = getOrCreateFile(ED->getLocation());
     unsigned Line = getLineNumber(ED->getLocation());
@@ -2103,15 +2125,7 @@ llvm::DIType *CGDebugInfo::getOrCreateType(QualType Ty, llvm::DIFile *Unit) {
   if (auto *T = getTypeOrNull(Ty))
     return T;
 
-  llvm::DIType *Res = nullptr;
-  if (DebugTypeExtRefs)
-    // Make a forward declaration of an external type.
-    Res = getTypeExtRefOrNull(Ty, Unit);
-
-  // Otherwise create the type.
-  if (!Res)
-    Res = CreateTypeNode(Ty, Unit);
-
+  llvm::DIType *Res = CreateTypeNode(Ty, Unit);
   void* TyPtr = Ty.getAsOpaquePtr();
 
   // And update the type cache.
@@ -2155,110 +2169,6 @@ llvm::DIModule *CGDebugInfo::getParentModuleOrNull(const Decl *D) {
   if (Info)
     ModuleRef = getOrCreateModuleRef(*Info);
   return ModuleRef;
-}
-
-llvm::DIType *CGDebugInfo::getTypeExtRefOrNull(QualType Ty, llvm::DIFile *F,
-                                               bool Anchored) {
-  assert(DebugTypeExtRefs && "module debugging only");
-  Decl *TyDecl = nullptr;
-  StringRef Name;
-  SmallString<256> UID;
-  unsigned Tag = 0;
-
-  // Handle all types that have a declaration.
-  switch (Ty->getTypeClass()) {
-  case Type::Typedef: {
-    TyDecl = cast<TypedefType>(Ty)->getDecl();
-    if (!TyDecl->isFromASTFile())
-      return nullptr;
-
-    // A typedef will anchor a type in the module.
-    if (auto *TD = dyn_cast<TypedefDecl>(TyDecl)) {
-      // This is a working around the fact that LLVM does not allow
-      // typedefs to be forward declarations.
-      QualType Ty = TD->getUnderlyingType();
-      Ty = UnwrapTypeForDebugInfo(Ty, CGM.getContext());
-      if (auto *AnchoredTy = getTypeExtRefOrNull(Ty, F, /*Anchored=*/true)) {
-        TypeCache[Ty.getAsOpaquePtr()].reset(AnchoredTy);
-        SourceLocation Loc = TD->getLocation();
-        return DBuilder.createTypedef(AnchoredTy, TD->getName(),
-                                      getOrCreateFile(Loc), getLineNumber(Loc),
-                                      getDeclContextDescriptor(TD));
-      }
-    }
-    break;
-  }
-
-  case Type::Record: {
-    TyDecl = cast<RecordType>(Ty)->getDecl();
-    if (!TyDecl->isFromASTFile())
-      return nullptr;
-
-    if (auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(TyDecl))
-      if (!CTSD->isExplicitInstantiationOrSpecialization() && !Anchored)
-        // We may not assume that this type made it into the module.
-        return nullptr;
-    // C++ classes and template instantiations.
-    if (auto *RD = dyn_cast<CXXRecordDecl>(TyDecl)) {
-      if (!RD->getDefinition())
-        return nullptr;
-      Tag = getTagForRecord(RD);
-      UID =
-          getUniqueTagTypeName(cast<TagType>(RD->getTypeForDecl()), CGM, TheCU);
-      Name = getClassName(RD);
-    } else if (auto *RD = dyn_cast<RecordDecl>(TyDecl)) {
-      // C-style structs.
-      if (!RD->getDefinition())
-        return nullptr;
-      Tag = getTagForRecord(RD);
-      Name = getClassName(RD);
-    }
-    break;
-  }
-
-  case Type::Enum: {
-    TyDecl = cast<EnumType>(Ty)->getDecl();
-    if (!TyDecl->isFromASTFile())
-      return nullptr;
-
-    if (auto *ED = dyn_cast<EnumDecl>(TyDecl)) {
-      if (!ED->getDefinition())
-        return nullptr;
-      Tag = llvm::dwarf::DW_TAG_enumeration_type;
-      if ((TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_C_plus_plus) ||
-          (TheCU->getSourceLanguage() == llvm::dwarf::DW_LANG_ObjC_plus_plus)) {
-        UID = getUniqueTagTypeName(cast<TagType>(ED->getTypeForDecl()), CGM,
-                                   TheCU);
-        Name = ED->getName();
-      }
-    }
-    break;
-  }
-
-  case Type::ObjCInterface: {
-    TyDecl = cast<ObjCInterfaceType>(Ty)->getDecl();
-    if (!TyDecl->isFromASTFile())
-      return nullptr;
-
-    if (auto *ID = dyn_cast<ObjCInterfaceDecl>(TyDecl)) {
-      if (!ID->getDefinition())
-        return nullptr;
-      Tag = llvm::dwarf::DW_TAG_structure_type;
-      Name = ID->getName();
-    }
-    break;
-  }
-
-  default:
-    return nullptr;
-  }
-
-  if (Tag && !Name.empty()) {
-    assert(TyDecl);
-    auto *Ctx = getDeclContextDescriptor(TyDecl);
-    return DBuilder.createForwardDecl(Tag, Name, Ctx, F, 0, 0, 0, 0, UID);
-  } else
-    return nullptr;
 }
 
 llvm::DIType *CGDebugInfo::CreateTypeNode(QualType Ty, llvm::DIFile *Unit) {
