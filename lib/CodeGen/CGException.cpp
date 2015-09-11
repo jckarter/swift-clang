@@ -603,8 +603,8 @@ CodeGenFunction::getEHDispatchBlock(EHScopeStack::stable_iterator si) {
       dispatchBlock = getTerminateHandler();
       break;
 
-    case EHScope::CatchEnd:
-      llvm_unreachable("CatchEnd unnecessary for Itanium!");
+    case EHScope::PadEnd:
+      llvm_unreachable("PadEnd unnecessary for Itanium!");
     }
     scope.setCachedEHDispatchBlock(dispatchBlock);
   }
@@ -647,8 +647,8 @@ CodeGenFunction::getMSVCDispatchBlock(EHScopeStack::stable_iterator SI) {
     DispatchBlock->setName("terminate");
     break;
 
-  case EHScope::CatchEnd:
-    llvm_unreachable("CatchEnd dispatch block missing!");
+  case EHScope::PadEnd:
+    llvm_unreachable("PadEnd dispatch block missing!");
   }
   EHS.setCachedEHDispatchBlock(DispatchBlock);
   return DispatchBlock;
@@ -664,7 +664,7 @@ static bool isNonEHScope(const EHScope &S) {
   case EHScope::Filter:
   case EHScope::Catch:
   case EHScope::Terminate:
-  case EHScope::CatchEnd:
+  case EHScope::PadEnd:
     return false;
   }
 
@@ -723,8 +723,8 @@ llvm::BasicBlock *CodeGenFunction::EmitLandingPad() {
   case EHScope::Terminate:
     return getTerminateLandingPad();
 
-  case EHScope::CatchEnd:
-    llvm_unreachable("CatchEnd unnecessary for Itanium!");
+  case EHScope::PadEnd:
+    llvm_unreachable("PadEnd unnecessary for Itanium!");
 
   case EHScope::Catch:
   case EHScope::Cleanup:
@@ -792,8 +792,8 @@ llvm::BasicBlock *CodeGenFunction::EmitLandingPad() {
     case EHScope::Catch:
       break;
 
-    case EHScope::CatchEnd:
-      llvm_unreachable("CatchEnd unnecessary for Itanium!");
+    case EHScope::PadEnd:
+      llvm_unreachable("PadEnd unnecessary for Itanium!");
     }
 
     EHCatchScope &catchScope = cast<EHCatchScope>(*I);
@@ -1030,7 +1030,7 @@ void CodeGenFunction::ExitCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
                         isa<CXXConstructorDecl>(CurCodeDecl);
 
   if (CatchEndBlockBB)
-    EHStack.pushCatchEnd(CatchEndBlockBB);
+    EHStack.pushPadEnd(CatchEndBlockBB);
 
   // Perversely, we emit the handlers backwards precisely because we
   // want them to appear in source order.  In all of these cases, the
@@ -1085,7 +1085,7 @@ void CodeGenFunction::ExitCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
   EmitBlock(ContBB);
   incrementProfileCounter(&S);
   if (CatchEndBlockBB)
-    EHStack.popCatchEnd();
+    EHStack.popPadEnd();
 }
 
 namespace {
@@ -1399,8 +1399,10 @@ void CodeGenFunction::EmitSEHTryStmt(const SEHTryStmt &S) {
 namespace {
 struct PerformSEHFinally final : EHScopeStack::Cleanup {
   llvm::Function *OutlinedFinally;
-  PerformSEHFinally(llvm::Function *OutlinedFinally)
-      : OutlinedFinally(OutlinedFinally) {}
+  EHScopeStack::stable_iterator EnclosingScope;
+  PerformSEHFinally(llvm::Function *OutlinedFinally,
+                    EHScopeStack::stable_iterator EnclosingScope)
+      : OutlinedFinally(OutlinedFinally), EnclosingScope(EnclosingScope) {}
 
   void Emit(CodeGenFunction &CGF, Flags F) override {
     ASTContext &Context = CGF.getContext();
@@ -1425,7 +1427,28 @@ struct PerformSEHFinally final : EHScopeStack::Cleanup {
         CGM.getTypes().arrangeFreeFunctionCall(Args, FPT,
                                                /*chainCall=*/false);
 
+    // If this is the normal cleanup or using the old EH IR, just emit the call.
+    if (!F.isForEHCleanup() || !CGM.getCodeGenOpts().NewMSEH) {
+      CGF.EmitCall(FnInfo, OutlinedFinally, ReturnValueSlot(), Args);
+      return;
+    }
+
+    // Build a cleanupendpad to unwind through.
+    llvm::BasicBlock *CleanupBB = CGF.Builder.GetInsertBlock();
+    llvm::BasicBlock *CleanupEndBB = CGF.createBasicBlock("ehcleanup.end");
+    llvm::Instruction *PadInst = CleanupBB->getFirstNonPHI();
+    auto *CPI = cast<llvm::CleanupPadInst>(PadInst);
+    CGBuilderTy(CGF, CleanupEndBB)
+        .CreateCleanupEndPad(CPI, CGF.getEHDispatchBlock(EnclosingScope));
+
+    // Push and pop the cleanupendpad around the call.
+    CGF.EHStack.pushPadEnd(CleanupEndBB);
     CGF.EmitCall(FnInfo, OutlinedFinally, ReturnValueSlot(), Args);
+    CGF.EHStack.popPadEnd();
+
+    // Insert the catchendpad block here.
+    CGF.CurFn->getBasicBlockList().insertAfter(CGF.Builder.GetInsertBlock(),
+                                               CleanupEndBB);
   }
 };
 }
@@ -1781,7 +1804,8 @@ void CodeGenFunction::EnterSEHTryStmt(const SEHTryStmt &S) {
         HelperCGF.GenerateSEHFinallyFunction(*this, *Finally);
 
     // Push a cleanup for __finally blocks.
-    EHStack.pushCleanup<PerformSEHFinally>(NormalAndEHCleanup, FinallyFunc);
+    EHStack.pushCleanup<PerformSEHFinally>(NormalAndEHCleanup, FinallyFunc,
+                                           EHStack.getInnermostEHScope());
     return;
   }
 
