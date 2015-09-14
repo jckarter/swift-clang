@@ -7254,7 +7254,8 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       << DeclSpec::getSpecifierName(TSCS);
 
   if (D.isFirstDeclarationOfMember())
-    adjustMemberFunctionCC(R, D.isStaticMember());
+    adjustMemberFunctionCC(R, D.isStaticMember(), D.isCtorOrDtor(),
+                           D.getIdentifierLoc());
 
   bool isFriend = false;
   FunctionTemplateDecl *FunctionTemplate = nullptr;
@@ -12637,26 +12638,26 @@ ExprResult Sema::VerifyBitField(SourceLocation FieldLoc,
   }
 
   if (!FieldTy->isDependentType()) {
-    uint64_t TypeSize = Context.getTypeSize(FieldTy);
-    if (Value.getZExtValue() > TypeSize) {
+    uint64_t TypeWidth = Context.getIntWidth(FieldTy);
+    if (Value.ugt(TypeWidth)) {
       if (!getLangOpts().CPlusPlus || IsMsStruct ||
           Context.getTargetInfo().getCXXABI().isMicrosoft()) {
         if (FieldName) 
-          return Diag(FieldLoc, diag::err_bitfield_width_exceeds_type_size)
+          return Diag(FieldLoc, diag::err_bitfield_width_exceeds_type_width)
             << FieldName << (unsigned)Value.getZExtValue() 
-            << (unsigned)TypeSize;
+            << (unsigned)TypeWidth;
         
-        return Diag(FieldLoc, diag::err_anon_bitfield_width_exceeds_type_size)
-          << (unsigned)Value.getZExtValue() << (unsigned)TypeSize;
+        return Diag(FieldLoc, diag::err_anon_bitfield_width_exceeds_type_width)
+          << (unsigned)Value.getZExtValue() << (unsigned)TypeWidth;
       }
       
       if (FieldName)
-        Diag(FieldLoc, diag::warn_bitfield_width_exceeds_type_size)
+        Diag(FieldLoc, diag::warn_bitfield_width_exceeds_type_width)
           << FieldName << (unsigned)Value.getZExtValue() 
-          << (unsigned)TypeSize;
+          << (unsigned)TypeWidth;
       else
-        Diag(FieldLoc, diag::warn_anon_bitfield_width_exceeds_type_size)
-          << (unsigned)Value.getZExtValue() << (unsigned)TypeSize;        
+        Diag(FieldLoc, diag::warn_anon_bitfield_width_exceeds_type_width)
+          << (unsigned)Value.getZExtValue() << (unsigned)TypeWidth;        
     }
   }
 

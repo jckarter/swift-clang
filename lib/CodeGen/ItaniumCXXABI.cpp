@@ -3312,9 +3312,6 @@ static StructorCodegen getCodegenToUse(CodeGenModule &CGM,
   if (MD->getParent()->getNumVBases())
     return StructorCodegen::Emit;
 
-  if (MD->hasAttr<AlwaysInlineAttr>())
-    return StructorCodegen::Emit;
-
   GlobalDecl AliasDecl;
   if (const auto *DD = dyn_cast<CXXDestructorDecl>(MD)) {
     AliasDecl = GlobalDecl(DD, Dtor_Complete);
@@ -3355,8 +3352,7 @@ static void emitConstructorDestructorAlias(CodeGenModule &CGM,
   llvm::PointerType *AliasType = Aliasee->getType();
 
   // Create the alias with no name.
-  auto *Alias = llvm::GlobalAlias::create(AliasType, Linkage, "", Aliasee,
-                                          &CGM.getModule());
+  auto *Alias = llvm::GlobalAlias::create(Linkage, "", Aliasee);
 
   // Switch any previous uses to the alias.
   if (Entry) {
