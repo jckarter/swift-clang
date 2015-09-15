@@ -25,6 +25,7 @@
 #include "clang/CodeGen/CGFunctionInfo.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/Metadata.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -1344,6 +1345,13 @@ namespace {
 
 }
 
+static bool isInitializerOfDynamicClass(const CXXCtorInitializer *BaseInit) {
+  const Type *BaseType = BaseInit->getBaseClass();
+  const auto *BaseClassDecl =
+          cast<CXXRecordDecl>(BaseType->getAs<RecordType>()->getDecl());
+  return BaseClassDecl->isDynamicClass();
+}
+
 /// EmitCtorPrologue - This routine generates necessary code to initialize
 /// base classes and non-static data members belonging to this constructor.
 void CodeGenFunction::EmitCtorPrologue(const CXXConstructorDecl *CD,
@@ -1367,9 +1375,13 @@ void CodeGenFunction::EmitCtorPrologue(const CXXConstructorDecl *CD,
     assert(BaseCtorContinueBB);
   }
 
+  bool BaseVPtrsInitialized = false;
   // Virtual base initializers first.
   for (; B != E && (*B)->isBaseInitializer() && (*B)->isBaseVirtual(); B++) {
+    CXXCtorInitializer *BaseInit = *B;
     EmitBaseInitializer(*this, ClassDecl, *B, CtorType);
+    BaseVPtrsInitialized |= BaseInitializerUsesThis(getContext(),
+                                                    BaseInit->getInit());
   }
 
   if (BaseCtorContinueBB) {
@@ -1382,7 +1394,14 @@ void CodeGenFunction::EmitCtorPrologue(const CXXConstructorDecl *CD,
   for (; B != E && (*B)->isBaseInitializer(); B++) {
     assert(!(*B)->isBaseVirtual());
     EmitBaseInitializer(*this, ClassDecl, *B, CtorType);
+    BaseVPtrsInitialized |= isInitializerOfDynamicClass(*B);
   }
+
+  // Pointer to this requires to be passed through invariant.group.barrier
+  // only if we've initialized any base vptrs.
+  if (CGM.getCodeGenOpts().StrictVTablePointers &&
+      CGM.getCodeGenOpts().OptimizationLevel > 0 && BaseVPtrsInitialized)
+    CXXThisValue = Builder.CreateInvariantGroupBarrier(LoadCXXThis());
 
   InitializeVTablePointers(ClassDecl);
 
@@ -1468,11 +1487,14 @@ FieldHasTrivialDestructorBody(ASTContext &Context,
 /// any vtable pointers before calling this destructor.
 static bool CanSkipVTablePointerInitialization(CodeGenFunction &CGF,
                                                const CXXDestructorDecl *Dtor) {
+  const CXXRecordDecl *ClassDecl = Dtor->getParent();
+  if (!ClassDecl->isDynamicClass())
+    return true;
+
   if (!Dtor->hasTrivialBody())
     return false;
 
   // Check the fields.
-  const CXXRecordDecl *ClassDecl = Dtor->getParent();
   for (const auto *Field : ClassDecl->fields())
     if (!FieldHasTrivialDestructorBody(CGF.getContext(), Field))
       return false;
@@ -1543,8 +1565,14 @@ void CodeGenFunction::EmitDestructorBody(FunctionArgList &Args) {
     EnterDtorCleanups(Dtor, Dtor_Base);
 
     // Initialize the vtable pointers before entering the body.
-    if (!CanSkipVTablePointerInitialization(*this, Dtor))
-        InitializeVTablePointers(Dtor->getParent());
+    if (!CanSkipVTablePointerInitialization(*this, Dtor)) {
+      // Insert the llvm.invariant.group.barrier intrinsic before initializing
+      // the vptrs to cancel any previous assumptions we might have made.
+      if (CGM.getCodeGenOpts().StrictVTablePointers &&
+          CGM.getCodeGenOpts().OptimizationLevel > 0)
+        CXXThisValue = Builder.CreateInvariantGroupBarrier(LoadCXXThis());
+      InitializeVTablePointers(Dtor->getParent());
+    }
 
     if (isTryBody)
       EmitStmt(cast<CXXTryStmt>(Body)->getTryBlock());
@@ -2060,7 +2088,8 @@ void CodeGenFunction::EmitVTableAssumptionLoad(const VPtr &Vptr, Address This) {
         ApplyNonVirtualAndVirtualOffset(*this, This, NonVirtualOffset, nullptr,
                                         Vptr.VTableClass, Vptr.NearestVBase);
 
-  llvm::Value *VPtrValue = GetVTablePtr(This, VTableGlobal->getType());
+  llvm::Value *VPtrValue =
+      GetVTablePtr(This, VTableGlobal->getType(), Vptr.VTableClass);
   llvm::Value *Cmp =
       Builder.CreateICmpEQ(VPtrValue, VTableGlobal, "cmp.vtables");
   Builder.CreateAssumption(Cmp);
@@ -2279,7 +2308,10 @@ void CodeGenFunction::InitializeVTablePointer(const VPtr &Vptr) {
   VTableAddressPoint = Builder.CreateBitCast(VTableAddressPoint, VTablePtrTy);
 
   llvm::StoreInst *Store = Builder.CreateStore(VTableAddressPoint, VTableField);
-  CGM.DecorateInstruction(Store, CGM.getTBAAInfoForVTablePtr());
+  CGM.DecorateInstructionWithTBAA(Store, CGM.getTBAAInfoForVTablePtr());
+  if (CGM.getCodeGenOpts().OptimizationLevel > 0 &&
+      CGM.getCodeGenOpts().StrictVTablePointers)
+    CGM.DecorateInstructionWithInvariantGroup(Store, Vptr.VTableClass);
 }
 
 CodeGenFunction::VPtrsVector
@@ -2372,7 +2404,8 @@ static bool isProvablyNonNull(llvm::Value *Ptr) {
 }
 
 llvm::Value *CodeGenFunction::GetVTablePtr(Address This,
-                                           llvm::Type *Ty) {
+                                           llvm::Type *VTableTy,
+                                           const CXXRecordDecl *RD) {
   // Under -fapple-kext-vtable-mitigation, set the top bit of the
   // pointer before loading the address.
   if (CGM.getCodeGenOpts().AppleKextVTableMitigation &&
@@ -2380,13 +2413,19 @@ llvm::Value *CodeGenFunction::GetVTablePtr(Address This,
     llvm::Value *Ptr = Builder.CreatePtrToInt(This.getPointer(), IntPtrTy);
     uint64_t Mask = 1ULL << (PointerWidthInBits - 1);
     Ptr = Builder.CreateOr(Ptr, llvm::ConstantInt::get(IntPtrTy, Mask));
-    Ptr = Builder.CreateIntToPtr(Ptr, Ty->getPointerTo(This.getAddressSpace()));
+    Ptr = Builder.CreateIntToPtr(Ptr,
+        VTableTy->getPointerTo(This.getAddressSpace()));
     This = Address(Ptr, This.getAlignment());
   }
 
-  Address VTablePtrSrc = Builder.CreateElementBitCast(This, Ty);
+  Address VTablePtrSrc = Builder.CreateElementBitCast(This, VTableTy);
   llvm::Instruction *VTable = Builder.CreateLoad(VTablePtrSrc, "vtable");
-  CGM.DecorateInstruction(VTable, CGM.getTBAAInfoForVTablePtr());
+  CGM.DecorateInstructionWithTBAA(VTable, CGM.getTBAAInfoForVTablePtr());
+
+  if (CGM.getCodeGenOpts().OptimizationLevel > 0 &&
+      CGM.getCodeGenOpts().StrictVTablePointers)
+    CGM.DecorateInstructionWithInvariantGroup(VTable, RD);
+
   return VTable;
 }
 
@@ -2471,7 +2510,8 @@ void CodeGenFunction::EmitVTablePtrCheckForCast(QualType T,
   }
 
   llvm::Value *VTable =
-    GetVTablePtr(Address(Derived, getPointerAlign()), Int8PtrTy);
+    GetVTablePtr(Address(Derived, getPointerAlign()), Int8PtrTy, ClassDecl);
+
   EmitVTablePtrCheck(ClassDecl, VTable, TCK, Loc);
 
   if (MayBeNull) {
