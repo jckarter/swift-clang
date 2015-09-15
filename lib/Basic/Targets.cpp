@@ -7121,6 +7121,7 @@ public:
     LargeArrayMinWidth = 128;
     LargeArrayAlign = 128;
     SimdDefaultAlign = 128;
+    SigAtomicType = SignedLong;
   }
 
 protected:
@@ -7223,8 +7224,7 @@ class WebAssembly32TargetInfo : public WebAssemblyTargetInfo {
 public:
   explicit WebAssembly32TargetInfo(const llvm::Triple &T)
       : WebAssemblyTargetInfo(T) {
-    // TODO: Set this to the correct value once the spec issues are resolved.
-    MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 0;
+    MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 32;
     DataLayoutString = "e-p:32:32-i64:64-n32:64-S128";
   }
 
@@ -7242,8 +7242,7 @@ public:
       : WebAssemblyTargetInfo(T) {
     LongAlign = LongWidth = 64;
     PointerAlign = PointerWidth = 64;
-    // TODO: Set this to the correct value once the spec issues are resolved.
-    MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 0;
+    MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
     DataLayoutString = "e-p:64:64-i64:64-n32:64-S128";
   }
 

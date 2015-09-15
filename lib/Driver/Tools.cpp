@@ -4897,8 +4897,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasFlag(options::OPT_fuse_cxa_atexit,
                     options::OPT_fno_use_cxa_atexit,
                     !IsWindowsCygnus && !IsWindowsGNU &&
-                        getToolChain().getArch() != llvm::Triple::hexagon &&
-                        getToolChain().getArch() != llvm::Triple::xcore) ||
+                    getToolChain().getTriple().getOS() != llvm::Triple::Solaris &&
+                    getToolChain().getArch() != llvm::Triple::hexagon &&
+                    getToolChain().getArch() != llvm::Triple::xcore) ||
       KernelOrKext)
     CmdArgs.push_back("-fno-use-cxa-atexit");
 
@@ -7321,10 +7322,6 @@ void solaris::Linker::ConstructJob(Compilation &C, const JobAction &JA,
         Args.MakeArgString(getToolChain().GetFilePath("values-Xa.o")));
     CmdArgs.push_back(
         Args.MakeArgString(getToolChain().GetFilePath("crtbegin.o")));
-
-    if (getToolChain().getDriver().CCCIsCXX())
-      CmdArgs.push_back(
-          Args.MakeArgString(getToolChain().GetFilePath("cxa_finalize.o")));
   }
 
   const ToolChain::path_list &Paths = getToolChain().getFilePaths();

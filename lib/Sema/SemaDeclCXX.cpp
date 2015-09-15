@@ -7823,7 +7823,8 @@ bool Sema::CheckUsingShadowDecl(UsingDecl *Using, NamedDecl *Orig,
       FoundEquivalentDecl = true;
     }
 
-    (isa<TagDecl>(D) ? Tag : NonTag) = D;
+    if (isVisible(D))
+      (isa<TagDecl>(D) ? Tag : NonTag) = D;
   }
 
   if (FoundEquivalentDecl)
