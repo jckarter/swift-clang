@@ -2196,7 +2196,26 @@ std::string Driver::GetProgramPath(const char *Name,
 std::string Driver::GetTemporaryPath(StringRef Prefix,
                                      const char *Suffix) const {
   SmallString<128> Path;
-  std::error_code EC = llvm::sys::fs::createTemporaryFile(Prefix, Suffix, Path);
+  std::error_code EC;
+
+  // The LLVM_DIAGNOSTIC_DIR environment variable is used internally by the
+  // build infrastructure to preserve diagnostic files for bug triagers. We
+  // need a dedicated directory unrelated to the system temp directory for this
+  // purpose because;
+  //   (1) the diagnostic files may disappear from the build worker by the
+  //       time the dispatcher realizes there is a problem. And,
+  //   (2) the diagnostic directory may be backed by NFS, which is too slow to
+  //       be used as a general temp directory.
+  Optional<std::string> DiagnosticDir =
+      llvm::sys::Process::GetEnv("LLVM_DIAGNOSTIC_DIR");
+  if (CCGenDiagnostics && DiagnosticDir.hasValue()) {
+    Path.assign(DiagnosticDir.getValue());
+    EC = llvm::sys::fs::access(Path, llvm::sys::fs::AccessMode::Exist);
+    llvm::sys::path::append(Path, Prefix + StringRef(".") + Suffix);
+  } else {
+    EC = llvm::sys::fs::createTemporaryFile(Prefix, Suffix, Path);
+  }
+
   if (EC) {
     Diag(clang::diag::err_unable_to_make_temp) << EC.message();
     return "";
