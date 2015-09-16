@@ -1,0 +1,105 @@
+#!/bin/sh
+# LLVM LOCAL file B&I
+
+set -x
+
+# Build LLVM the "Apple way".
+# Parameters:
+
+HOSTS_LIST=`echo $RC_ARCHS | sed 's/[[:space:]]/;/g'`
+
+# The first parameter is a yes/no that indicates whether assertions should be
+# enabled in the LLVM libs/tools.
+LLVM_ASSERTIONS="$1"
+
+# The second parameter is a yes/no that indicates whether this is an optimized
+# build.
+LLVM_OPTIMIZED="$2"
+
+SDKROOT_PATH=`xcodebuild -version -sdk $SDKROOT Path`
+
+if [ "$LLVM_OPTIMIZED" = "yes" ]; then
+    BUILD_TYPE=RelWithDebInfo
+else
+    BUILD_TYPE=Debug
+fi
+
+# Figure out how many make processes to run.
+SYSCTL=`sysctl -n hw.activecpu`
+# sysctl -n hw.* does not work when invoked via B&I chroot /BuildRoot.
+# Builders can default to 2, since even if they are single processor,
+# nothing else is running on the machine.
+if [ -z "$SYSCTL" ]; then
+    SYSCTL=2
+fi
+
+CMAKE=`xcrun -find cmake`
+NINJA=`xcrun -find ninja`
+CC=`xcrun -find clang`
+CXX=`xcrun -find clang++`
+PREFIX=$DSTROOT
+CMAKE_OPTS="\
+  -DLLVM_ENABLE_ASSERTIONS:BOOL=$LLVM_ASSERTIONS \
+  -DCMAKE_INSTALL_PREFIX=$PREFIX \
+  -DCMAKE_MAKE_PROGRAM=$NINJA \
+  -DCMAKE_CXX_COMPILER=$CXX \
+  -DCMAKE_C_COMPILER=$CC"
+
+# Build the LLVM tree universal.
+mkdir -p $OBJROOT/obj-llvm || exit 1
+cd $OBJROOT/obj-llvm || exit 1
+
+$CMAKE -G 'Ninja' -C $SRCROOT/tools/clang/utils/buildit/stage1.cmake $CMAKE_OPTS \
+    -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+    -DCMAKE_OSX_ARCHITECTURES="$HOSTS_LIST" \
+    "$SRCROOT" \
+    || exit 1
+
+$NINJA bootstrap-install
+if ! test $? == 0 ; then
+    echo "error: LLVM 'ninja install' failed!"
+    exit 1
+fi
+
+$NINJA install-libcxx
+if ! test $? == 0 ; then
+    echo "error: LLVM 'ninja install-libcxx' failed!"
+    exit 1
+fi
+
+cp $OBJROOT/obj-llvm/tools/clang/bootstrap-bins/bin/c-index-test $DSTROOT/$DT_TOOLCHAIN_DIR/usr/local/bin/
+echo 1 > $DSTROOT/$DT_TOOLCHAIN_DIR/usr/local/lib/enable_objc_gc
+
+cd $SYMROOT || exit 1
+
+# Clean out SYM_DIR in case -noclean was passed to buildit.
+rm -rf * || exit 1
+
+# Generate .dSYM files
+DSYMUTIL=`xcrun -find dsymutil`
+find $PREFIX -perm -0111 -type f \
+    -print | xargs -n 1 -P ${SYSCTL} ${DSYMUTIL}
+
+# Save .dSYM files and .a archives
+cd $PREFIX || exit 1
+find . \( -path \*.dSYM/\* \) -print \
+    | cpio -pdml $SYMROOT || exit 1
+
+find $PREFIX -name \*.dSYM -print | xargs rm -r || exit 1
+
+STRIP=`xcrun -find strip`
+if [ "x$LLVM_DEBUG" != "x1" ]; then
+    # Strip local symbols from llvm libraries.
+    #
+    # Use '-l' to strip i386 modules. N.B. that flag doesn't work with kext or
+    # PPC objects!
+    $STRIP -Sl $PREFIX/bin/*
+fi
+
+chgrp -h -R wheel $DSTROOT
+chgrp -R wheel $DSTROOT
+
+################################################################################
+# w00t! Done!
+
+exit 0
