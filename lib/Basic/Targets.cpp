@@ -3977,6 +3977,9 @@ public:
     // Use fp2ret for _Complex long double.
     ComplexLongDoubleUsesFP2Ret = true;
 
+    // Make __builtin_ms_va_list available.
+    HasBuiltinMSVaList = true;
+
     // x86-64 has atomics up to 16 bytes.
     MaxAtomicPromoteWidth = 128;
     MaxAtomicInlineWidth = 128;
