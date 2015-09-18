@@ -1685,8 +1685,9 @@ llvm::DIType *CGDebugInfo::CreateType(const ObjCInterfaceType *Ty,
 }
 
 llvm::DIModule *
-CGDebugInfo::getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod) {
-  auto &ModRef = ModuleRefCache[Mod.Signature];
+CGDebugInfo::getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod,
+                                  bool CreateSkeletonCU) {
+  auto &ModRef = ModuleRefCache[Mod.ModuleName];
   if (ModRef)
     return cast<llvm::DIModule>(ModRef);
 
@@ -1712,15 +1713,20 @@ CGDebugInfo::getOrCreateModuleRef(ExternalASTSource::ASTSourceDescriptor Mod) {
       OS << '\"';
     }
   }
-  llvm::DIBuilder DIB(CGM.getModule());
-  auto *CU = DIB.createCompileUnit(TheCU->getSourceLanguage(), Mod.ModuleName,
-                                   Mod.Path, TheCU->getProducer(), true,
-                                   StringRef(), 0, Mod.ASTFile,
-                                   llvm::DIBuilder::FullDebug, Mod.Signature);
-  llvm::DIModule *M =
-      DIB.createModule(CU, Mod.ModuleName, ConfigMacros, Mod.Path,
-                       CGM.getHeaderSearchOpts().Sysroot);
-  DIB.finalize();
+
+  llvm::DIModule *M = nullptr;
+  if (CreateSkeletonCU) {
+    llvm::DIBuilder DIB(CGM.getModule());
+    auto *CU = DIB.createCompileUnit(TheCU->getSourceLanguage(), Mod.ModuleName,
+                                     Mod.Path, TheCU->getProducer(), true,
+                                     StringRef(), 0, Mod.ASTFile,
+                                     llvm::DIBuilder::FullDebug, Mod.Signature);
+    M = DIB.createModule(CU, Mod.ModuleName, ConfigMacros, Mod.Path,
+                         CGM.getHeaderSearchOpts().Sysroot);
+    DIB.finalize();
+  } else
+    M = DBuilder.createModule(TheCU, Mod.ModuleName, ConfigMacros, Mod.Path,
+                              CGM.getHeaderSearchOpts().Sysroot);
   ModRef.reset(M);
   return M;
 }
@@ -2176,12 +2182,13 @@ llvm::DIModule *CGDebugInfo::getParentModuleOrNull(const Decl *D) {
   if (!DebugTypeExtRefs || !D->isFromASTFile())
     return nullptr;
 
+  // Record a reference to an imported clang module or precompiled header.
   llvm::DIModule *ModuleRef = nullptr;
   auto *Reader = CGM.getContext().getExternalSource();
   auto Idx = D->getOwningModuleID();
   auto Info = Reader->getSourceDescriptor(Idx);
   if (Info)
-    ModuleRef = getOrCreateModuleRef(*Info);
+    ModuleRef = getOrCreateModuleRef(*Info, true);
   return ModuleRef;
 }
 
@@ -3406,9 +3413,9 @@ void CGDebugInfo::EmitImportDecl(const ImportDecl &ID) {
   auto *Reader = CGM.getContext().getExternalSource();
   auto Info = Reader->getSourceDescriptor(*ID.getImportedModule());
   DBuilder.createImportedDeclaration(
-    getCurrentContextDescriptor(cast<Decl>(ID.getDeclContext())),
-                                getOrCreateModuleRef(Info),
-                                getLineNumber(ID.getLocation()));
+      getCurrentContextDescriptor(cast<Decl>(ID.getDeclContext())),
+      getOrCreateModuleRef(Info, DebugTypeExtRefs),
+      getLineNumber(ID.getLocation()));
 }
 
 llvm::DIImportedEntity *
