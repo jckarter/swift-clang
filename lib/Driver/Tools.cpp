@@ -3489,7 +3489,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         CmdArgs.push_back(ABIName);
 
         // Determine floating point ABI from the options & target defaults.
-        arm::FloatABI CurrentFloatABI = tools::arm::getARMFloatABI(D, Args, Triple);
+        arm::FloatABI CurrentFloatABI =
+            tools::arm::getARMFloatABI(getToolChain(), Args);
         if (CurrentFloatABI == arm::FloatABI::Soft) {
           CmdArgs.push_back("-msoft-float");
           CmdArgs.push_back("-mfloat-abi");
