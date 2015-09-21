@@ -4755,7 +4755,6 @@ class ObjCInterfaceType : public ObjCObjectType {
 public:
   /// Get the declaration of this interface.
   ObjCInterfaceDecl *getDecl() const { return Decl; }
-  void setDecl(ObjCInterfaceDecl *IDecl) const { Decl = IDecl; }
 
   bool isSugared() const { return false; }
   QualType desugar() const { return QualType(this, 0); }
