@@ -24,6 +24,30 @@ else
     BUILD_TYPE=Debug
 fi
 
+if [ -d $SRCROOT/src ]; then
+  LLVM_SRCROOT=$SRCROOT/src
+  IB_ROOT=$SRCROOT
+else
+  LLVM_SRCROOT=$SRCROOT
+  IB_ROOT=$LLVM_SRCROOT/tools/clang/utils/ib
+fi
+
+CMAKE_TOOLCHAIN_FLAGS="\
+  -DCMAKE_TOOLCHAIN_FILE=$SRCROOT/cmake/platforms/iOS.cmake \
+  -DCMAKE_SYSTEM_NAME=Darwin"
+ORDER_FILE=$IB_ROOT/static-order-files/armv7/clang.order
+
+OSX=MacOSX.platform
+
+if [ "${SDKROOT_PATH#*$OSX}" != "$SDKROOT_PATH"  ]; then
+  CMAKE_TOOLCHAIN_FLAGS=""
+  ORDER_FILE=$IB_ROOT/static-order-files/x86_64/clang.order
+fi
+
+if [ -e $ORDER_FILE ]; then
+  ORDER_FILE_CMAKE_FLAG="-DCLANG_ORDER_FILE=$ORDER_FILE"
+fi
+
 # Figure out how many make processes to run.
 SYSCTL=`sysctl -n hw.activecpu`
 # sysctl -n hw.* does not work when invoked via B&I chroot /BuildRoot.
@@ -45,19 +69,72 @@ CMAKE_OPTS="\
   -DCMAKE_CXX_COMPILER=$CXX \
   -DCMAKE_C_COMPILER=$CC"
 
+################################################################################
+
+# Build the LLVM tree native.
+mkdir -p $OBJROOT/obj-llvm-native || exit 1
+cd $OBJROOT/obj-llvm-native || exit 1
+
+# First build the native tblgen's
+OLD_SDKROOT=$SDKROOT
+OLD_DT_TOOLCHAIN_DIR=$DT_TOOLCHAIN_DIR
+OLD_TOOLCHAINS=$TOOLCHAINS
+OLD_IPHONEOS_DEPLOYMENT_TARGET=$IPHONEOS_DEPLOYMENT_TARGET
+OLD_TVOS_DEPLOYMENT_TARGET=$TVOS_DEPLOYMENT_TARGET
+OLD_WATCHOS_DEPLOYMENT_TARGET=$WATCHOS_DEPLOYMENT_TARGET
+
+# If we're building for iOS, we need to set up a native host environment
+if [ "$RC_PURPLE" = "YES" ]; then
+  IPHONEOS_DEPLOYMENT_TARGET=
+  TVOS_DEPLOYMENT_TARGET=
+  WATCHOS_DEPLOYMENT_TARGET=
+  SDKROOT=macosx
+  DT_TOOLCHAIN_DIR=
+  TOOLCHAINS=
+fi
+
+$CMAKE -G Ninja \
+    -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
+    -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_INCLUDE_EXAMPLES=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    "$SRCROOT" \
+    || exit 1
+
+SDKROOT=$SDKROOT DT_TOOLCHAIN_DIR= TOOLCHAINS= IPHONEOS_DEPLOYMENT_TARGET= TVOS_DEPLOYMENT_TARGET= WATCHOS_DEPLOYMENT_TARGET= $NINJA $COMMON_NINJAFLAGS llvm-tblgen clang-tblgen
+if [ $? != 0 ] ; then
+    echo "error: Clang 'make native tablegen exes' failed!"
+    exit 1
+fi
+
+SDKROOT=$OLD_SDKROOT
+IPHONEOS_DEPLOYMENT_TARGET=$OLD_IPHONEOS_DEPLOYMENT_TARGET
+TVOS_DEPLOYMENT_TARGET=$OLD_TVOS_DEPLOYMENT_TARGET
+WATCHOS_DEPLOYMENT_TARGET=$OLD_WATCHOS_DEPLOYMENT_TARGET
+DT_TOOLCHAIN_DIR=$OLD_DT_TOOLCHAIN_DIR
+TOOLCHAINS=$OLD_TOOLCHAINS
+################################################################################
+
 # Build the LLVM tree universal.
 mkdir -p $OBJROOT/obj-llvm || exit 1
 cd $OBJROOT/obj-llvm || exit 1
 
-$CMAKE -G 'Ninja' -C $SRCROOT/tools/clang/utils/buildit/stage1.cmake $CMAKE_OPTS \
+TOOLCHAIN_USR=$DSTROOT/$DT_TOOLCHAIN_DIR/usr
+
+$CMAKE -G 'Ninja' -C $LLVM_SRCROOT/tools/clang/cmake/caches/Apple-stage1.cmake $CMAKE_OPTS \
     -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DCMAKE_OSX_ARCHITECTURES="$HOSTS_LIST" \
-    "$SRCROOT" \
+    -DLLVM_TABLEGEN=$OBJROOT/obj-llvm-native/bin/llvm-tblgen \
+    -DCLANG_TABLEGEN=$OBJROOT/obj-llvm-native/bin/clang-tblgen \
+    -DCMAKE_INSTALL_PREFIX=$TOOLCHAIN_USR \
+    $CMAKE_TOOLCHAIN_FLAGS \
+    $ORDER_FILE_CMAKE_FLAG \
+    "$LLVM_SRCROOT" \
     || exit 1
 
 $NINJA bootstrap-install
 if ! test $? == 0 ; then
-    echo "error: LLVM 'ninja install' failed!"
+    echo "error: LLVM 'ninja bootstrap-install' failed!"
     exit 1
 fi
 
@@ -67,8 +144,29 @@ if ! test $? == 0 ; then
     exit 1
 fi
 
-cp $OBJROOT/obj-llvm/tools/clang/bootstrap-bins/bin/c-index-test $DSTROOT/$DT_TOOLCHAIN_DIR/usr/local/bin/
-echo 1 > $DSTROOT/$DT_TOOLCHAIN_DIR/usr/local/lib/enable_objc_gc
+# DSTROOT fixups
+mkdir -p $TOOLCHAIN_USR/local/lib/
+mkdir -p $TOOLCHAIN_USR/local/bin/
+mkdir -p $TOOLCHAIN_USR/local/include/
+
+cp $OBJROOT/obj-llvm/tools/clang/bootstrap-bins/bin/c-index-test $TOOLCHAIN_USR/local/bin/
+mv $TOOLCHAIN_USR/bin/clang-format $TOOLCHAIN_USR/local/bin/
+mv $TOOLCHAIN_USR/include/llvm-c $TOOLCHAIN_USR/local/include/llvm-c
+cp $LLVM_SRCROOT/include/llvm-c/Support.h $TOOLCHAIN_USR/local/include/llvm-c/
+cp $LLVM_SRCROOT/include/llvm-c/ProfileData.h $TOOLCHAIN_USR/local/include/llvm-c/
+mv $TOOLCHAIN_USR/include/clang-c $TOOLCHAIN_USR/local/include/clang-c
+rm -rf $TOOLCHAIN_USR/share/clang
+echo 1 > $TOOLCHAIN_USR/local/lib/enable_objc_gc
+
+#install licenses and manpages
+if [ -d $IB_ROOT ]; then
+  mkdir -p $TOOLCHAIN_USR/local/OpenSourceVersions/
+  cp $IB_ROOT/clang.plist $TOOLCHAIN_USR/local/OpenSourceVersions/clang.plist
+fi
+mkdir -p $TOOLCHAIN_USR/local/OpenSourceLicenses/
+cp $LLVM_SRCROOT/LICENSE.TXT $TOOLCHAIN_USR/local/OpenSourceLicenses/clang-llvm.txt
+cp $LLVM_SRCROOT/tools/clang/LICENSE.TXT $TOOLCHAIN_USR/local/OpenSourceLicenses/clang.txt
+
 
 cd $SYMROOT || exit 1
 
