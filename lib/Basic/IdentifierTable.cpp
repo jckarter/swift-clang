@@ -145,7 +145,6 @@ static KeywordStatus getKeywordStatus(const LangOptions &LangOpts,
   // We treat bridge casts as objective-C keywords so we can warn on them
   // in non-arc mode.
   if (LangOpts.ObjC2 && (Flags & KEYARC)) return KS_Enabled;
-  if (LangOpts.ObjC2 && (Flags & KEYOBJC2)) return KS_Enabled;
   if (LangOpts.ConceptsTS && (Flags & KEYCONCEPTS)) return KS_Enabled;
   if (LangOpts.ObjC2 && (Flags & KEYOBJC2)) return KS_Enabled;
   if (LangOpts.CPlusPlus && (Flags & KEYCXX11)) return KS_Future;

@@ -426,7 +426,6 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     Opts.DwarfVersion = 4;
   Opts.DebugTypeExtRefs = Args.hasArg(OPT_dwarf_ext_refs);
 
-  Opts.DebugTypeExtRefs = Args.hasArg(OPT_dwarf_ext_refs);
   if (const Arg *A =
           Args.getLastArg(OPT_emit_llvm_uselists, OPT_no_emit_llvm_uselists))
     Opts.EmitLLVMUseLists = A->getOption().getID() == OPT_emit_llvm_uselists;
