@@ -174,6 +174,7 @@ namespace clang {
       for (const auto &F : Firsts)
         Writer.AddDeclRef(F.second, Record);
     }
+
     /// Get the specialization decl from an entry in the specialization list.
     template <typename EntryType>
     typename RedeclarableTemplateDecl::SpecEntryTraits<EntryType>::DeclType *

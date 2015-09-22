@@ -120,8 +120,7 @@ testing::AssertionResult MatchVerifier<NodeType>::match(
 
   // Default to failure in case callback is never called
   setFailure("Could not find match");
-  if (!tooling::runToolOnCodeWithArgs(Factory->create(),
-                                      Code, Args, FileName))
+  if (!tooling::runToolOnCodeWithArgs(Factory->create(), Code, Args, FileName))
     return testing::AssertionFailure() << "Parsing error";
   if (!Verified)
     return testing::AssertionFailure() << VerifyResult;

@@ -991,7 +991,7 @@ ActOnStartClassInterface(Scope *S, SourceLocation AtInterfaceLoc,
     // Class already seen. Was it a definition?
     if (ObjCInterfaceDecl *Def = PrevIDecl->getDefinition()) {
       Diag(AtInterfaceLoc, diag::err_duplicate_class_def)
-            << PrevIDecl->getDeclName();
+        << PrevIDecl->getDeclName();
       Diag(Def->getLocation(), diag::note_previous_definition);
       IDecl->setInvalidDecl();
     }
@@ -1003,10 +1003,11 @@ ActOnStartClassInterface(Scope *S, SourceLocation AtInterfaceLoc,
   // may already be a definition, so we'll end up adding to it.
   if (!IDecl->hasDefinition())
     IDecl->startDefinition();
-    
+  
   if (SuperName) {
     // Diagnose availability in the context of the @interface.
     ContextRAII SavedContext(*this, IDecl);
+
     ActOnSuperClassOfClassInterface(S, AtInterfaceLoc, IDecl, 
                                     ClassName, ClassLoc, 
                                     SuperName, SuperLoc, SuperTypeArgs, 
@@ -1173,7 +1174,7 @@ Sema::ActOnStartProtocolInterface(SourceLocation AtProtoInterfaceLoc,
   if (AttrList)
     ProcessDeclAttributeList(TUScope, PDecl, AttrList);
   ProcessAPINotes(PDecl);
-
+  
   // Merge attributes from previous declarations.
   if (PrevDecl)
     mergeDeclAttributes(PDecl, PrevDecl);
@@ -1700,7 +1701,7 @@ Sema::ActOnForwardProtocolDeclaration(SourceLocation AtProtocolLoc,
     if (attrList)
       ProcessDeclAttributeList(TUScope, PDecl, attrList);
     ProcessAPINotes(PDecl);
-
+    
     if (PrevDecl)
       mergeDeclAttributes(PDecl, PrevDecl);
 

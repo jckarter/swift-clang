@@ -17,4 +17,3 @@ USEDLIBS = clangLex.a clangBasic.a \
         clangFrontend.a clangCodeGen.a clangDriver.a clangIndex.a 
 
 include $(CLANG_LEVEL)/unittests/Makefile
-

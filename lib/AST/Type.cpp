@@ -3459,7 +3459,7 @@ Optional<NullabilityKind> Type::getNullability(const ASTContext &context) const 
     QualType desugared = type.getSingleStepDesugaredType(context);
     if (desugared.getTypePtr() == type.getTypePtr())
       return None;
-
+    
     type = desugared;
   } while (true);
 }

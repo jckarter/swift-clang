@@ -2892,7 +2892,6 @@ struct RegisterFatalErrorHandler {
 static llvm::ManagedStatic<RegisterFatalErrorHandler> RegisterFatalErrorHandlerOnce;
 
 extern "C" {
-
 CXIndex clang_createIndex(int excludeDeclarationsFromPCH,
                           int displayDiagnostics) {
   // We use crash recovery to make some of our APIs more reliable, implicitly
@@ -2955,7 +2954,7 @@ CXTranslationUnit clang_createTranslationUnit(CXIndex CIdx,
                                               const char *ast_filename) {
   CXTranslationUnit TU;
   enum CXErrorCode Result =
-    clang_createTranslationUnit2(CIdx, ast_filename, &TU);
+      clang_createTranslationUnit2(CIdx, ast_filename, &TU);
   (void)Result;
   assert((TU && Result == CXError_Success) ||
          (!TU && Result != CXError_Success));

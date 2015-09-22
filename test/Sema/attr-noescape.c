@@ -10,7 +10,3 @@ void foo(__attribute__((noescape)) int *int_ptr,
          __attribute__((noescape)) int (^block)(int),
          __attribute((noescape)) int integer) { // expected-warning{{'noescape' attribute ignored on parameter of non-pointer type 'int'}}
 }
-
-         
-
-

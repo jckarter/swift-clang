@@ -3498,8 +3498,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
                                              *inferNullability),
                                            SourceRange(pointerLoc),
                                            nullptr, SourceLocation(),
-                                           nullptr, 0,
-                                           syntax);
+                                           nullptr, 0, syntax);
 
       spliceAttrIntoList(*nullabilityAttr, attrs);
 
@@ -5536,7 +5535,7 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
     }
     return true;
   }
-
+  
   // For the context-sensitive keywords/Objective-C property
   // attributes, require that the type be a single-level pointer.
   if (isContextSensitive) {
