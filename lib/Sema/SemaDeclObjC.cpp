@@ -1746,7 +1746,7 @@ ActOnStartCategoryInterface(SourceLocation AtInterfaceLoc,
   if (!CategoryName && IDecl->getImplementation()) {
     Diag(ClassLoc, diag::err_class_extension_after_impl) << ClassName;
     Diag(IDecl->getImplementation()->getLocation(), 
-          diag::note_implementation_declared) << 0;
+          diag::note_implementation_declared);
   }
 
   if (CategoryName) {
