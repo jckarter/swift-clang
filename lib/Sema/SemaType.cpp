@@ -5637,35 +5637,35 @@ static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
 
     // Complain about the nullability qualifier being in the wrong
     // place.
-    if (!attr.isContextSensitiveKeywordAttribute()) {
-      enum {
-        PK_Pointer,
-        PK_BlockPointer,
-        PK_MemberPointer,
-        PK_FunctionPointer,
-        PK_MemberFunctionPointer,
-      } pointerKind
-        = chunk.Kind == DeclaratorChunk::Pointer ? (inFunction ? PK_FunctionPointer
-                                                               : PK_Pointer)
-          : chunk.Kind == DeclaratorChunk::BlockPointer ? PK_BlockPointer
-          : inFunction? PK_MemberFunctionPointer : PK_MemberPointer;
+   if (!attr.isContextSensitiveKeywordAttribute()) {
+    enum {
+      PK_Pointer,
+      PK_BlockPointer,
+      PK_MemberPointer,
+      PK_FunctionPointer,
+      PK_MemberFunctionPointer,
+    } pointerKind
+      = chunk.Kind == DeclaratorChunk::Pointer ? (inFunction ? PK_FunctionPointer
+                                                             : PK_Pointer)
+        : chunk.Kind == DeclaratorChunk::BlockPointer ? PK_BlockPointer
+        : inFunction? PK_MemberFunctionPointer : PK_MemberPointer;
 
-      auto diag = state.getSema().Diag(attr.getLoc(),
-                                       diag::warn_nullability_declspec)
-        << DiagNullabilityKind(mapNullabilityAttrKind(attr.getKind()),
-                               attr.isContextSensitiveKeywordAttribute())
-        << type
-        << static_cast<unsigned>(pointerKind);
+    auto diag = state.getSema().Diag(attr.getLoc(),
+                                     diag::warn_nullability_declspec)
+      << DiagNullabilityKind(mapNullabilityAttrKind(attr.getKind()),
+                             attr.isContextSensitiveKeywordAttribute())
+      << type
+      << static_cast<unsigned>(pointerKind);
 
-      // FIXME: MemberPointer chunks don't carry the location of the *.
-      if (chunk.Kind != DeclaratorChunk::MemberPointer) {
-        diag << FixItHint::CreateRemoval(attr.getLoc())
-             << FixItHint::CreateInsertion(
-                  state.getSema().getPreprocessor()
-                    .getLocForEndOfToken(chunk.Loc),
-                  " " + attr.getName()->getName().str() + " ");
-      }
+    // FIXME: MemberPointer chunks don't carry the location of the *.
+    if (chunk.Kind != DeclaratorChunk::MemberPointer) {
+      diag << FixItHint::CreateRemoval(attr.getLoc())
+           << FixItHint::CreateInsertion(
+                state.getSema().getPreprocessor()
+                  .getLocForEndOfToken(chunk.Loc),
+                " " + attr.getName()->getName().str() + " ");
     }
+   }
 
     moveAttrFromListToList(attr, state.getCurrentAttrListRef(),
                            chunk.getAttrListRef());
