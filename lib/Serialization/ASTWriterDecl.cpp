@@ -132,17 +132,6 @@ namespace clang {
     void VisitObjCPropertyImplDecl(ObjCPropertyImplDecl *D);
     void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
 
-    void AddFunctionDefinition(const FunctionDecl *FD) {
-      assert(FD->doesThisDeclarationHaveABody());
-      if (auto *CD = dyn_cast<CXXConstructorDecl>(FD)) {
-        Record.push_back(CD->NumCtorInitializers);
-        if (CD->NumCtorInitializers)
-          Writer.AddCXXCtorInitializersRef(
-              llvm::makeArrayRef(CD->init_begin(), CD->init_end()), Record);
-      }
-      Writer.AddStmt(FD->getBody());
-    }
-
     /// Add an Objective-C type parameter list to the given record.
     void AddObjCTypeParamList(ObjCTypeParamList *typeParams) {
       // Empty type parameter list.
@@ -157,6 +146,17 @@ namespace clang {
       }
       Writer.AddSourceLocation(typeParams->getLAngleLoc(), Record);
       Writer.AddSourceLocation(typeParams->getRAngleLoc(), Record);
+    }
+
+    void AddFunctionDefinition(const FunctionDecl *FD) {
+      assert(FD->doesThisDeclarationHaveABody());
+      if (auto *CD = dyn_cast<CXXConstructorDecl>(FD)) {
+        Record.push_back(CD->NumCtorInitializers);
+        if (CD->NumCtorInitializers)
+          Writer.AddCXXCtorInitializersRef(
+              llvm::makeArrayRef(CD->init_begin(), CD->init_end()), Record);
+      }
+      Writer.AddStmt(FD->getBody());
     }
 
     /// Add to the record the first declaration from each module file that
