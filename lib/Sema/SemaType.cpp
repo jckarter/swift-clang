@@ -714,6 +714,31 @@ static void maybeSynthesizeBlockSignature(TypeProcessingState &state,
   state.setCurrentChunkIndex(declarator.getNumTypeObjects());
 }
 
+static void diagnoseAndRemoveTypeQualifiers(Sema &S, const DeclSpec &DS,
+                                            unsigned &TypeQuals,
+                                            QualType TypeSoFar,
+                                            unsigned RemoveTQs,
+                                            unsigned DiagID) {
+  // If this occurs outside a template instantiation, warn the user about
+  // it; they probably didn't mean to specify a redundant qualifier.
+  typedef std::pair<DeclSpec::TQ, SourceLocation> QualLoc;
+  for (QualLoc Qual : {QualLoc(DeclSpec::TQ_const, DS.getConstSpecLoc()),
+                       QualLoc(DeclSpec::TQ_volatile, DS.getVolatileSpecLoc()),
+                       QualLoc(DeclSpec::TQ_atomic, DS.getAtomicSpecLoc())}) {
+    if (!(RemoveTQs & Qual.first))
+      continue;
+
+    if (S.ActiveTemplateInstantiations.empty()) {
+      if (TypeQuals & Qual.first)
+        S.Diag(Qual.second, DiagID)
+          << DeclSpec::getSpecifierName(Qual.first) << TypeSoFar
+          << FixItHint::CreateRemoval(Qual.second);
+    }
+
+    TypeQuals &= ~Qual.first;
+  }
+}
+
 /// Apply Objective-C type arguments to the given type.
 static QualType applyObjCTypeArgs(Sema &S, SourceLocation loc, QualType type,
                                   ArrayRef<TypeSourceInfo *> typeArgs,
@@ -1140,31 +1165,6 @@ TypeResult Sema::actOnObjCTypeArgsAndProtocolQualifiers(
 
   // We're done. Return the completed type to the parser.
   return CreateParsedType(Result, ResultTInfo);
-}
-
-static void diagnoseAndRemoveTypeQualifiers(Sema &S, const DeclSpec &DS,
-                                            unsigned &TypeQuals,
-                                            QualType TypeSoFar,
-                                            unsigned RemoveTQs,
-                                            unsigned DiagID) {
-  // If this occurs outside a template instantiation, warn the user about
-  // it; they probably didn't mean to specify a redundant qualifier.
-  typedef std::pair<DeclSpec::TQ, SourceLocation> QualLoc;
-  for (QualLoc Qual : {QualLoc(DeclSpec::TQ_const, DS.getConstSpecLoc()),
-                       QualLoc(DeclSpec::TQ_volatile, DS.getVolatileSpecLoc()),
-                       QualLoc(DeclSpec::TQ_atomic, DS.getAtomicSpecLoc())}) {
-    if (!(RemoveTQs & Qual.first))
-      continue;
-
-    if (S.ActiveTemplateInstantiations.empty()) {
-      if (TypeQuals & Qual.first)
-        S.Diag(Qual.second, DiagID)
-          << DeclSpec::getSpecifierName(Qual.first) << TypeSoFar
-          << FixItHint::CreateRemoval(Qual.second);
-    }
-
-    TypeQuals &= ~Qual.first;
-  }
 }
 
 /// \brief Convert the specified declspec to the appropriate type
