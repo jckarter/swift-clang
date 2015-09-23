@@ -1958,10 +1958,7 @@ ActOnClassPropertyRefExpr(IdentifierInfo &receiverName,
 
           // Otherwise, if this is a class method, try dispatching to our
           // superclass.
-          SuperType = QualType(
-                        CurMethod->getClassInterface()->getSuperClassType(),
-                        0);
-          IFace = classDecl->getSuperClass();
+          IFace = CurMethod->getClassInterface()->getSuperClass();
         }
       }
     }
