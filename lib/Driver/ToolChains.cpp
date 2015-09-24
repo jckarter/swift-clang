@@ -771,7 +771,7 @@ void DarwinClang::AddCCKextLibArgs(const ArgList &Args,
     llvm::sys::path::append(P, "libclang_rt.cc_kext_watchos.a");
   } else if (isTargetTvOS()) {
     llvm::sys::path::append(P, "libclang_rt.cc_kext_tvos.a");
-  } else if (isTargetIPhoneOS() {
+  } else if (isTargetIPhoneOS()) {
     llvm::sys::path::append(P, "libclang_rt.cc_kext_ios.a");
   } else {
     llvm::sys::path::append(P, "libclang_rt.cc_kext.a");
