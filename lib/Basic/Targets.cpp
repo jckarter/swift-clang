@@ -84,8 +84,6 @@ public:
   }
 
 };
-} // end anonymous namespace
-
 
 static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
                              const llvm::Triple &Triple,
@@ -247,7 +245,6 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
   PlatformMinVersion = VersionTuple(Maj, Min, Rev);
 }
 
-namespace {
 // CloudABI Target
 template <typename Target>
 class CloudABITargetInfo : public OSTargetInfo<Target> {
@@ -814,7 +811,6 @@ public:
   }
 };
 
-namespace {
 // WebAssembly target
 template <typename Target>
 class WebAssemblyOSTargetInfo : public OSTargetInfo<Target> {
@@ -841,7 +837,6 @@ public:
     this->TheCXXABI.set(TargetCXXABI::WebAssembly);
   }
 };
-} // end anonymous namespace
 
 //===----------------------------------------------------------------------===//
 // Specific target implementations.
@@ -3802,7 +3797,6 @@ public:
     Builder.defineMacro("_M_IX86", "600");
   }
 };
-} // end anonymous namespace
 
 static void addCygMingDefines(const LangOptions &Opts, MacroBuilder &Builder) {
   // Mingw and cygwin define __declspec(a) to __attribute__((a)).  Clang supports
@@ -3834,7 +3828,6 @@ static void addMinGWDefines(const LangOptions &Opts, MacroBuilder &Builder) {
   addCygMingDefines(Opts, Builder);
 }
 
-namespace {
 // x86-32 MinGW target
 class MinGWX86_32TargetInfo : public WindowsX86_32TargetInfo {
 public:
@@ -7252,15 +7245,12 @@ protected:
   }
 };
 
-} // end anonymous namespace.
-
 const Builtin::Info Le64TargetInfo::BuiltinInfo[] = {
 #define BUILTIN(ID, TYPE, ATTRS)                                               \
   { #ID, TYPE, ATTRS, nullptr, ALL_LANGUAGES, nullptr },
 #include "clang/Basic/BuiltinsLe64.def"
 };
 
-namespace {
 static const unsigned SPIRAddrSpaceMap[] = {
     1, // opencl_global
     3, // opencl_local
@@ -7413,9 +7403,7 @@ const Builtin::Info XCoreTargetInfo::BuiltinInfo[] = {
   { #ID, TYPE, ATTRS, HEADER, ALL_LANGUAGES, nullptr },
 #include "clang/Basic/BuiltinsXCore.def"
 };
-} // end anonymous namespace.
 
-namespace {
 // x86_32 Android target
 class AndroidX86_32TargetInfo : public LinuxTargetInfo<X86_32TargetInfo> {
 public:
@@ -7426,9 +7414,7 @@ public:
     LongDoubleFormat = &llvm::APFloat::IEEEdouble;
   }
 };
-} // end anonymous namespace
 
-namespace {
 // x86_64 Android target
 class AndroidX86_64TargetInfo : public LinuxTargetInfo<X86_64TargetInfo> {
 public:
@@ -7442,7 +7428,6 @@ public:
   }
 };
 } // end anonymous namespace
-
 
 //===----------------------------------------------------------------------===//
 // Driver code
