@@ -6527,13 +6527,13 @@ std::string arm::getARMTargetCPU(StringRef CPU, StringRef Arch,
 StringRef arm::getLLVMArchSuffixForARM(StringRef CPU, StringRef Arch,
                                        const llvm::Triple &Triple) {
   unsigned ArchKind;
-  Arch = tools::arm::getARMArch(Arch, Triple);
   if (CPU == "generic") {
-    ArchKind = llvm::ARM::parseArch(Arch);
+    std::string ARMArch = tools::arm::getARMArch(Arch, Triple);
+    ArchKind = llvm::ARM::parseArch(ARMArch);
     if (ArchKind == llvm::ARM::AK_INVALID)
       // In case of generic Arch, i.e. "arm",
       // extract arch from default cpu of the Triple
-      ArchKind = llvm::ARM::parseCPUArch(Triple.getARMCPUForArch(Arch));
+      ArchKind = llvm::ARM::parseCPUArch(Triple.getARMCPUForArch(ARMArch));
   } else {
     // FIXME: utterly disgusting hack to get through a merge. It would seem
     // plausible to go for a specific arch if you've been told one, but we seem to
@@ -6560,6 +6560,9 @@ void arm::appendEBLinkFlags(const ArgList &Args, ArgStringList &CmdArgs,
 }
 
 mips::NanEncoding mips::getSupportedNanEncoding(StringRef &CPU) {
+  // Strictly speaking, mips32r2 and mips64r2 are NanLegacy-only since Nan2008
+  // was first introduced in Release 3. However, other compilers have
+  // traditionally allowed it for Release 2 so we should do the same.
   return (NanEncoding)llvm::StringSwitch<int>(CPU)
       .Case("mips1", NanLegacy)
       .Case("mips2", NanLegacy)
@@ -6567,12 +6570,12 @@ mips::NanEncoding mips::getSupportedNanEncoding(StringRef &CPU) {
       .Case("mips4", NanLegacy)
       .Case("mips5", NanLegacy)
       .Case("mips32", NanLegacy)
-      .Case("mips32r2", NanLegacy)
+      .Case("mips32r2", NanLegacy | Nan2008)
       .Case("mips32r3", NanLegacy | Nan2008)
       .Case("mips32r5", NanLegacy | Nan2008)
       .Case("mips32r6", Nan2008)
       .Case("mips64", NanLegacy)
-      .Case("mips64r2", NanLegacy)
+      .Case("mips64r2", NanLegacy | Nan2008)
       .Case("mips64r3", NanLegacy | Nan2008)
       .Case("mips64r5", NanLegacy | Nan2008)
       .Case("mips64r6", Nan2008)
