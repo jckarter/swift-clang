@@ -85,6 +85,28 @@ public:
 
 };
 
+// CloudABI Target
+template <typename Target>
+class CloudABITargetInfo : public OSTargetInfo<Target> {
+protected:
+  void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
+                    MacroBuilder &Builder) const override {
+    Builder.defineMacro("__CloudABI__");
+    Builder.defineMacro("__ELF__");
+
+    // CloudABI uses ISO/IEC 10646:2012 for wchar_t, char16_t and char32_t.
+    Builder.defineMacro("__STDC_ISO_10646__", "201206L");
+    Builder.defineMacro("__STDC_UTF_16__");
+    Builder.defineMacro("__STDC_UTF_32__");
+  }
+
+public:
+  CloudABITargetInfo(const llvm::Triple &Triple)
+      : OSTargetInfo<Target>(Triple) {
+    this->UserLabelPrefix = "";
+  }
+};
+
 static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
                              const llvm::Triple &Triple,
                              StringRef &PlatformName,
@@ -200,8 +222,7 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
     if (Triple.isTvOS())
       Builder.defineMacro("__ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__", Str);
     else
-      Builder.defineMacro("__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__",
-                          Str);
+      Builder.defineMacro("__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__", Str);
   } else if (Triple.isWatchOS()) {
     assert(Maj < 10 && Min < 100 && Rev < 100 && "Invalid version!");
     char Str[6];
@@ -244,28 +265,6 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
 
   PlatformMinVersion = VersionTuple(Maj, Min, Rev);
 }
-
-// CloudABI Target
-template <typename Target>
-class CloudABITargetInfo : public OSTargetInfo<Target> {
-protected:
-  void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
-                    MacroBuilder &Builder) const override {
-    Builder.defineMacro("__CloudABI__");
-    Builder.defineMacro("__ELF__");
-
-    // CloudABI uses ISO/IEC 10646:2012 for wchar_t, char16_t and char32_t.
-    Builder.defineMacro("__STDC_ISO_10646__", "201206L");
-    Builder.defineMacro("__STDC_UTF_16__");
-    Builder.defineMacro("__STDC_UTF_32__");
-  }
-
-public:
-  CloudABITargetInfo(const llvm::Triple &Triple)
-      : OSTargetInfo<Target>(Triple) {
-    this->UserLabelPrefix = "";
-  }
-};
 
 template<typename Target>
 class DarwinTargetInfo : public OSTargetInfo<Target> {
