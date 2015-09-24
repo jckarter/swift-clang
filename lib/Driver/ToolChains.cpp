@@ -1401,20 +1401,20 @@ void Generic_GCC::GCCInstallationDetector::init(
   for (const std::string &Prefix : Prefixes) {
     if (!llvm::sys::fs::exists(Prefix))
       continue;
-    for (const StringRef Suffix : CandidateLibDirs) {
+    for (StringRef Suffix : CandidateLibDirs) {
       const std::string LibDir = Prefix + Suffix.str();
       if (!llvm::sys::fs::exists(LibDir))
         continue;
-      for (const StringRef Candidate : ExtraTripleAliases) // Try these first.
+      for (StringRef Candidate : ExtraTripleAliases) // Try these first.
         ScanLibDirForGCCTriple(TargetTriple, Args, LibDir, Candidate);
-      for (const StringRef Candidate : CandidateTripleAliases)
+      for (StringRef Candidate : CandidateTripleAliases)
         ScanLibDirForGCCTriple(TargetTriple, Args, LibDir, Candidate);
     }
-    for (const StringRef Suffix : CandidateBiarchLibDirs) {
+    for (StringRef Suffix : CandidateBiarchLibDirs) {
       const std::string LibDir = Prefix + Suffix.str();
       if (!llvm::sys::fs::exists(LibDir))
         continue;
-      for (const StringRef Candidate : CandidateBiarchTripleAliases)
+      for (StringRef Candidate : CandidateBiarchTripleAliases)
         ScanLibDirForGCCTriple(TargetTriple, Args, LibDir, Candidate,
                                /*NeedsBiarchSuffix=*/ true);
     }
@@ -1685,7 +1685,7 @@ Generic_GCC::CudaInstallationDetector::init(const Driver &D,
     CudaPathCandidates.push_back(D.SysRoot + "/usr/local/cuda-7.0");
   }
 
-  for (const auto CudaPath : CudaPathCandidates) {
+  for (const auto &CudaPath : CudaPathCandidates) {
     if (CudaPath.empty() || !llvm::sys::fs::exists(CudaPath))
       continue;
 
@@ -3279,7 +3279,7 @@ static Distro DetectDistro(llvm::Triple::ArchType Arch) {
     SmallVector<StringRef, 16> Lines;
     Data.split(Lines, "\n");
     Distro Version = UnknownDistro;
-    for (const StringRef Line : Lines)
+    for (StringRef Line : Lines)
       if (Version == UnknownDistro && Line.startswith("DISTRIB_CODENAME="))
         Version = llvm::StringSwitch<Distro>(Line.substr(17))
                       .Case("hardy", UbuntuHardy)
@@ -3988,6 +3988,7 @@ SanitizerMask Linux::getSupportedSanitizers() const {
   Res |= SanitizerKind::Address;
   Res |= SanitizerKind::KernelAddress;
   Res |= SanitizerKind::Vptr;
+  Res |= SanitizerKind::SafeStack;
   if (IsX86_64 || IsMIPS64 || IsAArch64)
     Res |= SanitizerKind::DataFlow;
   if (IsX86_64 || IsMIPS64)
@@ -3998,7 +3999,6 @@ SanitizerMask Linux::getSupportedSanitizers() const {
     Res |= SanitizerKind::Memory;
   if (IsX86 || IsX86_64) {
     Res |= SanitizerKind::Function;
-    Res |= SanitizerKind::SafeStack;
   }
   return Res;
 }
