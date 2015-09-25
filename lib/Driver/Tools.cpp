@@ -6539,8 +6539,8 @@ std::string arm::getARMTargetCPU(StringRef CPU, StringRef Arch,
 StringRef arm::getLLVMArchSuffixForARM(StringRef CPU, StringRef Arch,
                                        const llvm::Triple &Triple) {
   unsigned ArchKind;
+  std::string ARMArch = tools::arm::getARMArch(Arch, Triple);
   if (CPU == "generic") {
-    std::string ARMArch = tools::arm::getARMArch(Arch, Triple);
     ArchKind = llvm::ARM::parseArch(ARMArch);
     if (ArchKind == llvm::ARM::AK_INVALID)
       // In case of generic Arch, i.e. "arm",
@@ -6551,7 +6551,7 @@ StringRef arm::getLLVMArchSuffixForARM(StringRef CPU, StringRef Arch,
     // plausible to go for a specific arch if you've been told one, but we seem to
     // assume (for example) that cortex-m4/armv7m should actually give a thumbv7em
     // triple. That should be flexible, since it's not a supported combination.
-    ArchKind = (Arch == "armv7k" || Arch == "thumbv7k")
+    ArchKind = (ARMArch == "armv7k" || ARMArch == "thumbv7k")
                             ? llvm::ARM::AK_ARMV7K
                             : llvm::ARM::parseCPUArch(CPU);
   }
