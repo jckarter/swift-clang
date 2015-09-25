@@ -7878,7 +7878,8 @@ public:
                                        SourceLocation EndLoc);
   /// \brief Called on well-formed '\#pragma omp ordered' after parsing of the
   /// associated statement.
-  StmtResult ActOnOpenMPOrderedDirective(Stmt *AStmt, SourceLocation StartLoc,
+  StmtResult ActOnOpenMPOrderedDirective(ArrayRef<OMPClause *> Clauses,
+                                         Stmt *AStmt, SourceLocation StartLoc,
                                          SourceLocation EndLoc);
   /// \brief Called on well-formed '\#pragma omp atomic' after parsing of the
   /// associated statement.
@@ -8011,6 +8012,9 @@ public:
                                       SourceLocation EndLoc);
   /// \brief Called on well-formed 'seq_cst' clause.
   OMPClause *ActOnOpenMPSeqCstClause(SourceLocation StartLoc,
+                                     SourceLocation EndLoc);
+  /// \brief Called on well-formed 'threads' clause.
+  OMPClause *ActOnOpenMPThreadsClause(SourceLocation StartLoc,
                                      SourceLocation EndLoc);
 
   OMPClause *ActOnOpenMPVarListClause(
