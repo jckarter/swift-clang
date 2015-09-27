@@ -11146,7 +11146,7 @@ void Sema::ActOnFinishDelayedAttribute(Scope *S, Decl *D,
     D = TD->getTemplatedDecl();
   ProcessDeclAttributeList(S, D, Attrs.getList());  
   ProcessAPINotes(D);
-
+  
   if (CXXMethodDecl *Method = dyn_cast_or_null<CXXMethodDecl>(D))
     if (Method->isStatic())
       checkThisInStaticMemberFunctionAttributes(Method);
