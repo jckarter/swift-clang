@@ -1035,10 +1035,6 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   Opts.ARCMTMigrateEmitARCErrors
     = Args.hasArg(OPT_arcmt_migrate_emit_arc_errors);
 
-  if (Args.hasArg(OPT_objcmt_migrate_apinotes))
-    Opts.ObjCMTAction |= FrontendOptions::ObjCMT_ApiNotes;
-  if (Args.hasArg(OPT_objcmt_migrate_swift_unavailable))
-    Opts.ObjCMTAction |= FrontendOptions::ObjCMT_Swift_Unavailable;
   if (Args.hasArg(OPT_objcmt_migrate_literals))
     Opts.ObjCMTAction |= FrontendOptions::ObjCMT_Literals;
   if (Args.hasArg(OPT_objcmt_migrate_subscripting))
