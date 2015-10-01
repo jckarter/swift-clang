@@ -1755,15 +1755,10 @@ llvm::DIType *CGDebugInfo::CreateTypeDefinition(const ObjCInterfaceType *Ty,
   if (ID->getImplementation())
     Flags |= llvm::DINode::FlagObjcClassComplete;
 
-  // For module debugging, get the UID of the type.
-  SmallString<256> FullName;
-  if (CGM.getCodeGenOpts().ClangModule &&
-      TheCU->getSourceLanguage() != llvm::dwarf::DW_LANG_C_plus_plus)
-    index::generateUSRForDecl(Ty->getDecl(), FullName);
-
+  llvm::DIScope *Mod = getParentModuleOrNull(ID);
   llvm::DICompositeType *RealDecl = DBuilder.createStructType(
-      Unit, ID->getName(), DefUnit, Line, Size, Align, Flags, nullptr,
-      llvm::DINodeArray(), RuntimeLang, nullptr, FullName);
+      Mod ? Mod : Unit, ID->getName(), DefUnit, Line, Size, Align, Flags,
+      nullptr, llvm::DINodeArray(), RuntimeLang);
 
   QualType QTy(Ty, 0);
   TypeCache[QTy.getAsOpaquePtr()].reset(RealDecl);

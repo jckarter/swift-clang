@@ -2076,7 +2076,7 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
                                                             NewDeprecated,
                                                             NewObsoleted,
                                                             IsUnavailable, Str,
-                                                            /*Override=*/false,
+                                                            Sema::AMK_None,
                                                             Index);
         if (NewAttr)
           D->addAttr(NewAttr);
@@ -2098,7 +2098,7 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
                                                             Deprecated.Version,
                                                             Obsoleted.Version,
                                                             IsUnavailable, Str,
-                                                            /*Override=*/false,
+                                                            Sema::AMK_None,
                                                             Index);
         if (NewAttr)
           D->addAttr(NewAttr);
