@@ -1,4 +1,3 @@
-
 //===--- CGDebugInfo.cpp - Emit Debug Information for a Module ------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -28,7 +27,6 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/Version.h"
 #include "clang/Frontend/CodeGenOptions.h"
-#include "clang/Index/USRGeneration.h"
 #include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/Lex/ModuleMap.h"
 #include "clang/Lex/PreprocessorOptions.h"
@@ -378,10 +376,8 @@ void CGDebugInfo::CreateCompileUnit() {
       CGM.getCodeGenOpts().SplitDwarfFile,
       DebugKind <= CodeGenOptions::DebugLineTablesOnly
           ? llvm::DIBuilder::LineTablesOnly
-          : (CGM.getCodeGenOpts().ClangModule ?
-             llvm::DIBuilder::ClangModule : llvm::DIBuilder::FullDebug),
-      0 /* DWOid */,
-      DebugKind != CodeGenOptions::LocTrackingOnly);
+          : llvm::DIBuilder::FullDebug,
+      0 /* DWOid */, DebugKind != CodeGenOptions::LocTrackingOnly);
 }
 
 llvm::DIType *CGDebugInfo::CreateType(const BuiltinType *BT) {
@@ -633,17 +629,9 @@ static SmallString<256> getUniqueTagTypeName(const TagType *Ty,
   SmallString<256> FullName;
   const TagDecl *TD = Ty->getDecl();
 
-  // In a clang module even non-C++ types are assigned a UID.
-  if (CGM.getCodeGenOpts().ClangModule) {
-    if (!hasCXXMangling(TD, TheCU)) {
-      index::generateUSRForDecl(Ty->getDecl(), FullName);
-      return FullName;
-    }
-  } else {
-    if (!hasCXXMangling(TD, TheCU) || !TD->isExternallyVisible())
-      return FullName;
-  }
-  
+  if (!hasCXXMangling(TD, TheCU) || !TD->isExternallyVisible())
+    return FullName;
+
   // Microsoft Mangler does not have support for mangleCXXRTTIName yet.
   if (CGM.getTarget().getCXXABI().isMicrosoft())
     return FullName;
@@ -2571,7 +2559,7 @@ llvm::DISubprogram *CGDebugInfo::getFunctionDeclaration(const Decl *D) {
     if (const CXXMethodDecl *MD =
             dyn_cast<CXXMethodDecl>(FD->getCanonicalDecl())) {
       return CreateCXXMemberFunction(MD, getOrCreateFile(MD->getLocation()),
-                                     cast<llvm::DIType>(S));
+                                     cast<llvm::DICompositeType>(S));
     }
   }
   if (MI != SPCache.end()) {
@@ -2604,8 +2592,7 @@ llvm::DISubroutineType *CGDebugInfo::getOrCreateFunctionType(const Decl *D,
 
   if (const CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(D))
     return getOrCreateMethodType(Method, F);
-  const ObjCMethodDecl *OMethod = dyn_cast<ObjCMethodDecl>(D);
-  if (OMethod && OMethod->getSelfDecl()) {
+  if (const ObjCMethodDecl *OMethod = dyn_cast<ObjCMethodDecl>(D)) {
     // Add "self" and "_cmd"
     SmallVector<llvm::Metadata *, 16> Elts;
 
