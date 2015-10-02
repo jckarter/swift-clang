@@ -5639,7 +5639,6 @@ static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
 
     // Complain about the nullability qualifier being in the wrong
     // place.
-   if (!attr.isContextSensitiveKeywordAttribute()) {
     enum {
       PK_Pointer,
       PK_BlockPointer,
@@ -5667,7 +5666,6 @@ static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
                   .getLocForEndOfToken(chunk.Loc),
                 " " + attr.getName()->getName().str() + " ");
     }
-   }
 
     moveAttrFromListToList(attr, state.getCurrentAttrListRef(),
                            chunk.getAttrListRef());
