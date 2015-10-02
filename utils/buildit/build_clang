@@ -98,10 +98,10 @@ $CMAKE -G Ninja \
     -DLLVM_INCLUDE_TESTS=OFF \
     -DLLVM_INCLUDE_EXAMPLES=OFF \
     -DCMAKE_BUILD_TYPE=Release \
-    "$SRCROOT" \
+    "$LLVM_SRCROOT" \
     || exit 1
 
-SDKROOT=$SDKROOT DT_TOOLCHAIN_DIR= TOOLCHAINS= IPHONEOS_DEPLOYMENT_TARGET= TVOS_DEPLOYMENT_TARGET= WATCHOS_DEPLOYMENT_TARGET= $NINJA $COMMON_NINJAFLAGS llvm-tblgen clang-tblgen
+SDKROOT=$SDKROOT DT_TOOLCHAIN_DIR= TOOLCHAINS= IPHONEOS_DEPLOYMENT_TARGET= TVOS_DEPLOYMENT_TARGET= WATCHOS_DEPLOYMENT_TARGET= $NINJA -v llvm-tblgen clang-tblgen llvm-config
 if [ $? != 0 ] ; then
     echo "error: Clang 'make native tablegen exes' failed!"
     exit 1
@@ -132,41 +132,115 @@ $CMAKE -G 'Ninja' -C $LLVM_SRCROOT/tools/clang/cmake/caches/Apple-stage1.cmake $
     "$LLVM_SRCROOT" \
     || exit 1
 
-$NINJA bootstrap-install
+$NINJA -v bootstrap-install
 if ! test $? == 0 ; then
     echo "error: LLVM 'ninja bootstrap-install' failed!"
     exit 1
 fi
 
-$NINJA install-libcxx
+$NINJA -v install-libcxx
 if ! test $? == 0 ; then
     echo "error: LLVM 'ninja install-libcxx' failed!"
     exit 1
 fi
 
+# Build the runtime
+mkdir -p $OBJROOT/obj-rt || exit 1
+cd $OBJROOT/obj-rt|| exit 1
+
+# First build the native tblgen's
+OLD_SDKROOT=$SDKROOT
+OLD_DT_TOOLCHAIN_DIR=$DT_TOOLCHAIN_DIR
+OLD_TOOLCHAINS=$TOOLCHAINS
+OLD_IPHONEOS_DEPLOYMENT_TARGET=$IPHONEOS_DEPLOYMENT_TARGET
+OLD_TVOS_DEPLOYMENT_TARGET=$TVOS_DEPLOYMENT_TARGET
+OLD_WATCHOS_DEPLOYMENT_TARGET=$WATCHOS_DEPLOYMENT_TARGET
+
+IPHONEOS_DEPLOYMENT_TARGET=
+TVOS_DEPLOYMENT_TARGET=
+WATCHOS_DEPLOYMENT_TARGET=
+SDKROOT=
+DT_TOOLCHAIN_DIR=
+TOOLCHAINS=
+
+$CMAKE -G 'Ninja' -C $LLVM_SRCROOT/projects/compiler-rt/cmake/caches/Apple.cmake \
+    $CMAKE_OPTS \
+    -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+    -DLLVM_CONFIG_PATH=$OBJROOT/obj-llvm-native/bin/llvm-config \
+    -DCMAKE_INSTALL_PREFIX=$TOOLCHAIN_USR/lib/clang/7.0.0/ \
+    -DCMAKE_C_COMPILER=$TOOLCHAIN_USR/bin/clang \
+    -DCMAKE_CXX_COMPILER=$TOOLCHAIN_USR/bin/clang++ \
+    "$LLVM_SRCROOT/projects/compiler-rt" \
+    || exit 1
+
+SDKROOT= DT_TOOLCHAIN_DIR= TOOLCHAINS= IPHONEOS_DEPLOYMENT_TARGET= TVOS_DEPLOYMENT_TARGET= WATCHOS_DEPLOYMENT_TARGET= $NINJA -v install
+if ! test $? == 0 ; then
+    echo "error: LLVM 'ninja install (compiler-rt)' failed!"
+    exit 1
+fi
+
+SDKROOT=$OLD_SDKROOT
+IPHONEOS_DEPLOYMENT_TARGET=$OLD_IPHONEOS_DEPLOYMENT_TARGET
+TVOS_DEPLOYMENT_TARGET=$OLD_TVOS_DEPLOYMENT_TARGET
+WATCHOS_DEPLOYMENT_TARGET=$OLD_WATCHOS_DEPLOYMENT_TARGET
+DT_TOOLCHAIN_DIR=$OLD_DT_TOOLCHAIN_DIR
+TOOLCHAINS=$OLD_TOOLCHAINS
+
 # DSTROOT fixups
 mkdir -p $TOOLCHAIN_USR/local/lib/
+mkdir -p $TOOLCHAIN_USR/local/lib/clang/
 mkdir -p $TOOLCHAIN_USR/local/bin/
 mkdir -p $TOOLCHAIN_USR/local/include/
+mkdir -p $TOOLCHAIN_USR/share/man/man1/
+mkdir -p $DSTROOT/usr/local/bin/
 
+# fixup bin
 cp $OBJROOT/obj-llvm/tools/clang/bootstrap-bins/bin/c-index-test $TOOLCHAIN_USR/local/bin/
 mv $TOOLCHAIN_USR/bin/clang-format $TOOLCHAIN_USR/local/bin/
+rm $TOOLCHAIN_USR/bin/git-clang-format
+rm $TOOLCHAIN_USR/bin/clang-check
+rm $TOOLCHAIN_USR/bin/clang
+mv $TOOLCHAIN_USR/bin/clang-7.0 $TOOLCHAIN_USR/bin/clang
+
+# fixup headers
 mv $TOOLCHAIN_USR/include/llvm-c $TOOLCHAIN_USR/local/include/llvm-c
-cp $LLVM_SRCROOT/include/llvm-c/Support.h $TOOLCHAIN_USR/local/include/llvm-c/
-cp $LLVM_SRCROOT/include/llvm-c/ProfileData.h $TOOLCHAIN_USR/local/include/llvm-c/
 mv $TOOLCHAIN_USR/include/clang-c $TOOLCHAIN_USR/local/include/clang-c
+install -m 0444 $LLVM_SRCROOT/include/llvm-c/Support.h $TOOLCHAIN_USR/local/include/llvm-c/
+install -m 0444 $LLVM_SRCROOT/include/llvm-c/ProfileData.h $TOOLCHAIN_USR/local/include/llvm-c/
+install -m 0444 $LLVM_SRCROOT/tools/clang/include/clang-c/module.modulemap $TOOLCHAIN_USR/local/include/clang-c/module.modulemap
+
+# other fixup
+install -m 0444 $LLVM_SRCROOT/utils/clang-parse-diagnostics-file $DSTROOT/usr/local/bin/clang-parse-diagnostics-file
 rm -rf $TOOLCHAIN_USR/share/clang
-echo 1 > $TOOLCHAIN_USR/local/lib/enable_objc_gc
+rm -rf $TOOLCHAIN_USR/include/c++/v1/support/
+rm $TOOLCHAIN_USR/lib/clang/7.0.0/asan_blacklist.txt
+rm $TOOLCHAIN_USR/lib/clang/7.0.0/cfi_blacklist.txt
+echo 1 > $OBJROOT/enable_objc_gc
+install -m 0444 $OBJROOT/enable_objc_gc $TOOLCHAIN_USR/local/lib/clang/enable_objc_gc
 
 #install licenses and manpages
 if [ -d $IB_ROOT ]; then
   mkdir -p $TOOLCHAIN_USR/local/OpenSourceVersions/
-  cp $IB_ROOT/clang.plist $TOOLCHAIN_USR/local/OpenSourceVersions/clang.plist
+  install -m 0444 $IB_ROOT/clang.plist $TOOLCHAIN_USR/local/OpenSourceVersions/clang.plist
+  install -m 0444 $IB_ROOT/llvm-cov.1 $TOOLCHAIN_USR/share/man/man1/llvm-cov.1
+  install -m 0444 $IB_ROOT/clang.1 $TOOLCHAIN_USR/share/man/man1/clang.1
 fi
 mkdir -p $TOOLCHAIN_USR/local/OpenSourceLicenses/
-cp $LLVM_SRCROOT/LICENSE.TXT $TOOLCHAIN_USR/local/OpenSourceLicenses/clang-llvm.txt
-cp $LLVM_SRCROOT/tools/clang/LICENSE.TXT $TOOLCHAIN_USR/local/OpenSourceLicenses/clang.txt
+install -m 0444 $LLVM_SRCROOT/LICENSE.TXT $TOOLCHAIN_USR/local/OpenSourceLicenses/clang-llvm.txt
+install -m 0444 $LLVM_SRCROOT/tools/clang/LICENSE.TXT $TOOLCHAIN_USR/local/OpenSourceLicenses/clang.txt
 
+
+cd $TOOLCHAIN_USR/share/man/man1
+ln -sf clang.1 cc.1
+ln -sf clang.1 clang++.1
+ln -sf clang++.1 c++.1
+ln -sf llvm-cov.1 gcov.1
+
+# symlink dsymutil and gcov
+cd $TOOLCHAIN_USR/bin
+
+ln -s llvm-dsymutil dsymutil
+ln -s llvm-cov gcov
 
 cd $SYMROOT || exit 1
 
