@@ -1280,7 +1280,7 @@ public:
                                                 const FunctionProtoType *FPT);
   void UpdateExceptionSpec(FunctionDecl *FD,
                            const FunctionProtoType::ExceptionSpecInfo &ESI);
-  bool CheckSpecifiedExceptionType(QualType &T, const SourceRange &Range);
+  bool CheckSpecifiedExceptionType(QualType &T, SourceRange Range);
   bool CheckDistantExceptionSpec(QualType T);
   bool CheckEquivalentExceptionSpec(FunctionDecl *Old, FunctionDecl *New);
   bool CheckEquivalentExceptionSpec(
@@ -2478,7 +2478,7 @@ public:
                       ExprResult &SrcExpr,
                       bool DoFunctionPointerConverion = false,
                       bool Complain = false,
-                      const SourceRange& OpRangeForComplaining = SourceRange(),
+                      SourceRange OpRangeForComplaining = SourceRange(),
                       QualType DestTypeForComplaining = QualType(),
                       unsigned DiagIDForComplaining = 0);
 
@@ -3795,7 +3795,7 @@ public:
     ActOnUnaryExprOrTypeTraitExpr(SourceLocation OpLoc,
                                   UnaryExprOrTypeTrait ExprKind,
                                   bool IsType, void *TyOrEx,
-                                  const SourceRange &ArgRange);
+                                  SourceRange ArgRange);
 
   ExprResult CheckPlaceholderExpr(Expr *E);
   bool CheckVecStepExpr(Expr *E);
