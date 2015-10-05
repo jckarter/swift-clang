@@ -5627,7 +5627,7 @@ public:
     LongDoubleFormat = &llvm::APFloat::IEEEdouble;
 
     // FIXME: the AAPCS says these should be true, but we need to do more
-    // testing before we can change it for iOS.
+    // testing before we can change it for iOS (rdar://22980135).
     UseZeroLengthBitfieldAlignment = false;
 
     TheCXXABI.set(TargetCXXABI::iOS64);
