@@ -16,8 +16,6 @@ LINK_COMPONENTS := $(TARGETS_TO_BUILD) \
 	AsmParser \
 	BitReader \
 	BitWriter \
-	DebugInfoDWARF \
-	Instrumentation \
 	IPO \
 	MC \
 	ObjCArcOpts \
@@ -29,7 +27,7 @@ LINK_COMPONENTS := $(TARGETS_TO_BUILD) \
 USEDLIBS = clang.a \
 	   clangCodeGen.a \
 	   clangIndex.a clangFormat.a clangRewrite.a \
-	   clangCodeGen.a clangIndex.a clangFrontend.a clangDriver.a \
+	   clangFrontend.a clangDriver.a \
 	   clangTooling.a \
 	   clangToolingCore.a \
 	   clangSerialization.a clangParse.a clangSema.a \

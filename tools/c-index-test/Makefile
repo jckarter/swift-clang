@@ -37,7 +37,7 @@ LINK_COMPONENTS := $(TARGETS_TO_BUILD) \
 USEDLIBS = clang.a \
 	   clangCodeGen.a \
 	   clangIndex.a clangFormat.a clangRewrite.a \
-	   clangFrontend.a clangCodeGen.a clangIndex.a clangDriver.a \
+	   clangFrontend.a clangDriver.a \
 	   clangTooling.a \
 	   clangToolingCore.a \
 	   clangSerialization.a clangParse.a clangSema.a \

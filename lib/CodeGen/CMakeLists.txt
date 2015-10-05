@@ -1,10 +1,8 @@
 set(LLVM_LINK_COMPONENTS
-  ${LLVM_TARGETS_TO_BUILD}
   Analysis
   BitReader
   BitWriter
   Core
-  DebugInfoDWARF
   IPO
   IRReader
   InstCombine
@@ -86,5 +84,4 @@ add_clang_library(clangCodeGen
   clangBasic
   clangFrontend
   clangLex
-  clangIndex
   )

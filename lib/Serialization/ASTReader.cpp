@@ -3724,8 +3724,8 @@ ASTReader::ReadASTCore(StringRef FileName,
   BitstreamCursor &Stream = F.Stream;
   PCHContainerRdr.ExtractPCH(F.Buffer->getMemBufferRef(), F.StreamFile);
   Stream.init(&F.StreamFile);
-  F.SizeInBits = F.StreamFile.getBitcodeBytes().getExtent() * 8;
-
+  F.SizeInBits = F.Buffer->getBufferSize() * 8;
+  
   // Sniff for the signature.
   if (!startsWithASTFileMagic(Stream)) {
     Diag(diag::err_module_file_invalid) << moduleKindForDiagnostic(Type)

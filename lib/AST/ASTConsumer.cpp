@@ -15,8 +15,6 @@
 #include "llvm/Bitcode/BitstreamReader.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclGroup.h"
-#include "clang/Lex/ModuleLoader.h"
-
 using namespace clang;
 
 bool ASTConsumer::HandleTopLevelDecl(DeclGroupRef D) {

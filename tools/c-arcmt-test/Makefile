@@ -25,7 +25,6 @@ LINK_COMPONENTS := $(TARGETS_TO_BUILD) \
 	AsmParser \
 	BitReader \
 	BitWriter \
-	Instrumentation \
 	IPO \
 	MC \
 	ObjCARCOpts \
@@ -43,7 +42,7 @@ USEDLIBS = clang.a \
 	   clangToolingCore.a \
 	   clangRewriteFrontend.a \
 	   clangRewrite.a \
-	   clangFrontend.a clangCodeGen.a clangIndex.a clangDriver.a \
+	   clangFrontend.a clangDriver.a \
 	   clangStaticAnalyzerCheckers.a clangStaticAnalyzerCore.a \
 	   clangSerialization.a clangParse.a clangSema.a \
 	   clangAnalysis.a clangEdit.a clangAST.a clangLex.a clangAPINotes.a \
