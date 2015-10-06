@@ -418,12 +418,12 @@ public:
   bool runInvocation(CompilerInvocation *Invocation, FileManager *Files,
                      std::shared_ptr<PCHContainerOperations> PCHContainerOps,
                      DiagnosticConsumer *DiagConsumer) override {
-    // FIXME: This should use the provided FileManager.
     std::unique_ptr<ASTUnit> AST = ASTUnit::LoadFromCompilerInvocation(
         Invocation, PCHContainerOps,
         CompilerInstance::createDiagnostics(&Invocation->getDiagnosticOpts(),
                                             DiagConsumer,
-                                            /*ShouldOwnClient=*/false));
+                                            /*ShouldOwnClient=*/false),
+        Files);
     if (!AST)
       return false;
 
@@ -455,8 +455,10 @@ std::unique_ptr<ASTUnit> buildASTFromCodeWithArgs(
 
   std::vector<std::unique_ptr<ASTUnit>> ASTs;
   ASTBuilderAction Action(ASTs);
+  llvm::IntrusiveRefCntPtr<FileManager> Files(
+      new FileManager(FileSystemOptions()));
   ToolInvocation Invocation(getSyntaxOnlyToolArgs(Args, FileNameRef), &Action,
-                            nullptr, PCHContainerOps);
+                            Files.get(), PCHContainerOps);
 
   SmallString<1024> CodeStorage;
   Invocation.mapVirtualFile(FileNameRef,
