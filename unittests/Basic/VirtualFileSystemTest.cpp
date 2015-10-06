@@ -536,7 +536,9 @@ TEST_F(InMemoryFileSystemTest, IsEmpty) {
 TEST_F(InMemoryFileSystemTest, WindowsPath) {
   FS.addFile("c:/windows/system128/foo.cpp", 0, MemoryBuffer::getMemBuffer(""));
   auto Stat = FS.status("c:");
+#if !defined(_WIN32)
   ASSERT_FALSE(Stat.getError()) << Stat.getError() << FS.toString();
+#endif
   Stat = FS.status("c:/windows/system128/foo.cpp");
   ASSERT_FALSE(Stat.getError()) << Stat.getError() << FS.toString();
   FS.addFile("d:/windows/foo.cpp", 0, MemoryBuffer::getMemBuffer(""));
@@ -598,6 +600,19 @@ TEST_F(InMemoryFileSystemTest, DirectoryIteration) {
   I.increment(EC);
   ASSERT_FALSE(EC);
   ASSERT_EQ(vfs::directory_iterator(), I);
+}
+
+TEST_F(InMemoryFileSystemTest, WorkingDirectory) {
+  FS.setCurrentWorkingDirectory("/b");
+  FS.addFile("c", 0, MemoryBuffer::getMemBuffer(""));
+
+  auto Stat = FS.status("/b/c");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_EQ("c", Stat->getName());
+  ASSERT_EQ("/b", *FS.getCurrentWorkingDirectory());
+
+  Stat = FS.status("c");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
 }
 
 // NOTE: in the tests below, we use '//root/' as our root directory, since it is
