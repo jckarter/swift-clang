@@ -27,4 +27,7 @@ set(LLVM_TOOLCHAIN_TOOLS
   llvm-cov
   llvm-dwarfdump
   llvm-profdata
+  llvm-objdump
+  llvm-nm
+  llvm-size
   CACHE STRING "")
