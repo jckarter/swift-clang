@@ -449,7 +449,7 @@ class ObjCInterfaceValidatorCCC : public CorrectionCandidateCallback {
   ObjCInterfaceDecl *CurrentIDecl;
 };
 
-}
+} // end anonymous namespace
 
 static void diagnoseUseOfProtocols(Sema &TheSema,
                                    ObjCContainerDecl *CD,
@@ -484,7 +484,7 @@ ActOnSuperClassOfClassInterface(Scope *S,
     if (TypoCorrection Corrected = CorrectTypo(
             DeclarationNameInfo(SuperName, SuperLoc),
             LookupOrdinaryName, TUScope,
-            NULL, llvm::make_unique<ObjCInterfaceValidatorCCC>(IDecl),
+            nullptr, llvm::make_unique<ObjCInterfaceValidatorCCC>(IDecl),
             CTK_ErrorRecovery)) {
       diagnoseTypo(Corrected, PDiag(diag::err_undef_superclass_suggest)
                    << SuperName << ClassName);
@@ -507,7 +507,7 @@ ActOnSuperClassOfClassInterface(Scope *S,
       SuperClassType = Context.getObjCInterfaceType(SuperClassDecl);
     }
 
-    if (PrevDecl && SuperClassDecl == 0) {
+    if (PrevDecl && !SuperClassDecl) {
       // The previous declaration was not a class decl. Check if we have a
       // typedef. If we do, get the underlying class type.
       if (const TypedefNameDecl *TDecl =
@@ -548,7 +548,7 @@ ActOnSuperClassOfClassInterface(Scope *S,
                                    SuperClassDecl->getDeclName(),
                                    ClassName,
                                    SourceRange(AtInterfaceLoc, ClassLoc))) {
-        SuperClassDecl = 0;
+        SuperClassDecl = nullptr;
         SuperClassType = QualType();
       }
     }
@@ -746,7 +746,7 @@ namespace {
     Category,
     Extension
   };
-}
+} // end anonymous namespace
 
 /// Check consistency between two Objective-C type parameter lists, e.g.,
 /// between a category/extension and an \@interface or between an \@class and an
@@ -1503,8 +1503,8 @@ void Sema::actOnObjCTypeArgsOrProtocolQualifiers(
                                                 SourceLocation(),
                                                 SourceLocation(),
                                                 SourceLocation()),
-                    parsedAttrs,
-                    starLoc);
+                                                parsedAttrs,
+                                                starLoc);
 
       // Diagnose the missing '*'.
       Diag(loc, diag::err_objc_type_arg_missing_star)
@@ -3737,7 +3737,6 @@ Decl *Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
   return ClassDecl;
 }
 
-
 /// CvtQTToAstBitMask - utility routine to produce an AST bitmask for
 /// objective-c's type qualifier from the parser version of the same info.
 static Decl::ObjCDeclQualifier
@@ -3902,7 +3901,6 @@ private:
       search(Interface);
   }
 
-
   void search(const ObjCProtocolList &protocols) {
     for (ObjCProtocolList::iterator i = protocols.begin(), e = protocols.end();
          i != e; ++i)
@@ -3930,7 +3928,7 @@ private:
     searchFromContainer(container);
   }
 };
-}
+} // end anonymous namespace
 
 void Sema::CheckObjCMethodOverrides(ObjCMethodDecl *ObjCMethod,
                                     ObjCInterfaceDecl *CurrentClass,
@@ -4527,7 +4525,6 @@ void Sema::DiagnoseUseOfUnimplementedSelectors() {
     if (!LookupImplementedMethodInGlobalPool(Sel))
       Diag(Loc, diag::warn_unimplemented_selector) << Sel;
   }
-  return;
 }
 
 ObjCIvarDecl *
@@ -4590,7 +4587,7 @@ namespace {
       return true;
     }
   };
-}
+} // end anonymous namespace
 
 void Sema::DiagnoseUnusedBackingIvarInAccessor(Scope *S,
                                           const ObjCImplementationDecl *ImplD) {
