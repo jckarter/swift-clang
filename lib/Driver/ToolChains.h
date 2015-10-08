@@ -552,6 +552,12 @@ public:
 
   void AddLinkARCArgs(const llvm::opt::ArgList &Args,
                       llvm::opt::ArgStringList &CmdArgs) const override;
+
+  unsigned GetDefaultDwarfVersion() const override { return 2; }
+  // Until dtrace (via CTF) and LLDB can deal with distributed debug info,
+  // Darwin defaults to standalone/full debug info.
+  bool GetDefaultStandaloneDebug() const override { return true; }
+
   /// }
 
 private:
@@ -608,6 +614,8 @@ public:
       const llvm::opt::ArgList &DriverArgs,
       llvm::opt::ArgStringList &CC1Args) const override;
 
+  unsigned GetDefaultDwarfVersion() const override { return 2; }
+
 protected:
   Tool *buildAssembler() const override;
   Tool *buildLinker() const override;
@@ -659,6 +667,7 @@ public:
   unsigned GetDefaultStackProtectorLevel(bool KernelOrKext) const override {
     return 2;
   }
+  unsigned GetDefaultDwarfVersion() const override { return 2; }
 
 protected:
   Tool *buildAssembler() const override;
@@ -705,6 +714,10 @@ public:
   bool UseSjLjExceptions(const llvm::opt::ArgList &Args) const override;
   bool isPIEDefault() const override;
   SanitizerMask getSupportedSanitizers() const override;
+  unsigned GetDefaultDwarfVersion() const override { return 2; }
+  // Until dtrace (via CTF) and LLDB can deal with distributed debug info,
+  // FreeBSD defaults to standalone/full debug info.
+  bool GetDefaultStandaloneDebug() const override { return true; }
 
 protected:
   Tool *buildAssembler() const override;
@@ -1012,6 +1025,7 @@ public:
   Tool *SelectTool(const JobAction &JA) const override;
   void getCompilerSupportDir(std::string &Dir) const;
   void getBuiltinLibDir(std::string &Dir) const;
+  unsigned GetDefaultDwarfVersion() const override { return 2; }
 
 protected:
   Tool *buildLinker() const override;
