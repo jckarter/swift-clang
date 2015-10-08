@@ -383,7 +383,7 @@ protected:
     DefineStd(Builder, "linux", Opts);
     Builder.defineMacro("__gnu_linux__");
     Builder.defineMacro("__ELF__");
-    if (Triple.getEnvironment() == llvm::Triple::Android) {
+    if (Triple.isAndroid()) {
       Builder.defineMacro("__ANDROID__", "1");
       unsigned Maj, Min, Rev;
       Triple.getEnvironmentVersion(Maj, Min, Rev);
@@ -2705,7 +2705,35 @@ bool X86TargetInfo::initFeatureMap(
     setFeatureEnabledImpl(Features, "cx16", true);
     break;
   }
-  return TargetInfo::initFeatureMap(Features, Diags, CPU, FeaturesVec);
+  if (!TargetInfo::initFeatureMap(Features, Diags, CPU, FeaturesVec))
+    return false;
+
+  // Can't do this earlier because we need to be able to explicitly enable
+  // or disable these features and the things that they depend upon.
+
+  // Enable popcnt if sse4.2 is enabled and popcnt is not explicitly disabled.
+  auto I = Features.find("sse4.2");
+  if (I != Features.end() && I->getValue() == true &&
+      std::find(FeaturesVec.begin(), FeaturesVec.end(), "-popcnt") ==
+          FeaturesVec.end())
+    Features["popcnt"] = true;
+
+  // Enable prfchw if 3DNow! is enabled and prfchw is not explicitly disabled.
+  I = Features.find("3dnow");
+  if (I != Features.end() && I->getValue() == true &&
+      std::find(FeaturesVec.begin(), FeaturesVec.end(), "-prfchw") ==
+          FeaturesVec.end())
+    Features["prfchw"] = true;
+
+  // Additionally, if SSE is enabled and mmx is not explicitly disabled,
+  // then enable MMX.
+  I = Features.find("sse");
+  if (I != Features.end() && I->getValue() == true &&
+      std::find(FeaturesVec.begin(), FeaturesVec.end(), "-mmx") ==
+          FeaturesVec.end())
+    Features["mmx"] = true;
+
+  return true;
 }
 
 void X86TargetInfo::setSSELevel(llvm::StringMap<bool> &Features,
@@ -2974,22 +3002,6 @@ bool X86TargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
     XOPLevel = std::max(XOPLevel, XLevel);
   }
 
-  // Enable popcnt if sse4.2 is enabled and popcnt is not explicitly disabled.
-  // Can't do this earlier because we need to be able to explicitly enable
-  // popcnt and still disable sse4.2.
-  if (!HasPOPCNT && SSELevel >= SSE42 &&
-      std::find(Features.begin(), Features.end(), "-popcnt") == Features.end()){
-    HasPOPCNT = true;
-    Features.push_back("+popcnt");
-  }
-
-  // Enable prfchw if 3DNow! is enabled and prfchw is not explicitly disabled.
-  if (!HasPRFCHW && MMX3DNowLevel >= AMD3DNow &&
-      std::find(Features.begin(), Features.end(), "-prfchw") == Features.end()){
-    HasPRFCHW = true;
-    Features.push_back("+prfchw");
-  }
-
   // LLVM doesn't have a separate switch for fpmath, so only accept it if it
   // matches the selected sse level.
   if (FPMath == FP_SSE && SSELevel < SSE1) {
@@ -2999,17 +3011,6 @@ bool X86TargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
     Diags.Report(diag::err_target_unsupported_fpmath) << "387";
     return false;
   }
-
-  // Don't tell the backend if we're turning off mmx; it will end up disabling
-  // SSE, which we don't want.
-  // Additionally, if SSE is enabled and mmx is not explicitly disabled,
-  // then enable MMX.
-  std::vector<std::string>::iterator it;
-  it = std::find(Features.begin(), Features.end(), "-mmx");
-  if (it != Features.end())
-    Features.erase(it);
-  else if (SSELevel > NoSSE)
-    MMX3DNowLevel = std::max(MMX3DNowLevel, MMX);
 
   SimdDefaultAlign =
       hasFeature("avx512f") ? 512 : hasFeature("avx") ? 256 : 128;
