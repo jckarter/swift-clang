@@ -10268,6 +10268,8 @@ void tools::Myriad::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
 
   if (UseDefaultLibs) {
+    if (C.getDriver().CCCIsCXX())
+      CmdArgs.push_back("-lstdc++");
     if (T.getOS() == llvm::Triple::RTEMS) {
       CmdArgs.push_back("--start-group");
       CmdArgs.push_back("-lc");
@@ -10278,8 +10280,6 @@ void tools::Myriad::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     } else {
       CmdArgs.push_back("-lc");
     }
-    if (C.getDriver().CCCIsCXX())
-      CmdArgs.push_back("-lstdc++");
     CmdArgs.push_back("-lgcc");
   }
   if (UseStartfiles) {
