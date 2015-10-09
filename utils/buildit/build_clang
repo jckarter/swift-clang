@@ -43,6 +43,7 @@ ORDER_FILE=$IB_ROOT/static-order-files/armv7/clang.order
 OSX=MacOSX.platform
 
 if [ "${SDKROOT_PATH#*$OSX}" != "$SDKROOT_PATH"  ]; then
+  BUILDING_HOST=YES
   CMAKE_TOOLCHAIN_FLAGS=""
   ORDER_FILE=$IB_ROOT/static-order-files/x86_64/clang.order
 fi
@@ -122,12 +123,12 @@ TOOLCHAINS=$OLD_TOOLCHAINS
 mkdir -p $OBJROOT/obj-llvm || exit 1
 cd $OBJROOT/obj-llvm || exit 1
 
-if [ "$RC_PURPLE" = "YES" ]; then
-  CACHE_FILE=$LLVM_SRCROOT/tools/clang/cmake/caches/Apple-device.cmake
-  BUILD_TARGET=install
-else
+if [ "$BUILDING_HOST" = "YES" ]; then
   CACHE_FILE=$LLVM_SRCROOT/tools/clang/cmake/caches/Apple-stage1.cmake
   BUILD_TARGET=bootstrap-install
+else
+  CACHE_FILE=$LLVM_SRCROOT/tools/clang/cmake/caches/Apple-device.cmake
+  BUILD_TARGET=install
 fi
 
 TOOLCHAIN_USR=$DSTROOT/$DT_TOOLCHAIN_DIR/usr
@@ -144,13 +145,7 @@ $CMAKE -G 'Ninja' -C $CACHE_FILE \
     "$LLVM_SRCROOT" \
     || exit 1
 
-$NINJA -v $BUILD_TARGET
-if ! test $? == 0 ; then
-    echo "error: LLVM 'ninja bootstrap-install' failed!"
-    exit 1
-fi
-
-if [ "$RC_PURPLE" != "YES" ]; then
+if [ "$BUILDING_HOST" = "YES" ]; then
   $NINJA -v install-libcxx
   if ! test $? == 0 ; then
       echo "error: LLVM 'ninja install-libcxx' failed!"
@@ -158,8 +153,14 @@ if [ "$RC_PURPLE" != "YES" ]; then
   fi
 fi
 
+$NINJA -v $BUILD_TARGET
+if ! test $? == 0 ; then
+    echo "error: LLVM 'ninja bootstrap-install' failed!"
+    exit 1
+fi
+
 # Build the runtime
-if [ "$RC_PURPLE" != "YES" ]; then
+if [ "$BUILDING_HOST" = "YES" ]; then
   mkdir -p $OBJROOT/obj-rt || exit 1
   cd $OBJROOT/obj-rt|| exit 1
 
