@@ -4327,7 +4327,8 @@ static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
 
   } else if (isa<EnumConstantDecl>(D) || isa<ObjCProtocolDecl>(D) ||
              isa<ObjCInterfaceDecl>(D) || isa<ObjCPropertyDecl>(D) ||
-             isa<VarDecl>(D) || isa<TagDecl>(D) || isa<FieldDecl>(D)) {
+             isa<VarDecl>(D) || isa<TypedefNameDecl>(D) || isa<TagDecl>(D) ||
+             isa<IndirectFieldDecl>(D) || isa<FieldDecl>(D)) {
     if (!isValidIdentifier(Name)) {
       S.Diag(ArgLoc, diag::err_attr_swift_name_identifier) << Attr.getName();
       return;
