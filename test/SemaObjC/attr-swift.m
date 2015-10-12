@@ -95,6 +95,7 @@ void foo2(int i) __attribute__((swift_name("foo(a:b:)"))); // expected-warning{{
 void foo3(int i, int j) __attribute__((swift_name("fooWithX(_:y:)"))); // okay
 void foo4(int i, int *error) __attribute__((swift_name("fooWithA(_:)"))); // okay
 
+typedef int some_int_type __attribute__((swift_name("SomeInt")));
 
 // --- swift_error ---
 
