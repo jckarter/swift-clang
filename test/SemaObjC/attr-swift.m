@@ -40,17 +40,17 @@ __attribute__((swift_name("SNFooType")))
 
 __attribute__((swift_name("SNFooClass")))
 @interface SNFoo <SNFoo>
-- (instancetype)init __attribute__((swift_name("init"))); // expected-error {{only factory methods can have the 'swift_name' attribute}}
-- (instancetype)initWithValue:(int)value __attribute__((swift_name("fooWithValue(_:)"))); // expected-error {{only factory methods can have the 'swift_name' attribute}}
+- (instancetype)init __attribute__((swift_name("init()")));
+- (instancetype)initWithValue:(int)value __attribute__((swift_name("fooWithValue(_:)")));
 
-+ (void)refresh __attribute__((swift_name("refresh()"))); // expected-error {{only factory methods can have the 'swift_name' attribute}}
++ (void)refresh __attribute__((swift_name("refresh()")));
 
 + (instancetype)foo __attribute__((swift_name("foo()")));
 + (SNFoo *)fooWithValue:(int)value __attribute__((swift_name("foo(value:)")));
 + (SNFoo *)fooWithValue:(int)value value:(int)value2 __attribute__((swift_name("foo(value:extra:)")));
 + (SNFoo *)fooWithConvertingValue:(int)value value:(int)value2 __attribute__((swift_name("init(_:extra:)")));
 
-+ (SNFoo *)fooWithOtherValue:(int)value __attribute__((swift_name("init"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift method name string}}
++ (SNFoo *)fooWithOtherValue:(int)value __attribute__((swift_name("init"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift function name string}}
 + (SNFoo *)fooWithAnotherValue:(int)value __attribute__((swift_name("foo()"))); // expected-warning {{too few parameters in 'swift_name' attribute (expected 1; got 0)}}
 + (SNFoo *)fooWithYetAnotherValue:(int)value __attribute__((swift_name("foo(value:extra:)"))); // expected-warning {{too many parameters in 'swift_name' attribute (expected 1; got 2)}}
 
@@ -68,20 +68,33 @@ __attribute__((swift_name("SNFooClass")))
 + (instancetype)specialBaz __attribute__((swift_name("init(_:)"))); // expected-warning {{too many parameters in 'swift_name' attribute (expected 0; got 1)}}
 + (instancetype)specialGarply __attribute__((swift_name("foo(options:)"))); // expected-warning {{too many parameters in 'swift_name' attribute (expected 0; got 1)}}
 
-+ (instancetype)trailingParen __attribute__((swift_name("foo("))); // expected-error {{parameter of 'swift_name' attribute must be a Swift method name string}}
-+ (instancetype)trailingColon:(int)value __attribute__((swift_name("foo(value)"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift method name string}}
-+ (instancetype)initialIgnore:(int)value __attribute__((swift_name("_(value:)"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift method name string}}
-+ (instancetype)middleOmitted:(int)value __attribute__((swift_name("foo(:)"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift method name string}}
++ (instancetype)trailingParen __attribute__((swift_name("foo("))); // expected-error {{parameter of 'swift_name' attribute must be a Swift function name string}}
++ (instancetype)trailingColon:(int)value __attribute__((swift_name("foo(value)"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift function name string}}
++ (instancetype)initialIgnore:(int)value __attribute__((swift_name("_(value:)"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift function name string}}
++ (instancetype)middleOmitted:(int)value __attribute__((swift_name("foo(:)"))); // expected-error {{parameter of 'swift_name' attribute must be a Swift function name string}}
 
-@property(strong) id someProp __attribute__((swift_name("prop"))); // expected-error {{'swift_name' attribute cannot be applied to this declaration}}
+@property(strong) id someProp __attribute__((swift_name("prop")));
 @end
 
-enum __attribute__((swift_name("MoreColors"))) MoreColors { // expected-error {{'swift_name' attribute cannot be applied to this declaration}}
+enum __attribute__((swift_name("MoreColors"))) MoreColors {
   Cyan,
   Magenta,
   Yellow __attribute__((swift_name("RoseGold"))),
   Black __attribute__((swift_name("SpaceGrey()"))) // expected-error {{parameter of 'swift_name' attribute must be an ASCII identifier string}}
 };
+
+struct __attribute__((swift_name("FooStruct"))) BarStruct {
+  int x, y, z __attribute__((swift_name("zed")));
+};
+
+int global_int __attribute__((swift_name("GlobalInt")));
+
+void foo1(int i) __attribute__((swift_name("foo"))); // expected-error{{parameter of 'swift_name' attribute must be a Swift function name string}}
+void foo2(int i) __attribute__((swift_name("foo()"))); // expected-warning{{too few parameters in 'swift_name' attribute (expected 1; got 0)}}
+void foo2(int i) __attribute__((swift_name("foo(a:b:)"))); // expected-warning{{too many parameters in 'swift_name' attribute (expected 1; got 2)}}
+void foo3(int i, int j) __attribute__((swift_name("fooWithX(_:y:)"))); // okay
+void foo4(int i, int *error) __attribute__((swift_name("fooWithA(_:)"))); // okay
+
 
 // --- swift_error ---
 

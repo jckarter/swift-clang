@@ -2876,12 +2876,10 @@ def err_objc_attr_protocol_requires_definition : Error<
 // Swift attributes
 def err_attr_swift_name_decl_kind : Error<
   "%0 attribute cannot be applied to this declaration">;
-def err_attr_swift_name_factory_methods_only : Error<
-  "only factory methods can have the %0 attribute">;
 def err_attr_swift_name_identifier : Error<
   "parameter of %0 attribute must be an ASCII identifier string">;
-def err_attr_swift_name_method : Error<
-  "parameter of %0 attribute must be a Swift method name string">;
+def err_attr_swift_name_function : Error<
+  "parameter of %0 attribute must be a Swift function name string">;
 def warn_attr_swift_name_num_params : Warning<
   "too %select{few|many}0 parameters in %1 attribute (expected %2; got %3)">,
   InGroup<DiagGroup<"swift-name-attribute">>;
