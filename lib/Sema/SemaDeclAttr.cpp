@@ -4214,12 +4214,12 @@ static void handleObjCPreciseLifetimeAttr(Sema &S, Decl *D,
                                      Attr.getAttributeSpellingListIndex()));
 }
 
-/// Do a very rough check to make sure \p Name looks like a Swift method name,
+/// Do a very rough check to make sure \p Name looks like a Swift function name,
 /// e.g. <code>init(foo:bar:baz:)</code> or <code>controllerForName(_:)</code>,
 /// and return the number of parameter names.
-static bool validateSwiftMethodName(StringRef Name,
-                                    unsigned &ParamCount,
-                                    bool &IsSingleParamInit) {
+static bool validateSwiftFunctionName(StringRef Name,
+                                      unsigned &ParamCount,
+                                      bool &IsSingleParamInit) {
   ParamCount = 0;
   if (Name.back() != ')')
     return false;
@@ -4259,65 +4259,56 @@ static void handleSwiftName(Sema &S, Decl *D, const AttributeList &Attr) {
   if (!S.checkStringLiteralArgumentAttr(Attr, 0, Name, &ArgLoc))
     return;
 
-  if (const auto *Method = dyn_cast<ObjCMethodDecl>(D)) {
-    // swift_name only applies to factory methods for now.
-    if (!Method->isClassMethod()) {
-      S.Diag(Attr.getLoc(), diag::err_attr_swift_name_factory_methods_only)
-          << Attr.getName();
-      return;
-    }
+  if (isa<ObjCMethodDecl>(D) || isa<FunctionDecl>(D)) {
+    ArrayRef<ParmVarDecl*> Params;
+    unsigned ParamCount;
 
-    bool HasRelatedResultType = Method->hasRelatedResultType();
-    if (!HasRelatedResultType) {
-      const ObjCInterfaceDecl *Interface = Method->getClassInterface();
-      Sema::ResultTypeCompatibilityKind RTC =
-          S.checkRelatedResultTypeCompatibility(Method, Interface);
-      HasRelatedResultType = (RTC == Sema::RTC_Compatible);
-    }
-    if (!HasRelatedResultType) {
-      S.Diag(Attr.getLoc(), diag::err_attr_swift_name_factory_methods_only)
-          << Attr.getName();
-      return;
+    if (const auto *Method = dyn_cast<ObjCMethodDecl>(D)) {
+      ParamCount = Method->getSelector().getNumArgs();
+      Params = Method->parameters().slice(0, ParamCount);
+    } else {
+      const auto *Function = cast<FunctionDecl>(D);
+      ParamCount = Function->getNumParams();
+      Params = Function->parameters();
     }
 
     bool IsSingleParamInit;
     unsigned SwiftParamCount;
-    if (!validateSwiftMethodName(Name, SwiftParamCount, IsSingleParamInit)) {
-      S.Diag(ArgLoc, diag::err_attr_swift_name_method) << Attr.getName();
+    if (!validateSwiftFunctionName(Name, SwiftParamCount, IsSingleParamInit)) {
+      S.Diag(ArgLoc, diag::err_attr_swift_name_function) << Attr.getName();
       return;
     }
 
-    unsigned ObjCParamCount = Method->getSelector().getNumArgs();
-
     bool ParamsOK;
-    if (SwiftParamCount == ObjCParamCount) {
+    if (SwiftParamCount == ParamCount) {
       ParamsOK = true;
-    } else if (SwiftParamCount > ObjCParamCount) {
-      ParamsOK = IsSingleParamInit && ObjCParamCount == 0;
+    } else if (SwiftParamCount > ParamCount) {
+      ParamsOK = IsSingleParamInit && ParamCount == 0;
     } else {
       // We have fewer Swift parameters than Objective-C parameters, but that
       // might be because we've transformed some of them. Check for potential
       // "out" parameters and err on the side of not warning.
       unsigned MaybeOutParamCount =
-          std::count_if(Method->param_begin(), Method->sel_param_end(),
+          std::count_if(Params.begin(), Params.end(),
                         [](const ParmVarDecl *Param) -> bool {
         QualType ParamTy = Param->getType();
         if (ParamTy->isReferenceType() || ParamTy->isPointerType())
           return !ParamTy->getPointeeType().isConstQualified();
         return false;
       });
-      ParamsOK = (SwiftParamCount + MaybeOutParamCount >= ObjCParamCount);
+      ParamsOK = (SwiftParamCount + MaybeOutParamCount >= ParamCount);
     }
 
     if (!ParamsOK) {
       S.Diag(ArgLoc, diag::warn_attr_swift_name_num_params)
-          << (SwiftParamCount > ObjCParamCount) << Attr.getName()
-          << ObjCParamCount << SwiftParamCount;
+          << (SwiftParamCount > ParamCount) << Attr.getName()
+          << ParamCount << SwiftParamCount;
       return;
     }
 
   } else if (isa<EnumConstantDecl>(D) || isa<ObjCProtocolDecl>(D) ||
-             isa<ObjCInterfaceDecl>(D)) {
+             isa<ObjCInterfaceDecl>(D) || isa<ObjCPropertyDecl>(D) ||
+             isa<VarDecl>(D) || isa<TagDecl>(D) || isa<FieldDecl>(D)) {
     if (!isValidIdentifier(Name)) {
       S.Diag(ArgLoc, diag::err_attr_swift_name_identifier) << Attr.getName();
       return;
