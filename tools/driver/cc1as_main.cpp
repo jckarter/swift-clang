@@ -146,7 +146,7 @@ public:
     RelaxAll = 0;
     NoExecStack = 0;
     FatalWarnings = 0;
-    DwarfVersion = 3;
+    DwarfVersion = 0;
     EmbedBitcode = 0;
   }
 
