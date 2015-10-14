@@ -629,6 +629,10 @@ if (CLANG_ENABLE_BOOTSTRAP)
                 # seem to work, so instead I'm passing this through
                 -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
                 -DPACKAGE_VERSION=${PACKAGE_VERSION}
+                -DLLVM_VERSION_MAJOR=${LLVM_VERSION_MAJOR}
+                -DLLVM_VERSION_MINOR=${LLVM_VERSION_MINOR}
+                -DLLVM_VERSION_PATCH=${LLVM_VERSION_PATCH}
+                -DLLVM_VERSION_SUFFIX=${LLVM_VERSION_SUFFIX}
                 ${CLANG_BOOTSTRAP_CMAKE_ARGS}
                 -DCMAKE_CXX_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang++
                 -DCMAKE_C_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang
