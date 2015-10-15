@@ -38,10 +38,9 @@ MINOR_VERISON=${VERSION:2:3}
 MAJ_MIN_VER=${MAJOR_VERISON}.${MINOR_VERISON}
 FULL_VER=${MAJOR_VERISON}.${MINOR_VERISON}.0
 
-SUBMISSION_MAJOR=`echo $RC_ProjectSourceVersion | sed -e 's/\([0-9]*\).*/\1/'`
-SUBMISSION_EXTRA=`echo $RC_ProjectSourceVersion | sed -e 's/[^.]*\.\([0-9]*\)/\1/'`
-SUBMISSION_MINOR=`echo $SUBMISSION_EXTRA | sed -e 's/\([0-9]*\).*/\1/'`
-SUBMISSION_PATCH=`echo $SUBMISSION_EXTRA | sed -e 's/[^.]*\.\([0-9]*\)/\1/'`
+SUBMISSION_MAJOR=`echo $RC_ProjectSourceVersion | awk -F'.' '{print $1}'`
+SUBMISSION_MINOR=`echo $RC_ProjectSourceVersion | awk -F'.' '{print $2}'`
+SUBMISSION_PATCH=`echo $RC_ProjectSourceVersion | awk -F'.' '{print $3}'`
 
 CMAKE_TOOLCHAIN_FLAGS="\
   -DCMAKE_TOOLCHAIN_FILE=$LLVM_SRCROOT/cmake/platforms/iOS.cmake \
