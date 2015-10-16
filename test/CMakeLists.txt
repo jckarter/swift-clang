@@ -59,7 +59,7 @@ if( NOT CLANG_BUILT_STANDALONE )
   list(APPEND CLANG_TEST_DEPS
     FileCheck count not
     llc opt llvm-symbolizer llvm-profdata llvm-objdump llvm-readobj
-    llvm-dwarfdump llvm-config
+    llvm-dwarfdump llvm-config llvm-bcanalyzer
     )
 endif()
 
