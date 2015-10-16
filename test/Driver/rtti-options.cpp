@@ -23,6 +23,10 @@
 // XXX: %clang -### -c -target x86_64-unknown-unknown -fsanitize=vptr -fno-rtti %s 2>&1 | FileCheck -check-prefix=CHECK-SAN-ERROR %s
 // XXX: %clang -### -c -target x86_64-unknown-unknown -fsanitize=undefined %s 2>&1 | FileCheck -check-prefix=CHECK-OK %s
 // XXX: %clang -### -c -target x86_64-unknown-unknown -fsanitize=undefined -frtti %s 2>&1 | FileCheck -check-prefix=CHECK-OK %s
+// XXX: %clang -### -c -target x86_64-scei-ps4 -fsanitize=vptr %s 2>&1 | FileCheck -check-prefix=CHECK-SAN-WARN %s
+// XXX: %clang -### -c -target x86_64-scei-ps4 -fsanitize=vptr -frtti %s 2>&1 | FileCheck -check-prefix=CHECK-OK %s
+// XXX: %clang -### -c -target x86_64-scei-ps4 -fsanitize=vptr -fno-rtti %s 2>&1 | FileCheck -check-prefix=CHECK-SAN-ERROR %s
+// XXX: %clang -### -c -target x86_64-scei-ps4 -fsanitize=undefined -frtti %s 2>&1 | FileCheck -check-prefix=CHECK-OK %s
 
 // Exceptions + no/default rtti
 // RUN: %clang -### -c -target x86_64-scei-ps4 -fcxx-exceptions -fno-rtti %s 2>&1 | FileCheck -check-prefix=CHECK-EXC-ERROR-CXX %s
@@ -48,6 +52,7 @@
 // RUN: %clang -### -c -target x86_64-unknown-unknown %s 2>&1 | FileCheck -check-prefix=CHECK-RTTI %s
 
 // CHECK-UNUSED: warning: argument unused during compilation: '-fcxx-exceptions'
+// CHECK-SAN-WARN: implicitly disabling vptr sanitizer because rtti wasn't enabled
 // CHECK-SAN-ERROR: invalid argument '-fsanitize=vptr' not allowed with '-fno-rtti'
 // CHECK-EXC-WARN: implicitly enabling rtti for exception handling
 // CHECK-EXC-ERROR: invalid argument '-fno-rtti' not allowed with '-fexceptions'

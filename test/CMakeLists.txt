@@ -58,8 +58,15 @@ set(CLANG_TEST_PARAMS
 if( NOT CLANG_BUILT_STANDALONE )
   list(APPEND CLANG_TEST_DEPS
     FileCheck count not
-    llc opt llvm-symbolizer llvm-profdata llvm-objdump llvm-readobj
-    llvm-dwarfdump llvm-config llvm-bcanalyzer
+    llc
+    llvm-bcanalyzer
+    llvm-config
+    llvm-dwarfdump
+    llvm-objdump
+    llvm-profdata
+    llvm-readobj
+    llvm-symbolizer
+    opt
     )
 endif()
 
