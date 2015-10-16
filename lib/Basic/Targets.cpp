@@ -2173,6 +2173,7 @@ class X86TargetInfo : public TargetInfo {
   bool HasAVX512VL = false;
   bool HasSHA = false;
   bool HasCX16 = false;
+  bool HasFXSR = false;
   bool HasXSAVE = false;
   bool HasXSAVEOPT = false;
   bool HasXSAVEC = false;
@@ -2636,26 +2637,31 @@ bool X86TargetInfo::initFeatureMap(
   case CK_Pentium3M:
   case CK_C3_2:
     setFeatureEnabledImpl(Features, "sse", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     break;
   case CK_PentiumM:
   case CK_Pentium4:
   case CK_Pentium4M:
   case CK_x86_64:
     setFeatureEnabledImpl(Features, "sse2", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     break;
   case CK_Yonah:
   case CK_Prescott:
   case CK_Nocona:
     setFeatureEnabledImpl(Features, "sse3", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     setFeatureEnabledImpl(Features, "cx16", true);
     break;
   case CK_Core2:
   case CK_Bonnell:
     setFeatureEnabledImpl(Features, "ssse3", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     setFeatureEnabledImpl(Features, "cx16", true);
     break;
   case CK_Penryn:
     setFeatureEnabledImpl(Features, "sse4.1", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     setFeatureEnabledImpl(Features, "cx16", true);
     break;
   case CK_Skylake:
@@ -2696,6 +2702,7 @@ bool X86TargetInfo::initFeatureMap(
     // FALLTHROUGH
   case CK_Nehalem:
     setFeatureEnabledImpl(Features, "sse4.2", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     setFeatureEnabledImpl(Features, "cx16", true);
     break;
   case CK_KNL:
@@ -2703,6 +2710,7 @@ bool X86TargetInfo::initFeatureMap(
     setFeatureEnabledImpl(Features, "avx512cd", true);
     setFeatureEnabledImpl(Features, "avx512er", true);
     setFeatureEnabledImpl(Features, "avx512pf", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     setFeatureEnabledImpl(Features, "rdseed", true);
     setFeatureEnabledImpl(Features, "adx", true);
     setFeatureEnabledImpl(Features, "lzcnt", true);
@@ -2735,6 +2743,7 @@ bool X86TargetInfo::initFeatureMap(
   case CK_AthlonMP:
     setFeatureEnabledImpl(Features, "sse", true);
     setFeatureEnabledImpl(Features, "3dnowa", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     break;
   case CK_K8:
   case CK_Opteron:
@@ -2742,6 +2751,7 @@ bool X86TargetInfo::initFeatureMap(
   case CK_AthlonFX:
     setFeatureEnabledImpl(Features, "sse2", true);
     setFeatureEnabledImpl(Features, "3dnowa", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     break;
   case CK_AMDFAM10:
     setFeatureEnabledImpl(Features, "sse4a", true);
@@ -2753,6 +2763,7 @@ bool X86TargetInfo::initFeatureMap(
   case CK_Athlon64SSE3:
     setFeatureEnabledImpl(Features, "sse3", true);
     setFeatureEnabledImpl(Features, "3dnowa", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     break;
   case CK_BTVER2:
     setFeatureEnabledImpl(Features, "avx", true);
@@ -2769,6 +2780,7 @@ bool X86TargetInfo::initFeatureMap(
     setFeatureEnabledImpl(Features, "popcnt", true);
     setFeatureEnabledImpl(Features, "prfchw", true);
     setFeatureEnabledImpl(Features, "cx16", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     setFeatureEnabledImpl(Features, "xsave", true);
     break;
   case CK_BDVER4:
@@ -2793,6 +2805,7 @@ bool X86TargetInfo::initFeatureMap(
     setFeatureEnabledImpl(Features, "pclmul", true);
     setFeatureEnabledImpl(Features, "prfchw", true);
     setFeatureEnabledImpl(Features, "cx16", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
     setFeatureEnabledImpl(Features, "xsave", true);
     break;
   }
@@ -3074,6 +3087,8 @@ bool X86TargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
       HasSHA = true;
     } else if (Feature == "+cx16") {
       HasCX16 = true;
+    } else if (Feature == "+fxsr") {
+      HasFXSR = true;
     } else if (Feature == "+xsave") {
       HasXSAVE = true;
     } else if (Feature == "+xsaveopt") {
@@ -3374,6 +3389,8 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   if (HasSHA)
     Builder.defineMacro("__SHA__");
 
+  if (HasFXSR)
+    Builder.defineMacro("__FXSR__");
   if (HasXSAVE)
     Builder.defineMacro("__XSAVE__");
   if (HasXSAVEOPT)
@@ -3472,6 +3489,7 @@ bool X86TargetInfo::hasFeature(StringRef Feature) const {
       .Case("fma", HasFMA)
       .Case("fma4", XOPLevel >= FMA4)
       .Case("fsgsbase", HasFSGSBASE)
+      .Case("fxsr", HasFXSR)
       .Case("lzcnt", HasLZCNT)
       .Case("mm3dnow", MMX3DNowLevel >= AMD3DNow)
       .Case("mm3dnowa", MMX3DNowLevel >= AMD3DNowAthlon)
