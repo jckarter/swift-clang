@@ -10044,6 +10044,8 @@ static void ConstructPS4LinkJob(const Tool &T, Compilation &C,
     assert(Output.isNothing() && "Invalid output.");
   }
 
+  AddPS4SanitizerArgs(ToolChain, CmdArgs);
+
   Args.AddAllArgs(CmdArgs, options::OPT_L);
   Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
   Args.AddAllArgs(CmdArgs, options::OPT_e);
@@ -10061,7 +10063,6 @@ static void ConstructPS4LinkJob(const Tool &T, Compilation &C,
   }
 
   AddPS4ProfileRT(ToolChain, Args, CmdArgs);
-  AddPS4SanitizerArgs(ToolChain, CmdArgs);
 
   const char *Exec = Args.MakeArgString(ToolChain.GetProgramPath("ps4-ld"));
 
@@ -10113,6 +10114,8 @@ static void ConstructGoldLinkJob(const Tool &T, Compilation &C,
   } else {
     assert(Output.isNothing() && "Invalid output.");
   }
+
+  AddPS4SanitizerArgs(ToolChain, CmdArgs);
 
   if (!Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nostartfiles)) {
@@ -10241,7 +10244,6 @@ static void ConstructGoldLinkJob(const Tool &T, Compilation &C,
   }
 
   AddPS4ProfileRT(ToolChain, Args, CmdArgs);
-  AddPS4SanitizerArgs(ToolChain, CmdArgs);
 
   const char *Exec =
 #ifdef LLVM_ON_WIN32
