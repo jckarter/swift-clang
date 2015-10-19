@@ -955,10 +955,9 @@ public:
 
   StringRef getABI() const override { return ABI; }
 
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::PPC::LastTSBuiltin-Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                             clang::PPC::LastTSBuiltin-Builtin::FirstTSBuiltin);
   }
 
   bool isCLZForZeroUndef() const override { return false; }
@@ -977,10 +976,8 @@ public:
   void setFeatureEnabled(llvm::StringMap<bool> &Features, StringRef Name,
                          bool Enabled) const override;
 
-  void getGCCRegNames(const char * const *&Names,
-                      unsigned &NumNames) const override;
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override;
+  ArrayRef<const char *> getGCCRegNames() const override;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override;
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &Info) const override {
     switch (*Name) {
@@ -1467,10 +1464,8 @@ const char * const PPCTargetInfo::GCCRegNames[] = {
   "sfp"
 };
 
-void PPCTargetInfo::getGCCRegNames(const char * const *&Names,
-                                   unsigned &NumNames) const {
-  Names = GCCRegNames;
-  NumNames = llvm::array_lengthof(GCCRegNames);
+ArrayRef<const char*> PPCTargetInfo::getGCCRegNames() const {
+  return llvm::makeArrayRef(GCCRegNames);
 }
 
 const TargetInfo::GCCRegAlias PPCTargetInfo::GCCRegAliases[] = {
@@ -1543,10 +1538,8 @@ const TargetInfo::GCCRegAlias PPCTargetInfo::GCCRegAliases[] = {
   { { "cc" }, "cr0" },
 };
 
-void PPCTargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                     unsigned &NumAliases) const {
-  Aliases = GCCRegAliases;
-  NumAliases = llvm::array_lengthof(GCCRegAliases);
+ArrayRef<TargetInfo::GCCRegAlias> PPCTargetInfo::getGCCRegAliases() const {
+  return llvm::makeArrayRef(GCCRegAliases);
 }
 
 class PPC32TargetInfo : public PPCTargetInfo {
@@ -1722,22 +1715,18 @@ public:
       Builder.defineMacro("__CUDA_ARCH__", CUDAArchCode);
     }
   }
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::NVPTX::LastTSBuiltin - Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                         clang::NVPTX::LastTSBuiltin - Builtin::FirstTSBuiltin);
   }
   bool hasFeature(StringRef Feature) const override {
     return Feature == "ptx" || Feature == "nvptx";
   }
 
-  void getGCCRegNames(const char *const *&Names,
-                      unsigned &NumNames) const override;
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {
+  ArrayRef<const char *> getGCCRegNames() const override;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
     // No aliases.
-    Aliases = nullptr;
-    NumAliases = 0;
+    return None;
   }
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &Info) const override {
@@ -1785,10 +1774,8 @@ const Builtin::Info NVPTXTargetInfo::BuiltinInfo[] = {
 
 const char *const NVPTXTargetInfo::GCCRegNames[] = {"r0"};
 
-void NVPTXTargetInfo::getGCCRegNames(const char *const *&Names,
-                                     unsigned &NumNames) const {
-  Names = GCCRegNames;
-  NumNames = llvm::array_lengthof(GCCRegNames);
+ArrayRef<const char *> NVPTXTargetInfo::getGCCRegNames() const {
+  return llvm::makeArrayRef(GCCRegNames);
 }
 
 class NVPTX32TargetInfo : public NVPTXTargetInfo {
@@ -1903,13 +1890,10 @@ public:
     return "";
   }
 
-  void getGCCRegNames(const char * const *&Names,
-                      unsigned &NumNames) const override;
+  ArrayRef<const char *> getGCCRegNames() const override;
 
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {
-    Aliases = nullptr;
-    NumAliases = 0;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
+    return None;
   }
 
   bool validateAsmConstraint(const char *&Name,
@@ -1917,10 +1901,9 @@ public:
     return true;
   }
 
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::AMDGPU::LastTSBuiltin - Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                        clang::AMDGPU::LastTSBuiltin - Builtin::FirstTSBuiltin);
   }
 
   void getTargetDefines(const LangOptions &Opts,
@@ -2086,10 +2069,8 @@ const char * const AMDGPUTargetInfo::GCCRegNames[] = {
   "vcc_lo", "vcc_hi", "flat_scr_lo", "flat_scr_hi"
 };
 
-void AMDGPUTargetInfo::getGCCRegNames(const char * const *&Names,
-                                      unsigned &NumNames) const {
-  Names = GCCRegNames;
-  NumNames = llvm::array_lengthof(GCCRegNames);
+ArrayRef<const char *> AMDGPUTargetInfo::getGCCRegNames() const {
+  return llvm::makeArrayRef(GCCRegNames);
 }
 
 // Namespace for x86 abstract base class
@@ -2431,25 +2412,18 @@ public:
     // X87 evaluates with 80 bits "long double" precision.
     return SSELevel == NoSSE ? 2 : 0;
   }
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                                 unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::X86::LastTSBuiltin-Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                             clang::X86::LastTSBuiltin-Builtin::FirstTSBuiltin);
   }
-  void getGCCRegNames(const char * const *&Names,
-                      unsigned &NumNames) const override {
-    Names = GCCRegNames;
-    NumNames = llvm::array_lengthof(GCCRegNames);
+  ArrayRef<const char *> getGCCRegNames() const override {
+    return llvm::makeArrayRef(GCCRegNames);
   }
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {
-    Aliases = nullptr;
-    NumAliases = 0;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
+    return None;
   }
-  void getGCCAddlRegNames(const AddlRegName *&Names,
-                          unsigned &NumNames) const override {
-    Names = AddlRegNames;
-    NumNames = llvm::array_lengthof(AddlRegNames);
+  ArrayRef<TargetInfo::AddlRegName> getGCCAddlRegNames() const override {
+    return llvm::makeArrayRef(AddlRegNames);
   }
   bool validateCpuSupports(StringRef Name) const override;
   bool validateAsmConstraint(const char *&Name,
@@ -4921,10 +4895,9 @@ public:
       Builder.defineMacro("__ARM_FP_FAST", "1");
   }
 
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::ARM::LastTSBuiltin-Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                             clang::ARM::LastTSBuiltin-Builtin::FirstTSBuiltin);
   }
   bool isCLZForZeroUndef() const override { return false; }
   BuiltinVaListKind getBuiltinVaListKind() const override {
@@ -4933,10 +4906,8 @@ public:
                           ? TargetInfo::CharPtrBuiltinVaList
                           : TargetInfo::VoidPtrBuiltinVaList);
   }
-  void getGCCRegNames(const char * const *&Names,
-                      unsigned &NumNames) const override;
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override;
+  ArrayRef<const char *> getGCCRegNames() const override;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override;
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &Info) const override {
     switch (*Name) {
@@ -5071,10 +5042,8 @@ const char * const ARMTargetInfo::GCCRegNames[] = {
   "q8", "q9", "q10", "q11", "q12", "q13", "q14", "q15"
 };
 
-void ARMTargetInfo::getGCCRegNames(const char * const *&Names,
-                                   unsigned &NumNames) const {
-  Names = GCCRegNames;
-  NumNames = llvm::array_lengthof(GCCRegNames);
+ArrayRef<const char *> ARMTargetInfo::getGCCRegNames() const {
+  return llvm::makeArrayRef(GCCRegNames);
 }
 
 const TargetInfo::GCCRegAlias ARMTargetInfo::GCCRegAliases[] = {
@@ -5098,10 +5067,8 @@ const TargetInfo::GCCRegAlias ARMTargetInfo::GCCRegAliases[] = {
   // don't want to substitute one of these for a different-sized one.
 };
 
-void ARMTargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                       unsigned &NumAliases) const {
-  Aliases = GCCRegAliases;
-  NumAliases = llvm::array_lengthof(GCCRegAliases);
+ArrayRef<TargetInfo::GCCRegAlias> ARMTargetInfo::getGCCRegAliases() const {
+  return llvm::makeArrayRef(GCCRegAliases);
 }
 
 const Builtin::Info ARMTargetInfo::BuiltinInfo[] = {
@@ -5436,10 +5403,9 @@ public:
     Builder.defineMacro("__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8");
   }
 
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::AArch64::LastTSBuiltin - Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                       clang::AArch64::LastTSBuiltin - Builtin::FirstTSBuiltin);
   }
 
   bool hasFeature(StringRef Feature) const override {
@@ -5478,10 +5444,8 @@ public:
     return TargetInfo::AArch64ABIBuiltinVaList;
   }
 
-  void getGCCRegNames(const char *const *&Names,
-                      unsigned &NumNames) const override;
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override;
+  ArrayRef<const char *> getGCCRegNames() const override;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override;
 
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &Info) const override {
@@ -5591,10 +5555,8 @@ const char *const AArch64TargetInfo::GCCRegNames[] = {
   "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31"
 };
 
-void AArch64TargetInfo::getGCCRegNames(const char *const *&Names,
-                                     unsigned &NumNames) const {
-  Names = GCCRegNames;
-  NumNames = llvm::array_lengthof(GCCRegNames);
+ArrayRef<const char *> AArch64TargetInfo::getGCCRegNames() const {
+  return llvm::makeArrayRef(GCCRegNames);
 }
 
 const TargetInfo::GCCRegAlias AArch64TargetInfo::GCCRegAliases[] = {
@@ -5606,10 +5568,8 @@ const TargetInfo::GCCRegAlias AArch64TargetInfo::GCCRegAliases[] = {
   // don't want to substitute one of these for a different-sized one.
 };
 
-void AArch64TargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                       unsigned &NumAliases) const {
-  Aliases = GCCRegAliases;
-  NumAliases = llvm::array_lengthof(GCCRegAliases);
+ArrayRef<TargetInfo::GCCRegAlias> AArch64TargetInfo::getGCCRegAliases() const {
+  return llvm::makeArrayRef(GCCRegAliases);
 }
 
 const Builtin::Info AArch64TargetInfo::BuiltinInfo[] = {
@@ -5713,10 +5673,9 @@ public:
     NoAsmVariants = true;
   }
 
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::Hexagon::LastTSBuiltin-Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                         clang::Hexagon::LastTSBuiltin-Builtin::FirstTSBuiltin);
   }
 
   bool validateAsmConstraint(const char *&Name,
@@ -5734,10 +5693,8 @@ public:
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::CharPtrBuiltinVaList;
   }
-  void getGCCRegNames(const char * const *&Names,
-                      unsigned &NumNames) const override;
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override;
+  ArrayRef<const char *> getGCCRegNames() const override;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override;
   const char *getClobbers() const override {
     return "";
   }
@@ -5819,10 +5776,8 @@ const char * const HexagonTargetInfo::GCCRegNames[] = {
   "sa0", "lc0", "sa1", "lc1", "m0", "m1", "usr", "ugp"
 };
 
-void HexagonTargetInfo::getGCCRegNames(const char * const *&Names,
-                                   unsigned &NumNames) const {
-  Names = GCCRegNames;
-  NumNames = llvm::array_lengthof(GCCRegNames);
+ArrayRef<const char *> HexagonTargetInfo::getGCCRegNames() const {
+  return llvm::makeArrayRef(GCCRegNames);
 }
 
 
@@ -5832,10 +5787,8 @@ const TargetInfo::GCCRegAlias HexagonTargetInfo::GCCRegAliases[] = {
   { { "lr" }, "r31" },
  };
 
-void HexagonTargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                     unsigned &NumAliases) const {
-  Aliases = GCCRegAliases;
-  NumAliases = llvm::array_lengthof(GCCRegAliases);
+ArrayRef<TargetInfo::GCCRegAlias> HexagonTargetInfo::getGCCRegAliases() const {
+  return llvm::makeArrayRef(GCCRegAliases);
 }
 
 
@@ -5883,17 +5836,15 @@ public:
              .Default(false);
   }
 
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
     // FIXME: Implement!
+    return None;
   }
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::VoidPtrBuiltinVaList;
   }
-  void getGCCRegNames(const char * const *&Names,
-                      unsigned &NumNames) const override;
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override;
+  ArrayRef<const char *> getGCCRegNames() const override;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override;
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &info) const override {
     // FIXME: Implement!
@@ -5922,10 +5873,8 @@ const char * const SparcTargetInfo::GCCRegNames[] = {
   "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31"
 };
 
-void SparcTargetInfo::getGCCRegNames(const char * const *&Names,
-                                     unsigned &NumNames) const {
-  Names = GCCRegNames;
-  NumNames = llvm::array_lengthof(GCCRegNames);
+ArrayRef<const char *> SparcTargetInfo::getGCCRegNames() const {
+  return llvm::makeArrayRef(GCCRegNames);
 }
 
 const TargetInfo::GCCRegAlias SparcTargetInfo::GCCRegAliases[] = {
@@ -5963,10 +5912,8 @@ const TargetInfo::GCCRegAlias SparcTargetInfo::GCCRegAliases[] = {
   { { "i7" }, "r31" },
 };
 
-void SparcTargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                       unsigned &NumAliases) const {
-  Aliases = GCCRegAliases;
-  NumAliases = llvm::array_lengthof(GCCRegAliases);
+ArrayRef<TargetInfo::GCCRegAlias> SparcTargetInfo::getGCCRegAliases() const {
+  return llvm::makeArrayRef(GCCRegAliases);
 }
 
 // SPARC v8 is the 32-bit mode selected by Triple::sparc.
@@ -6096,19 +6043,15 @@ public:
     if (Opts.ZVector)
       Builder.defineMacro("__VEC__", "10301");
   }
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::SystemZ::LastTSBuiltin-Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                         clang::SystemZ::LastTSBuiltin-Builtin::FirstTSBuiltin);
   }
 
-  void getGCCRegNames(const char *const *&Names,
-                      unsigned &NumNames) const override;
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {
+  ArrayRef<const char *> getGCCRegNames() const override;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
     // No aliases.
-    Aliases = nullptr;
-    NumAliases = 0;
+    return None;
   }
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &info) const override;
@@ -6193,10 +6136,8 @@ const char *const SystemZTargetInfo::GCCRegNames[] = {
   "f8",  "f10", "f12", "f14", "f9",  "f11", "f13", "f15"
 };
 
-void SystemZTargetInfo::getGCCRegNames(const char *const *&Names,
-                                       unsigned &NumNames) const {
-  Names = GCCRegNames;
-  NumNames = llvm::array_lengthof(GCCRegNames);
+ArrayRef<const char *> SystemZTargetInfo::getGCCRegNames() const {
+  return llvm::makeArrayRef(GCCRegNames);
 }
 
 bool SystemZTargetInfo::
@@ -6256,22 +6197,17 @@ public:
     Builder.defineMacro("__MSP430__");
     // FIXME: defines for different 'flavours' of MCU
   }
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
     // FIXME: Implement.
-    Records = nullptr;
-    NumRecords = 0;
+    return None;
   }
   bool hasFeature(StringRef Feature) const override {
     return Feature == "msp430";
   }
-  void getGCCRegNames(const char *const *&Names,
-                      unsigned &NumNames) const override;
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {
+  ArrayRef<const char *> getGCCRegNames() const override;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
     // No aliases.
-    Aliases = nullptr;
-    NumAliases = 0;
+    return None;
   }
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &info) const override {
@@ -6299,10 +6235,8 @@ const char *const MSP430TargetInfo::GCCRegNames[] = {
     "r0", "r1", "r2",  "r3",  "r4",  "r5",  "r6",  "r7",
     "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"};
 
-void MSP430TargetInfo::getGCCRegNames(const char *const *&Names,
-                                      unsigned &NumNames) const {
-  Names = GCCRegNames;
-  NumNames = llvm::array_lengthof(GCCRegNames);
+ArrayRef<const char *> MSP430TargetInfo::getGCCRegNames() const {
+  return llvm::makeArrayRef(GCCRegNames);
 }
 
 // LLVM and Clang cannot be used directly to output native binaries for
@@ -6362,20 +6296,19 @@ public:
   }
   bool hasFeature(StringRef Feature) const override { return Feature == "tce"; }
 
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {}
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override { return None; }
   const char *getClobbers() const override { return ""; }
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::VoidPtrBuiltinVaList;
   }
-  void getGCCRegNames(const char *const *&Names,
-                      unsigned &NumNames) const override {}
+  ArrayRef<const char *> getGCCRegNames() const override { return None; }
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &info) const override {
     return true;
   }
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {}
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
+    return None;
+  }
 };
 
 class BPFTargetInfo : public TargetInfo {
@@ -6408,27 +6341,22 @@ public:
     return Feature == "bpf";
   }
 
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {}
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override { return None; }
   const char *getClobbers() const override {
     return "";
   }
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::VoidPtrBuiltinVaList;
   }
-  void getGCCRegNames(const char * const *&Names,
-                      unsigned &NumNames) const override {
-    Names = nullptr;
-    NumNames = 0;
+  ArrayRef<const char *> getGCCRegNames() const override {
+    return None;
   }
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &info) const override {
     return true;
   }
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {
-    Aliases = nullptr;
-    NumAliases = 0;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
+    return None;
   }
 };
 
@@ -6570,10 +6498,9 @@ public:
     Builder.defineMacro("_MIPS_ARCH_" + StringRef(CPU).upper());
   }
 
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::Mips::LastTSBuiltin - Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                          clang::Mips::LastTSBuiltin - Builtin::FirstTSBuiltin);
   }
   bool hasFeature(StringRef Feature) const override {
     return llvm::StringSwitch<bool>(Feature)
@@ -6584,8 +6511,7 @@ public:
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::VoidPtrBuiltinVaList;
   }
-  void getGCCRegNames(const char * const *&Names,
-                      unsigned &NumNames) const override {
+  ArrayRef<const char *> getGCCRegNames() const override {
     static const char *const GCCRegNames[] = {
       // CPU register names
       // Must match second column of GCCRegAliases
@@ -6610,11 +6536,9 @@ public:
       "$msair",      "$msacsr", "$msaaccess", "$msasave", "$msamodify",
       "$msarequest", "$msamap", "$msaunmap"
     };
-    Names = GCCRegNames;
-    NumNames = llvm::array_lengthof(GCCRegNames);
+    return llvm::makeArrayRef(GCCRegNames);
   }
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override = 0;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override = 0;
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &Info) const override {
     switch (*Name) {
@@ -6793,8 +6717,7 @@ public:
     else
       llvm_unreachable("Invalid ABI for Mips32.");
   }
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
     static const TargetInfo::GCCRegAlias GCCRegAliases[] = {
       { { "at" },  "$1" },
       { { "v0" },  "$2" },
@@ -6828,8 +6751,7 @@ public:
       { { "fp","$fp" }, "$30" },
       { { "ra" }, "$31" }
     };
-    Aliases = GCCRegAliases;
-    NumAliases = llvm::array_lengthof(GCCRegAliases);
+    return llvm::makeArrayRef(GCCRegAliases);
   }
 };
 
@@ -6949,8 +6871,7 @@ public:
     else
       llvm_unreachable("Invalid ABI for Mips64.");
   }
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
     static const TargetInfo::GCCRegAlias GCCRegAliases[] = {
       { { "at" },  "$1" },
       { { "v0" },  "$2" },
@@ -6984,8 +6905,7 @@ public:
       { { "fp","$fp" }, "$30" },
       { { "ra" }, "$31" }
     };
-    Aliases = GCCRegAliases;
-    NumAliases = llvm::array_lengthof(GCCRegAliases);
+    return llvm::makeArrayRef(GCCRegAliases);
   }
 
   bool hasInt128Type() const override { return true; }
@@ -7063,16 +6983,12 @@ public:
   bool hasFeature(StringRef Feature) const override {
     return Feature == "pnacl";
   }
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-  }
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override { return None; }
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::PNaClABIBuiltinVaList;
   }
-  void getGCCRegNames(const char * const *&Names,
-                      unsigned &NumNames) const override;
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override;
+  ArrayRef<const char *> getGCCRegNames() const override;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override;
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &Info) const override {
     return false;
@@ -7083,16 +6999,12 @@ public:
   }
 };
 
-void PNaClTargetInfo::getGCCRegNames(const char * const *&Names,
-                                     unsigned &NumNames) const {
-  Names = nullptr;
-  NumNames = 0;
+ArrayRef<const char *> PNaClTargetInfo::getGCCRegNames() const {
+  return None;
 }
 
-void PNaClTargetInfo::getGCCRegAliases(const GCCRegAlias *&Aliases,
-                                       unsigned &NumAliases) const {
-  Aliases = nullptr;
-  NumAliases = 0;
+ArrayRef<TargetInfo::GCCRegAlias> PNaClTargetInfo::getGCCRegAliases() const {
+  return None;
 }
 
 // We attempt to use PNaCl (le32) frontend and Mips32EL backend.
@@ -7125,24 +7037,19 @@ public:
     defineCPUMacros(Builder, "le64", /*Tuning=*/false);
     Builder.defineMacro("__ELF__");
   }
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::Le64::LastTSBuiltin - Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                          clang::Le64::LastTSBuiltin - Builtin::FirstTSBuiltin);
   }
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::PNaClABIBuiltinVaList;
   }
   const char *getClobbers() const override { return ""; }
-  void getGCCRegNames(const char *const *&Names,
-                      unsigned &NumNames) const override {
-    Names = nullptr;
-    NumNames = 0;
+  ArrayRef<const char *> getGCCRegNames() const override {
+    return None;
   }
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {
-    Aliases = nullptr;
-    NumAliases = 0;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
+    return None;
   }
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &Info) const override {
@@ -7219,24 +7126,19 @@ private:
               .Case("generic",       true)
               .Default(false);
   }
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const final {
-    Records = BuiltinInfo;
-    NumRecords = clang::WebAssembly::LastTSBuiltin - Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const final {
+    return llvm::makeArrayRef(BuiltinInfo,
+                   clang::WebAssembly::LastTSBuiltin - Builtin::FirstTSBuiltin);
   }
   BuiltinVaListKind getBuiltinVaListKind() const final {
     // TODO: Implement va_list properly.
     return VoidPtrBuiltinVaList;
   }
-  void getGCCRegNames(const char *const *&Names,
-                      unsigned &NumNames) const final {
-    Names = nullptr;
-    NumNames = 0;
+  ArrayRef<const char *> getGCCRegNames() const final {
+    return None;
   }
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const final {
-    Aliases = nullptr;
-    NumAliases = 0;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const final {
+    return None;
   }
   bool
   validateAsmConstraint(const char *&Name,
@@ -7342,17 +7244,16 @@ public:
     return Feature == "spir";
   }
 
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {}
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override { return None; }
   const char *getClobbers() const override { return ""; }
-  void getGCCRegNames(const char *const *&Names,
-                      unsigned &NumNames) const override {}
+  ArrayRef<const char *> getGCCRegNames() const override { return None; }
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &info) const override {
     return true;
   }
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {}
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
+    return None;
+  }
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::VoidPtrBuiltinVaList;
   }
@@ -7419,10 +7320,9 @@ public:
                         MacroBuilder &Builder) const override {
     Builder.defineMacro("__XS1B__");
   }
-  void getTargetBuiltins(const Builtin::Info *&Records,
-                         unsigned &NumRecords) const override {
-    Records = BuiltinInfo;
-    NumRecords = clang::XCore::LastTSBuiltin-Builtin::FirstTSBuiltin;
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return llvm::makeArrayRef(BuiltinInfo,
+                           clang::XCore::LastTSBuiltin-Builtin::FirstTSBuiltin);
   }
   BuiltinVaListKind getBuiltinVaListKind() const override {
     return TargetInfo::VoidPtrBuiltinVaList;
@@ -7430,19 +7330,15 @@ public:
   const char *getClobbers() const override {
     return "";
   }
-  void getGCCRegNames(const char * const *&Names,
-                      unsigned &NumNames) const override {
+  ArrayRef<const char *> getGCCRegNames() const override {
     static const char * const GCCRegNames[] = {
       "r0",   "r1",   "r2",   "r3",   "r4",   "r5",   "r6",   "r7",
       "r8",   "r9",   "r10",  "r11",  "cp",   "dp",   "sp",   "lr"
     };
-    Names = GCCRegNames;
-    NumNames = llvm::array_lengthof(GCCRegNames);
+    return llvm::makeArrayRef(GCCRegNames);
   }
-  void getGCCRegAliases(const GCCRegAlias *&Aliases,
-                        unsigned &NumAliases) const override {
-    Aliases = nullptr;
-    NumAliases = 0;
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
+    return None;
   }
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &Info) const override {
