@@ -3704,9 +3704,6 @@ public:
       Expr *baseObjectExpr = nullptr,
       SourceLocation opLoc = SourceLocation());
 
-  void DiagnoseInstanceReference(const CXXScopeSpec &SS, NamedDecl *Rep,
-                                 const DeclarationNameInfo &nameInfo);
-
   ExprResult BuildPossibleImplicitMemberExpr(const CXXScopeSpec &SS,
                                              SourceLocation TemplateKWLoc,
                                              LookupResult &R,
