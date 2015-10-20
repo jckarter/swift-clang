@@ -221,8 +221,6 @@ mv $TOOLCHAIN_USR/bin/clang-$MAJ_MIN_VER $TOOLCHAIN_USR/bin/clang
 rm $TOOLCHAIN_USR/lib/libLTO.dylib
 rm $TOOLCHAIN_USR/lib/libLTO.$SUB_MAJ_MIN_VER.dylib
 mv $TOOLCHAIN_USR/lib/libLTO.$RC_ProjectSourceVersion.dylib $TOOLCHAIN_USR/lib/libLTO.dylib
-# FIX-ME: Make sure we don't install libclang because swift does.
-rm $TOOLCHAIN_USR/lib/libclang.*
 
 # fixup headers
 mv $TOOLCHAIN_USR/include/llvm-c $TOOLCHAIN_USR/local/include/llvm-c
