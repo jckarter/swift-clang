@@ -41,6 +41,7 @@ FULL_VER=${MAJOR_VERISON}.${MINOR_VERISON}.0
 SUBMISSION_MAJOR=`echo $RC_ProjectSourceVersion | awk -F'.' '{print $1}'`
 SUBMISSION_MINOR=`echo $RC_ProjectSourceVersion | awk -F'.' '{print $2}'`
 SUBMISSION_PATCH=`echo $RC_ProjectSourceVersion | awk -F'.' '{print $3}'`
+SUB_MAJ_MIN_VER=${SUBMISSION_MAJOR}.${SUBMISSION_MINOR}
 
 CMAKE_TOOLCHAIN_FLAGS="\
   -DCMAKE_TOOLCHAIN_FILE=$LLVM_SRCROOT/cmake/platforms/iOS.cmake \
@@ -213,6 +214,13 @@ rm $TOOLCHAIN_USR/bin/git-clang-format
 rm $TOOLCHAIN_USR/bin/clang-check
 rm $TOOLCHAIN_USR/bin/clang
 mv $TOOLCHAIN_USR/bin/clang-$MAJ_MIN_VER $TOOLCHAIN_USR/bin/clang
+
+# fixup lib
+rm $TOOLCHAIN_USR/lib/libLTO.dylib
+rm $TOOLCHAIN_USR/lib/libLTO.$SUB_MAJ_MIN_VER.dylib
+mv $TOOLCHAIN_USR/lib/libLTO.$RC_ProjectSourceVersion.dylib $TOOLCHAIN_USR/lib/libLTO.dylib
+# FIX-ME: Make sure we don't install libclang because swift does.
+rm $TOOLCHAIN_USR/lib/libclang.*
 
 # fixup headers
 mv $TOOLCHAIN_USR/include/llvm-c $TOOLCHAIN_USR/local/include/llvm-c
