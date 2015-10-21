@@ -88,8 +88,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
       VMContext(M.getContext()), TBAA(nullptr), TheTargetCodeGenInfo(nullptr),
       Types(*this), VTables(*this), ObjCRuntime(nullptr),
       OpenCLRuntime(nullptr), OpenMPRuntime(nullptr), CUDARuntime(nullptr),
-      DebugInfo(nullptr), ObjCData(nullptr),
-      NoObjCARCExceptionsMetadata(nullptr), PGOReader(nullptr),
+      DebugInfo(nullptr), ARCData(nullptr),
+      NoObjCARCExceptionsMetadata(nullptr), RRData(nullptr), PGOReader(nullptr),
       CFConstantStringClassRef(nullptr), ConstantStringClassRef(nullptr),
       NSConstantStringType(nullptr), NSConcreteGlobalBlock(nullptr),
       NSConcreteStackBlock(nullptr), BlockObjectAssign(nullptr),
@@ -143,8 +143,9 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
 
   Block.GlobalUniqueCount = 0;
 
-  if (C.getLangOpts().ObjC1)
-    ObjCData = new ObjCEntrypoints();
+  if (C.getLangOpts().ObjCAutoRefCount)
+    ARCData = new ARCEntrypoints();
+  RRData = new RREntrypoints();
 
   if (!CodeGenOpts.InstrProfileInput.empty()) {
     auto ReaderOrErr =
@@ -172,7 +173,8 @@ CodeGenModule::~CodeGenModule() {
   delete TheTargetCodeGenInfo;
   delete TBAA;
   delete DebugInfo;
-  delete ObjCData;
+  delete ARCData;
+  delete RRData;
 }
 
 void CodeGenModule::createObjCRuntime() {

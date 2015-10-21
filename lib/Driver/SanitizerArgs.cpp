@@ -29,7 +29,7 @@ enum : SanitizerMask {
   NeedsUbsanRt = Undefined | Integer | CFI,
   NeedsUbsanCxxRt = Vptr | CFI,
   NotAllowedWithTrap = Vptr,
-  RequiresPIE = DataFlow,
+  RequiresPIE = Memory | DataFlow,
   NeedsUnwindTables = Address | Thread | Memory | DataFlow,
   SupportsCoverage = Address | Memory | Leak | Undefined | Integer | DataFlow,
   RecoverableByDefault = Undefined | Integer,
@@ -168,7 +168,7 @@ bool SanitizerArgs::needsUbsanRt() const {
 }
 
 bool SanitizerArgs::requiresPIE() const {
-  return NeedPIE || (Sanitizers.Mask & RequiresPIE);
+  return AsanZeroBaseShadow || (Sanitizers.Mask & RequiresPIE);
 }
 
 bool SanitizerArgs::needsUnwindTables() const {
@@ -184,8 +184,8 @@ void SanitizerArgs::clear() {
   CoverageFeatures = 0;
   MsanTrackOrigins = 0;
   MsanUseAfterDtor = false;
-  NeedPIE = false;
   AsanFieldPadding = 0;
+  AsanZeroBaseShadow = false;
   AsanSharedRuntime = false;
   LinkCXXRuntimes = false;
 }
@@ -432,10 +432,8 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
         }
       }
     }
-    MsanUseAfterDtor =
-        Args.hasArg(options::OPT_fsanitize_memory_use_after_dtor);
-    NeedPIE |= !(TC.getTriple().isOSLinux() &&
-                 TC.getTriple().getArch() == llvm::Triple::x86_64);
+    MsanUseAfterDtor = 
+      Args.hasArg(options::OPT_fsanitize_memory_use_after_dtor);
   }
 
   // Parse -f(no-)?sanitize-coverage flags if coverage is supported by the
@@ -506,7 +504,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
   if (AllAddedKinds & Address) {
     AsanSharedRuntime =
         Args.hasArg(options::OPT_shared_libasan) || TC.getTriple().isAndroid();
-    NeedPIE |= TC.getTriple().isAndroid();
+    AsanZeroBaseShadow = TC.getTriple().isAndroid();
     if (Arg *A =
             Args.getLastArg(options::OPT_fsanitize_address_field_padding)) {
         StringRef S = A->getValue();

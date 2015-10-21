@@ -12712,6 +12712,7 @@ NamedDecl *Sema::ActOnFriendFunctionDecl(Scope *S, Declarator &D,
     case UnqualifiedId::IK_OperatorFunctionId:
     case UnqualifiedId::IK_TemplateId:
       break;
+      llvm_unreachable("Didn't expect this kind of unqualified-id!");
     }
     // This implies that it has to be an operator or function.
     if (DiagArg >= 0) {

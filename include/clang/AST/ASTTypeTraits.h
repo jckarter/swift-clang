@@ -106,25 +106,18 @@ public:
     }
   };
 
-  /// Check if the given ASTNodeKind identifies a type that offers pointer
-  /// identity. This is useful for the fast path in DynTypedNode.
-  bool hasPointerIdentity() const {
-    return KindId > NKI_LastKindWithoutPointerIdentity;
-  }
-
 private:
   /// \brief Kind ids.
   ///
   /// Includes all possible base and derived kinds.
   enum NodeKindId {
     NKI_None,
+    NKI_CXXCtorInitializer,
     NKI_TemplateArgument,
+    NKI_NestedNameSpecifier,
     NKI_NestedNameSpecifierLoc,
     NKI_QualType,
     NKI_TypeLoc,
-    NKI_LastKindWithoutPointerIdentity = NKI_TypeLoc,
-    NKI_CXXCtorInitializer,
-    NKI_NestedNameSpecifier,
     NKI_Decl,
 #define DECL(DERIVED, BASE) NKI_##DERIVED##Decl,
 #include "clang/AST/DeclNodes.inc"
@@ -245,11 +238,7 @@ public:
   /// Note that this is not supported by all AST nodes. For AST nodes
   /// that don't have a pointer-defined identity inside the AST, this
   /// method returns NULL.
-  const void *getMemoizationData() const {
-    return NodeKind.hasPointerIdentity()
-               ? *reinterpret_cast<void *const *>(Storage.buffer)
-               : nullptr;
-  }
+  const void *getMemoizationData() const { return MemoizationData; }
 
   /// \brief Prints the node to the given output stream.
   void print(llvm::raw_ostream &OS, const PrintingPolicy &PP) const;
@@ -297,18 +286,18 @@ private:
   template <typename T, typename BaseT> struct DynCastPtrConverter {
     static const T *get(ASTNodeKind NodeKind, const char Storage[]) {
       if (ASTNodeKind::getFromNodeKind<T>().isBaseOf(NodeKind))
-        return &getUnchecked(NodeKind, Storage);
+        return cast<T>(*reinterpret_cast<BaseT *const *>(Storage));
       return nullptr;
     }
     static const T &getUnchecked(ASTNodeKind NodeKind, const char Storage[]) {
       assert(ASTNodeKind::getFromNodeKind<T>().isBaseOf(NodeKind));
-      return *cast<T>(static_cast<const BaseT *>(
-          *reinterpret_cast<const void *const *>(Storage)));
+      return *cast<T>(*reinterpret_cast<BaseT *const *>(Storage));
     }
     static DynTypedNode create(const BaseT &Node) {
       DynTypedNode Result;
       Result.NodeKind = ASTNodeKind::getFromNode(Node);
-      new (Result.Storage.buffer) const void *(&Node);
+      Result.MemoizationData = &Node;
+      new (Result.Storage.buffer) const BaseT * (&Node);
       return Result;
     }
   };
@@ -317,18 +306,18 @@ private:
   template <typename T> struct PtrConverter {
     static const T *get(ASTNodeKind NodeKind, const char Storage[]) {
       if (ASTNodeKind::getFromNodeKind<T>().isSame(NodeKind))
-        return &getUnchecked(NodeKind, Storage);
+        return *reinterpret_cast<T *const *>(Storage);
       return nullptr;
     }
     static const T &getUnchecked(ASTNodeKind NodeKind, const char Storage[]) {
       assert(ASTNodeKind::getFromNodeKind<T>().isSame(NodeKind));
-      return *static_cast<const T *>(
-          *reinterpret_cast<const void *const *>(Storage));
+      return **reinterpret_cast<T *const *>(Storage);
     }
     static DynTypedNode create(const T &Node) {
       DynTypedNode Result;
       Result.NodeKind = ASTNodeKind::getFromNodeKind<T>();
-      new (Result.Storage.buffer) const void *(&Node);
+      Result.MemoizationData = &Node;
+      new (Result.Storage.buffer) const T * (&Node);
       return Result;
     }
   };
@@ -347,12 +336,14 @@ private:
     static DynTypedNode create(const T &Node) {
       DynTypedNode Result;
       Result.NodeKind = ASTNodeKind::getFromNodeKind<T>();
+      Result.MemoizationData = nullptr;
       new (Result.Storage.buffer) T(Node);
       return Result;
     }
   };
 
   ASTNodeKind NodeKind;
+  const void *MemoizationData;
 
   /// \brief Stores the data of the node.
   ///
@@ -362,9 +353,12 @@ private:
   /// \c QualTypes, \c NestedNameSpecifierLocs, \c TypeLocs and
   /// \c TemplateArguments on the other hand do not have storage or unique
   /// pointers and thus need to be stored by value.
-  llvm::AlignedCharArrayUnion<const void *, TemplateArgument,
-                              NestedNameSpecifierLoc, QualType,
-                              TypeLoc> Storage;
+  typedef llvm::AlignedCharArrayUnion<
+      Decl *, Stmt *, Type *, NestedNameSpecifier *, CXXCtorInitializer *>
+      KindsByPointer;
+  llvm::AlignedCharArrayUnion<KindsByPointer, TemplateArgument,
+                              NestedNameSpecifierLoc, QualType, TypeLoc>
+      Storage;
 };
 
 template <typename T>
