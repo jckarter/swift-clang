@@ -33,6 +33,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Analysis/Analyses/FormatString.h"
+#include "clang/Analysis/Analyses/OSLog.h"
 #include "clang/AST/APValue.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTDiagnostic.h"
@@ -6748,6 +6750,14 @@ bool IntExprEvaluator::VisitCallExpr(const CallExpr *E) {
 
     return BuiltinOp == Builtin::BI__atomic_always_lock_free ?
         Success(0, E) : Error(E);
+  }
+
+  case Builtin::BI__builtin_os_log_format_buffer_size: {
+    analyze_os_log::OSLogBufferLayout Layout;
+    if (!analyze_os_log::computeOSLogBufferLayout(Info.Ctx, E, Layout)) {
+      return false;
+    }
+    return Success(Layout.getSize(), E);
   }
   }
 }

@@ -18,6 +18,7 @@
 #include "TargetInfo.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
+#include "clang/Analysis/Analyses/OSLog.h"
 #include "clang/Basic/TargetBuiltins.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/CodeGen/CGFunctionInfo.h"
@@ -1838,6 +1839,42 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
             CGM.getCXXABI().getThrowInfo(FD->getParamDecl(0)->getType()))
       return RValue::get(llvm::ConstantExpr::getBitCast(GV, CGM.Int8PtrTy));
     break;
+  }
+
+  case Builtin::BI__builtin_os_log_format: {
+    assert(E->getNumArgs() >= 2 &&
+           "__builtin_os_log_format takes at least 2 arguments");
+    analyze_os_log::OSLogBufferLayout Layout;
+    analyze_os_log::computeOSLogBufferLayout(CGM.getContext(), E, Layout);
+    Address BufAddr = EmitPointerWithAlignment(E->getArg(0));
+    llvm::Value *FormatStr = EmitScalarExpr(E->getArg(1));
+    CharUnits offset;
+    Builder.CreateStore(
+      Builder.getInt8(Layout.getSummaryByte()),
+      Builder.CreateConstByteGEP(BufAddr, offset++, "summary"));
+    Builder.CreateStore(
+      Builder.getInt8(Layout.getNumArgsByte()),
+      Builder.CreateConstByteGEP(BufAddr, offset++, "numArgs"));
+    for (const auto &item : Layout.Items) {
+      Builder.CreateStore(
+        Builder.getInt8(item.getDescriptorByte()),
+        Builder.CreateConstByteGEP(BufAddr, offset++, "argDescriptor"));
+      Builder.CreateStore(
+        Builder.getInt8(item.getSizeByte()),
+        Builder.CreateConstByteGEP(BufAddr, offset++, "argSize"));
+      Address addr = Builder.CreateConstByteGEP(BufAddr, offset);
+      if (const Expr *expr = item.getExpr()) {
+        addr = Builder.CreateElementBitCast(addr,
+                                            ConvertTypeForMem(expr->getType()));
+        EmitAnyExprToMem(expr, addr, Qualifiers(), /*isInit*/true);
+      } else {
+        addr = Builder.CreateElementBitCast(addr, Int32Ty);
+        Builder.CreateStore(
+          Builder.getInt32(item.getConstValue().getQuantity()), addr);
+      }
+      offset += item.getSize();
+    }
+    return RValue::get(FormatStr);
   }
   }
 
