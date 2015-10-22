@@ -2464,34 +2464,12 @@ static void CollectArgsForIntegratedAssembler(Compilation &C,
   }
 }
 
-static const char *getCompilerRTArgString(const ToolChain &TC,
-                                          const llvm::opt::ArgList &Args,
-                                          StringRef Component,
-                                          bool Shared = false) {
-  return Args.MakeArgString(TC.getCompilerRT(Args, Component, Shared));
-}
-
 // This adds the static libclang_rt.builtins-arch.a directly to the command line
 // FIXME: Make sure we can also emit shared objects if they're requested
 // and available, check for possible errors, etc.
 static void addClangRT(const ToolChain &TC, const ArgList &Args,
                        ArgStringList &CmdArgs) {
-  CmdArgs.push_back(getCompilerRTArgString(TC, Args, "builtins"));
-}
-
-static void addProfileRT(const ToolChain &TC, const ArgList &Args,
-                         ArgStringList &CmdArgs) {
-  if (!(Args.hasFlag(options::OPT_fprofile_arcs, options::OPT_fno_profile_arcs,
-                     false) ||
-        Args.hasArg(options::OPT_fprofile_generate) ||
-        Args.hasArg(options::OPT_fprofile_generate_EQ) ||
-        Args.hasArg(options::OPT_fprofile_instr_generate) ||
-        Args.hasArg(options::OPT_fprofile_instr_generate_EQ) ||
-        Args.hasArg(options::OPT_fcreate_profile) ||
-        Args.hasArg(options::OPT_coverage)))
-    return;
-
-  CmdArgs.push_back(getCompilerRTArgString(TC, Args, "profile"));
+  CmdArgs.push_back(TC.getCompilerRTArgString(Args, "builtins"));
 }
 
 namespace {
@@ -2570,11 +2548,9 @@ static void addSanitizerRuntime(const ToolChain &TC, const ArgList &Args,
                                 bool IsShared) {
   // Static runtimes must be forced into executable, so we wrap them in
   // whole-archive.
-  if (!IsShared)
-    CmdArgs.push_back("-whole-archive");
-  CmdArgs.push_back(getCompilerRTArgString(TC, Args, Sanitizer, IsShared));
-  if (!IsShared)
-    CmdArgs.push_back("-no-whole-archive");
+  if (!IsShared) CmdArgs.push_back("-whole-archive");
+  CmdArgs.push_back(TC.getCompilerRTArgString(Args, Sanitizer, IsShared));
+  if (!IsShared) CmdArgs.push_back("-no-whole-archive");
 }
 
 // Tries to use a file with the list of dynamic symbols that need to be exported
@@ -7259,9 +7235,6 @@ void darwin::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasArg(options::OPT_fnested_functions))
     CmdArgs.push_back("-allow_stack_execute");
 
-  // TODO: It would be nice to use addProfileRT() here, but darwin's compiler-rt
-  // paths are different enough from other toolchains that this needs a fair
-  // amount of refactoring done first.
   getMachOToolChain().addProfileRTLibs(Args, CmdArgs);
 
   if (!Args.hasArg(options::OPT_nostdlib) &&
@@ -7467,7 +7440,7 @@ void solaris::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   }
   CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crtn.o")));
 
-  addProfileRT(getToolChain(), Args, CmdArgs);
+  getToolChain().addProfileRTLibs(Args, CmdArgs);
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
@@ -8059,7 +8032,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
   }
 
-  addProfileRT(ToolChain, Args, CmdArgs);
+  ToolChain.addProfileRTLibs(Args, CmdArgs);
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
@@ -8348,7 +8321,7 @@ void netbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crtn.o")));
   }
 
-  addProfileRT(getToolChain(), Args, CmdArgs);
+  getToolChain().addProfileRTLibs(Args, CmdArgs);
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
@@ -8872,7 +8845,7 @@ void gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   bool NeedsSanitizerDeps = addSanitizerRuntimes(ToolChain, Args, CmdArgs);
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs);
   // The profile runtime also needs access to system libraries.
-  addProfileRT(getToolChain(), Args, CmdArgs);
+  getToolChain().addProfileRTLibs(Args, CmdArgs);
 
   if (D.CCCIsCXX() && !Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nodefaultlibs)) {
@@ -9183,7 +9156,7 @@ void minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
 
-  addProfileRT(getToolChain(), Args, CmdArgs);
+  getToolChain().addProfileRTLibs(Args, CmdArgs);
 
   if (!Args.hasArg(options::OPT_nostdlib) &&
       !Args.hasArg(options::OPT_nodefaultlibs)) {
@@ -9375,7 +9348,7 @@ void dragonfly::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crtn.o")));
   }
 
-  addProfileRT(getToolChain(), Args, CmdArgs);
+  getToolChain().addProfileRTLibs(Args, CmdArgs);
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
@@ -9481,18 +9454,18 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
           "asan_dynamic", "asan_dynamic_runtime_thunk",
       };
       for (const auto &Component : CompilerRTComponents)
-        CmdArgs.push_back(getCompilerRTArgString(TC, Args, Component));
+        CmdArgs.push_back(TC.getCompilerRTArgString(Args, Component));
       // Make sure the dynamic runtime thunk is not optimized out at link time
       // to ensure proper SEH handling.
       CmdArgs.push_back(Args.MakeArgString("-include:___asan_seh_interceptor"));
     } else if (DLL) {
-      CmdArgs.push_back(getCompilerRTArgString(TC, Args, "asan_dll_thunk"));
+      CmdArgs.push_back(TC.getCompilerRTArgString(Args, "asan_dll_thunk"));
     } else {
       static const char *const CompilerRTComponents[] = {
           "asan", "asan_cxx",
       };
       for (const auto &Component : CompilerRTComponents)
-        CmdArgs.push_back(getCompilerRTArgString(TC, Args, Component));
+        CmdArgs.push_back(TC.getCompilerRTArgString(Args, Component));
     }
   }
 

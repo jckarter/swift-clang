@@ -10918,6 +10918,9 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
   sema::AnalysisBasedWarnings::Policy WP = AnalysisWarnings.getDefaultPolicy();
   sema::AnalysisBasedWarnings::Policy *ActivePolicy = nullptr;
 
+  if (getLangOpts().Coroutines && !getCurFunction()->CoroutineStmts.empty())
+    CheckCompletedCoroutineBody(FD, Body);
+
   if (FD) {
     FD->setBody(Body);
 
