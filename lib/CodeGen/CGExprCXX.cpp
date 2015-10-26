@@ -1526,8 +1526,9 @@ static void EmitObjectDelete(CodeGenFunction &CGF,
                               /*ForVirtualBase=*/false,
                               /*Delegating=*/false,
                               Ptr);
-  else if (auto Lifetime = ElementType.getObjCLifetime()) {
-    switch (Lifetime) {
+  else if (CGF.getLangOpts().ObjCAutoRefCount &&
+           ElementType->isObjCLifetimeType()) {
+    switch (ElementType.getObjCLifetime()) {
     case Qualifiers::OCL_None:
     case Qualifiers::OCL_ExplicitNone:
     case Qualifiers::OCL_Autoreleasing:

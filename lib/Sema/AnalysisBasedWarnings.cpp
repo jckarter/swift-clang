@@ -2050,7 +2050,7 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
     DiagnoseSwitchLabelsFallthrough(S, AC, !FallThroughDiagFull);
   }
 
-  if (S.getLangOpts().ObjCWeak &&
+  if (S.getLangOpts().ObjCARCWeak &&
       !Diags.isIgnored(diag::warn_arc_repeated_use_of_weak, D->getLocStart()))
     diagnoseRepeatedUseOfWeak(S, fscope, D, AC.getParentMap());
 

@@ -4412,7 +4412,7 @@ TypeSourceInfo *Sema::GetTypeForDeclaratorCast(Declarator &D, QualType FromTy) {
   TypeSourceInfo *ReturnTypeInfo = nullptr;
   QualType declSpecTy = GetDeclSpecTypeForDeclarator(state, ReturnTypeInfo);
 
-  if (getLangOpts().ObjC1) {
+  if (getLangOpts().ObjCAutoRefCount) {
     Qualifiers::ObjCLifetime ownership = Context.getInnerObjCOwnership(FromTy);
     if (ownership != Qualifiers::OCL_None)
       transferARCOwnership(state, declSpecTy, ownership);
@@ -5096,6 +5096,11 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
     return true;
   }
 
+  // Consume lifetime attributes without further comment outside of
+  // ARC mode.
+  if (!S.getLangOpts().ObjCAutoRefCount)
+    return true;
+
   IdentifierInfo *II = attr.getArgAsIdent(0)->Ident;
   Qualifiers::ObjCLifetime lifetime;
   if (II->isStr("none"))
@@ -5110,14 +5115,6 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
     S.Diag(AttrLoc, diag::warn_attribute_type_not_supported)
       << attr.getName() << II;
     attr.setInvalid();
-    return true;
-  }
-
-  // Just ignore lifetime attributes other than __weak and __unsafe_unretained
-  // outside of ARC mode.
-  if (!S.getLangOpts().ObjCAutoRefCount &&
-      lifetime != Qualifiers::OCL_Weak &&
-      lifetime != Qualifiers::OCL_ExplicitNone) {
     return true;
   }
 
@@ -5171,34 +5168,22 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
     type = S.Context.getAttributedType(AttributedType::attr_objc_ownership,
                                        origType, type);
 
-  // Sometimes, __weak isn't allowed.
+  // Forbid __weak if the runtime doesn't support it.
   if (lifetime == Qualifiers::OCL_Weak &&
-      !S.getLangOpts().ObjCWeak && !NonObjCPointer) {
+      !S.getLangOpts().ObjCARCWeak && !NonObjCPointer) {
 
-    // Use a specialized diagnostic if the runtime just doesn't support them.
-    unsigned diagnostic =
-      (S.getLangOpts().ObjCWeakRuntime ? diag::err_arc_weak_disabled
-                                       : diag::err_arc_weak_no_runtime);
-
-    // In any case, delay the diagnostic until we know what we're parsing.
+    // Actually, delay this until we know what we're parsing.
     if (S.DelayedDiagnostics.shouldDelayDiagnostics()) {
       S.DelayedDiagnostics.add(
           sema::DelayedDiagnostic::makeForbiddenType(
               S.getSourceManager().getExpansionLoc(AttrLoc),
-              diagnostic, type, /*ignored*/ 0));
+              diag::err_arc_weak_no_runtime, type, /*ignored*/ 0));
     } else {
-      S.Diag(AttrLoc, diagnostic);
+      S.Diag(AttrLoc, diag::err_arc_weak_no_runtime);
     }
 
     attr.setInvalid();
     return true;
-  }
-
-  // If we accepted __weak, we might still need to warn about it.
-  if (lifetime == Qualifiers::OCL_Weak &&
-      !S.getLangOpts().ObjCAutoRefCount &&
-      S.getLangOpts().ObjCWeak) {
-    S.Diag(AttrLoc, diag::warn_objc_weak_compat);
   }
 
   // Forbid __weak for class objects marked as
@@ -5208,9 +5193,9 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
           type->getAs<ObjCObjectPointerType>()) {
       if (ObjCInterfaceDecl *Class = ObjT->getInterfaceDecl()) {
         if (Class->isArcWeakrefUnavailable()) {
-          S.Diag(AttrLoc, diag::err_arc_unsupported_weak_class);
-          S.Diag(ObjT->getInterfaceDecl()->getLocation(),
-                  diag::note_class_declared);
+            S.Diag(AttrLoc, diag::err_arc_unsupported_weak_class);
+            S.Diag(ObjT->getInterfaceDecl()->getLocation(),
+                   diag::note_class_declared);
         }
       }
     }

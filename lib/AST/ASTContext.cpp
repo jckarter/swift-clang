@@ -4954,6 +4954,8 @@ bool ASTContext::BlockRequiresCopying(QualType Ty,
   
   // If we have lifetime, that dominates.
   if (Qualifiers::ObjCLifetime lifetime = qs.getObjCLifetime()) {
+    assert(getLangOpts().ObjCAutoRefCount);
+    
     switch (lifetime) {
       case Qualifiers::OCL_None: llvm_unreachable("impossible");
         
@@ -4987,14 +4989,14 @@ bool ASTContext::getByrefLifetime(QualType Ty,
   if (Ty->isRecordType()) {
     HasByrefExtendedLayout = true;
     LifeTime = Qualifiers::OCL_None;
-  } else if ((LifeTime = Ty.getObjCLifetime())) {
-    // Honor the ARC qualifiers.
-  } else if (Ty->isObjCObjectPointerType() || Ty->isBlockPointerType()) {
-    // The MRR rule.
-    LifeTime = Qualifiers::OCL_ExplicitNone;
-  } else {
-    LifeTime = Qualifiers::OCL_None;
   }
+  else if (getLangOpts().ObjCAutoRefCount)
+    LifeTime = Ty.getObjCLifetime();
+  // MRR.
+  else if (Ty->isObjCObjectPointerType() || Ty->isBlockPointerType())
+    LifeTime = Qualifiers::OCL_ExplicitNone;
+  else
+    LifeTime = Qualifiers::OCL_None;
   return true;
 }
 

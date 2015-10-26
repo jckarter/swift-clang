@@ -9826,9 +9826,9 @@ Sema::ActOnCXXForRangeIdentifier(Scope *S, SourceLocation IdentLoc,
 void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
   if (var->isInvalidDecl()) return;
 
-  // In Objective-C, don't allow jumps past the implicit initialization of a
+  // In ARC, don't allow jumps past the implicit initialization of a
   // local retaining variable.
-  if (getLangOpts().ObjC1 &&
+  if (getLangOpts().ObjCAutoRefCount &&
       var->hasLocalStorage()) {
     switch (var->getType().getObjCLifetime()) {
     case Qualifiers::OCL_None:

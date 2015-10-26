@@ -209,8 +209,7 @@ createInvocationForMigration(CompilerInvocation &origCI,
   WarnOpts.push_back("error=arc-unsafe-retained-assign");
   CInvok->getDiagnosticOpts().Warnings = std::move(WarnOpts);
 
-  CInvok->getLangOpts()->ObjCWeakRuntime = HasARCRuntime(origCI);
-  CInvok->getLangOpts()->ObjCWeak = CInvok->getLangOpts()->ObjCWeakRuntime;
+  CInvok->getLangOpts()->ObjCARCWeak = HasARCRuntime(origCI);
 
   return CInvok.release();
 }
