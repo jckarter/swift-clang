@@ -5528,7 +5528,21 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
     SmallString<256> Flags;
     Flags += Exec;
+    bool InDashDArg = false;
     for (const char *OriginalArg : OriginalArgs) {
+      // Hide any -D defines that start with RC_(HIDE)|(SHOW)
+      StringRef Arg(OriginalArg);
+      if (InDashDArg) {
+        if (Arg.startswith("RC_HIDE") || Arg.startswith("RC_SHOW")) {
+          InDashDArg = false;
+          continue;
+        }
+        Flags += " -D";
+      }
+      InDashDArg = Arg.equals("-D");
+      if (InDashDArg)
+        continue;
+
       SmallString<128> EscapedArg;
       EscapeSpacesAndBackslashes(OriginalArg, EscapedArg);
       Flags += " ";
