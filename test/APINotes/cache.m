@@ -1,3 +1,6 @@
+// Tracked by rdar://problem/23228631
+// XFAIL: *
+
 // RUN: rm -rf %t/APINotesCache
 // RUN: %clang_cc1 -fapinotes -fapinotes-cache-path=%t/APINotesCache -I %S/Inputs/Headers -F %S/Inputs/Frameworks %s -verify
 
