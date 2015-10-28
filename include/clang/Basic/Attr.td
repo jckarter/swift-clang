@@ -132,9 +132,13 @@ def HasFunctionProto : SubsetSubject<DeclBase,
                                        isa<BlockDecl>(S)}]>;
 
 // A single argument to an attribute
-class Argument<string name, bit optional> {
+class Argument<string name, bit optional, bit fake = 0> {
   string Name = name;
   bit Optional = optional;
+
+  /// A fake argument is used to store and serialize additional information
+  /// in an attribute without actually changing its parsing or pretty-printing.
+  bit Fake = fake;
 }
 
 class BoolArgument<string name, bit opt = 0> : Argument<name, opt>;
@@ -170,7 +174,8 @@ class DefaultIntArgument<string name, int default> : IntArgument<name, 1> {
 // This argument is more complex, it includes the enumerator type name,
 // a list of strings to accept, and a list of enumerators to map them to.
 class EnumArgument<string name, string type, list<string> values,
-                   list<string> enums, bit opt = 0> : Argument<name, opt> {
+                   list<string> enums, bit opt = 0, bit fake = 0>
+    : Argument<name, opt, fake> {
   string Type = type;
   list<string> Values = values;
   list<string> Enums = enums;
@@ -1400,7 +1405,15 @@ def TransparentUnion : InheritableAttr {
 
 def Unavailable : InheritableAttr {
   let Spellings = [GNU<"unavailable">];
-  let Args = [StringArgument<"Message", 1>];
+  let Args = [StringArgument<"Message", 1>,
+              EnumArgument<"ImplicitReason", "ImplicitReason",
+                ["", "", "", ""],
+                ["IR_None",
+                 "IR_ARCForbiddenType",
+                 "IR_ForbiddenWeak",
+                 "IR_ARCForbiddenConversion",
+                 "IR_ARCInitReturnsUnrelated",
+                 "IR_ARCFieldWithOwnership"], 1, /*fake*/ 1>];
   let Documentation = [Undocumented];
 }
 
