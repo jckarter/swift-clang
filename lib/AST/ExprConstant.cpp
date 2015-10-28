@@ -2209,6 +2209,7 @@ enum AccessKinds {
   AK_Decrement
 };
 
+namespace {
 /// A handle to a complete object (an object that is not a subobject of
 /// another object).
 struct CompleteObject {
@@ -2225,6 +2226,7 @@ struct CompleteObject {
 
   explicit operator bool() const { return Value; }
 };
+} // end anonymous namespace
 
 /// Find the designated sub-object of an rvalue.
 template<typename SubobjectHandler>
