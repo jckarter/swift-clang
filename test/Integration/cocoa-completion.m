@@ -1,9 +1,6 @@
 #import <stdio.h>
 #import <objc/NSObject.h>
 
-// FIXME: rdar://20756421
-// XFAIL: *
-
 void foo() {
 
   NSObject *x;
