@@ -9485,22 +9485,16 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString("-debug"));
     CmdArgs.push_back(Args.MakeArgString("-incremental:no"));
     if (Args.hasArg(options::OPT__SLASH_MD, options::OPT__SLASH_MDd)) {
-      static const char *const CompilerRTComponents[] = {
-          "asan_dynamic", "asan_dynamic_runtime_thunk",
-      };
-      for (const auto &Component : CompilerRTComponents)
-        CmdArgs.push_back(TC.getCompilerRTArgString(Args, Component));
+      for (const auto &Lib : {"asan_dynamic", "asan_dynamic_runtime_thunk"})
+        CmdArgs.push_back(TC.getCompilerRTArgString(Args, Lib));
       // Make sure the dynamic runtime thunk is not optimized out at link time
       // to ensure proper SEH handling.
       CmdArgs.push_back(Args.MakeArgString("-include:___asan_seh_interceptor"));
     } else if (DLL) {
       CmdArgs.push_back(TC.getCompilerRTArgString(Args, "asan_dll_thunk"));
     } else {
-      static const char *const CompilerRTComponents[] = {
-          "asan", "asan_cxx",
-      };
-      for (const auto &Component : CompilerRTComponents)
-        CmdArgs.push_back(TC.getCompilerRTArgString(Args, Component));
+      for (const auto &Lib : {"asan", "asan_cxx"})
+        CmdArgs.push_back(TC.getCompilerRTArgString(Args, Lib));
     }
   }
 
@@ -10146,6 +10140,22 @@ void CrossWindows::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       // TODO handle /MT[d] /MD[d]
       CmdArgs.push_back("-lmsvcrt");
       AddRunTimeLibs(TC, D, CmdArgs, Args);
+    }
+  }
+
+  if (TC.getSanitizerArgs().needsAsanRt()) {
+    // TODO handle /MT[d] /MD[d]
+    if (Args.hasArg(options::OPT_shared)) {
+      CmdArgs.push_back(TC.getCompilerRTArgString(Args, "asan_dll_thunk"));
+    } else {
+      for (const auto &Lib : {"asan_dynamic", "asan_dynamic_runtime_thunk"})
+        CmdArgs.push_back(TC.getCompilerRTArgString(Args, Lib));
+        // Make sure the dynamic runtime thunk is not optimized out at link time
+        // to ensure proper SEH handling.
+        CmdArgs.push_back(Args.MakeArgString("--undefined"));
+        CmdArgs.push_back(Args.MakeArgString(TC.getArch() == llvm::Triple::x86
+                                                 ? "___asan_seh_interceptor"
+                                                 : "__asan_seh_interceptor"));
     }
   }
 
