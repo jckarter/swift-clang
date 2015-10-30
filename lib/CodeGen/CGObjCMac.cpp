@@ -2083,7 +2083,7 @@ llvm::Constant *CGObjCCommonMac::BuildGCBlockLayout(CodeGenModule &CGM,
 
   llvm::SmallVector<unsigned char, 32> buffer;
   llvm::Constant *C = builder.buildBitmap(*this, buffer);
-  if (CGM.getLangOpts().ObjCGCBitmapPrint) {
+  if (CGM.getLangOpts().ObjCGCBitmapPrint && !buffer.empty()) {
     printf("\n block variable layout for block: ");
     builder.dump(buffer);
   }
@@ -4137,7 +4137,7 @@ void CGObjCMac::EmitTryOrSynchronizedStmt(CodeGen::CodeGenFunction &CGF,
           assert(CGF.HaveInsertPoint() && "DeclStmt destroyed insert point?");
 
           // These types work out because ConvertType(id) == i8*.
-          CGF.Builder.CreateStore(Caught, CGF.GetAddrOfLocalVar(CatchParam));
+          EmitInitOfCatchParam(CGF, Caught, CatchParam);
         }
 
         CGF.EmitStmt(CatchStmt->getCatchBody());
@@ -4184,7 +4184,7 @@ void CGObjCMac::EmitTryOrSynchronizedStmt(CodeGen::CodeGenFunction &CGF,
       llvm::Value *Tmp =
         CGF.Builder.CreateBitCast(Caught,
                                   CGF.ConvertType(CatchParam->getType()));
-      CGF.Builder.CreateStore(Tmp, CGF.GetAddrOfLocalVar(CatchParam));
+      EmitInitOfCatchParam(CGF, Tmp, CatchParam);
 
       CGF.EmitStmt(CatchStmt->getCatchBody());
 
@@ -4863,6 +4863,9 @@ llvm::Constant *IvarLayoutBuilder::buildBitmap(CGObjCCommonMac &CGObjC,
     endOfLastScanInWords = endOfScanInWords;
   }
 
+  if (buffer.empty())
+    return llvm::ConstantPointerNull::get(CGM.Int8PtrTy);
+
   // For GC layouts, emit a skip to the end of the allocation so that we
   // have precise information about the entire thing.  This isn't useful
   // or necessary for the ARC-style layout strings.
@@ -4924,9 +4927,9 @@ CGObjCCommonMac::BuildIvarLayout(const ObjCImplementationDecl *OMD,
   // up.
   //
   // ARC layout strings only include the class's ivars.  In non-fragile
-  // runtimes, that means starting at InstanceStart.  In fragile runtimes,
-  // there's no InstanceStart, so it means starting at the end of the
-  // superclass, rounded up to word alignment.
+  // runtimes, that means starting at InstanceStart, rounded up to word
+  // alignment.  In fragile runtimes, there's no InstanceStart, so it means
+  // starting at the end of the superclass, rounded up to word alignment.
   //
   // MRC weak layout strings follow the ARC style.
   CharUnits baseOffset;
@@ -4940,10 +4943,12 @@ CGObjCCommonMac::BuildIvarLayout(const ObjCImplementationDecl *OMD,
     } else if (auto superClass = OI->getSuperClass()) {
       auto startOffset =
         CGM.getContext().getASTObjCInterfaceLayout(superClass).getSize();
-      baseOffset = startOffset.RoundUpToAlignment(CGM.getPointerAlign());
+      baseOffset = startOffset;
     } else {
       baseOffset = CharUnits::Zero();
     }
+
+    baseOffset = baseOffset.RoundUpToAlignment(CGM.getPointerAlign());
   }
   else {
     CGM.getContext().DeepCollectObjCIvars(OI, true, ivars);
@@ -4967,7 +4972,7 @@ CGObjCCommonMac::BuildIvarLayout(const ObjCImplementationDecl *OMD,
   llvm::SmallVector<unsigned char, 4> buffer;
   llvm::Constant *C = builder.buildBitmap(*this, buffer);
   
-   if (CGM.getLangOpts().ObjCGCBitmapPrint) {
+   if (CGM.getLangOpts().ObjCGCBitmapPrint && !buffer.empty()) {
     printf("\n%s ivar layout for class '%s': ",
            ForStrongLayout ? "strong" : "weak",
            OMD->getClassInterface()->getName().str().c_str());
