@@ -3,7 +3,7 @@
 // RUN: %clang_cc1 %s -O1 -emit-llvm -triple i686-unknown-unknown -o - | FileCheck %s --check-prefix=X86
 // RUN: %clang_cc1 %s -O1 -emit-llvm -triple powerpc-unknown-unknown -o - | FileCheck %s --check-prefix=PPC
 // RUN: %clang_cc1 %s -O1 -emit-llvm -triple armv7-none-linux-gnueabihf -o - | FileCheck %s --check-prefix=ARM
-// RUN: %clang_cc1 %s -O1 -emit-llvm -triple thumbv7k-apple-ios7.0 -o - -target-abi apcs-vfp | FileCheck %s --check-prefix=ARM7K
+// RUN: %clang_cc1 %s -O1 -emit-llvm -triple thumbv7k-apple-watchos2.0 -o - -target-abi aapcs16 | FileCheck %s --check-prefix=ARM7K
 
 float _Complex add_float_rr(float a, float b) {
   // X86-LABEL: @add_float_rr(

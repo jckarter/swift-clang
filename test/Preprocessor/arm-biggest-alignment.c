@@ -1,4 +1,4 @@
-// RUN: %clang -target x86_64-apple-macosx -arch armv7k -x c -E -dM %s -o - | FileCheck --check-prefix=CHECK-V7K %s
+// RUN: %clang -target x86_64-apple-macosx -arch armv7k -mwatchos-version-min=2.0 -x c -E -dM %s -o - | FileCheck --check-prefix=CHECK-V7K %s
 // CHECK-V7K: #define __BIGGEST_ALIGNMENT__ 8
 
 // RUN: %clang -target x86_64-apple-macosx -arch armv7m -x c -E -dM %s -o - | FileCheck --check-prefix=CHECK-AAPCS %s

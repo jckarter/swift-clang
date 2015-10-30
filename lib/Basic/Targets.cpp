@@ -3765,6 +3765,7 @@ public:
     LongDoubleWidth = 128;
     LongDoubleAlign = 128;
     SuitableAlign = 128;
+    MaxVectorAlign = 256;
     // The watchOS simulator uses the builtin bool type for Objective-C.
     llvm::Triple T = llvm::Triple(Triple);
     if (T.isWatchOS())
@@ -4310,12 +4311,12 @@ class ARMTargetInfo : public TargetInfo {
     // FIXME: Enumerated types are variable width in straight AAPCS.
   }
 
-  void setABIAPCS(bool IsAPCS_VFP) {
+  void setABIAPCS(bool IsAAPCS16) {
     const llvm::Triple &T = getTriple();
 
     IsAAPCS = false;
 
-    if (IsAPCS_VFP)
+    if (IsAAPCS16)
       DoubleAlign = LongLongAlign = LongDoubleAlign = SuitableAlign = 64;
     else
       DoubleAlign = LongLongAlign = LongDoubleAlign = SuitableAlign = 32;
@@ -4338,8 +4339,8 @@ class ARMTargetInfo : public TargetInfo {
     /// gcc.
     ZeroLengthBitfieldBoundary = 32;
 
-    if (T.isOSBinFormatMachO() && IsAPCS_VFP) {
-      assert(!BigEndian && "APCS_VFP does not support big-endian");
+    if (T.isOSBinFormatMachO() && IsAAPCS16) {
+      assert(!BigEndian && "AAPCS16 does not support big-endian");
       DataLayoutString = "e-m:o-p:32:32-i64:64-a:0:32-n32-S128";
     } else if (T.isOSBinFormatMachO())
       DataLayoutString =
@@ -4496,8 +4497,8 @@ public:
           Triple.getOS() == llvm::Triple::UnknownOS ||
           StringRef(CPU).startswith("cortex-m")) {
         setABI("aapcs");
-      } else if (Triple.getArchName().endswith("v7k")) {
-        setABI("apcs-vfp");
+      } else if (Triple.isWatchOS()) {
+        setABI("aapcs16");
       } else {
         setABI("apcs-gnu");
       }
@@ -4550,8 +4551,8 @@ public:
     //
     // FIXME: We need support for -meabi... we could just mangle it into the
     // name.
-    if (Name == "apcs-gnu" || Name == "apcs-vfp") {
-      setABIAPCS(Name == "apcs-vfp");
+    if (Name == "apcs-gnu" || Name == "aapcs16") {
+      setABIAPCS(Name == "aapcs16");
       return true;
     }
     if (Name == "aapcs" || Name == "aapcs-vfp" || Name == "aapcs-linux") {
@@ -4709,15 +4710,12 @@ public:
     // Target properties.
     Builder.defineMacro("__REGISTER_PREFIX__", "");
 
-#ifndef __OPEN_SOURCE__
     // Cortex-A7 has its own cpu subtargets (armv7k). However, it is also part
     // of the 7A family. Clang should define __ARM_ARCH_7A__ as well.
     if (CPUAttr == "7K") {
       Builder.defineMacro("__ARM_ARCH_7K__", "2");
       Builder.defineMacro("__ARM_ARCH_7A__");
-    } else
-#endif // !__OPEN_SOURCE__
-    if (!CPUAttr.empty())
+    } else if (!CPUAttr.empty())
       Builder.defineMacro("__ARM_ARCH_" + CPUAttr + "__");
 
     // ACLE 6.4.1 ARM/Thumb instruction set architecture
@@ -4898,10 +4896,10 @@ public:
   }
   bool isCLZForZeroUndef() const override { return false; }
   BuiltinVaListKind getBuiltinVaListKind() const override {
-    return IsAAPCS ? AAPCSABIBuiltinVaList
-                   : (getTriple().getArchName().endswith("v7k")
-                          ? TargetInfo::CharPtrBuiltinVaList
-                          : TargetInfo::VoidPtrBuiltinVaList);
+    return IsAAPCS
+               ? AAPCSABIBuiltinVaList
+               : (getTriple().isWatchOS() ? TargetInfo::CharPtrBuiltinVaList
+                                          : TargetInfo::VoidPtrBuiltinVaList);
   }
   ArrayRef<const char *> getGCCRegNames() const override;
   ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override;
@@ -5242,9 +5240,9 @@ public:
     // ARMleTargetInfo.
     MaxAtomicInlineWidth = 64;
 
-    if (Triple.getArchName().endswith("v7k")) {
+    if (Triple.isWatchOS()) {
       // Darwin on iOS uses a variant of the ARM C++ ABI.
-      TheCXXABI.set(TargetCXXABI::iOSv7k);
+      TheCXXABI.set(TargetCXXABI::WatchOS);
 
       // The 32-bit ABI is silent on what ptrdiff_t should be, but given that
       // size_t is long, it's a bit weird for it to be int.

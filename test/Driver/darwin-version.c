@@ -33,6 +33,8 @@
 // RUN: %clang -target x86_64-apple-macosx -mmacosx-version-min= -c %s -### 2>&1 | \
 // RUN:   FileCheck --check-prefix=CHECK-VERSION-MISSING %s
 // CHECK-VERSION-MISSING: invalid version number
+// RUN: %clang -target armv7k-apple-darwin -mwatchos-version-min=2.0 -c %s -### 2>&1 | \
+// RUN:   FileCheck --check-prefix=CHECK-VERSION-WATCHOS20 %s
 // RUN: %clang -target armv7-apple-darwin -mtvos-version-min=8.3 -c %s -### 2>&1 | \
 // RUN:   FileCheck --check-prefix=CHECK-VERSION-TVOS83 %s
 // CHECK-VERSION-TVOS83: "thumbv7-apple-tvos8.3.0"

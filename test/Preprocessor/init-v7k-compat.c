@@ -1,7 +1,7 @@
-// RUN: %clang_cc1 -E -dM -ffreestanding -triple=thumbv7k-apple-ios7.0 < /dev/null | FileCheck %s
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=thumbv7k-apple-watchos2.0 < /dev/null | FileCheck %s
 
-// Check that the chosen types for things like size_t, ptrdiff_t etc match up
-// between the armv7k and arm64_32 slices.
+// Check that the chosen types for things like size_t, ptrdiff_t etc are as
+// expected
 
 // CHECK-NOT: #define _LP64 1
 // CHECK-NOT: #define __AARCH_BIG_ENDIAN 1
