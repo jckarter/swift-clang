@@ -2153,11 +2153,6 @@ void Driver::generatePrefixedToolNames(
   // FIXME: Needs a better variable than DefaultTargetTriple
   Names.emplace_back(DefaultTargetTriple + "-" + Tool);
   Names.emplace_back(Tool);
-
-  // Allow the discovery of tools prefixed with LLVM's default target triple.
-  std::string LLVMDefaultTargetTriple = llvm::sys::getDefaultTargetTriple();
-  if (LLVMDefaultTargetTriple != DefaultTargetTriple)
-    Names.emplace_back(LLVMDefaultTargetTriple + "-" + Tool);
 }
 
 static bool ScanDirForExecutable(SmallString<128> &Dir,
@@ -2230,6 +2225,8 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
     case llvm::Triple::Darwin:
     case llvm::Triple::MacOSX:
     case llvm::Triple::IOS:
+    case llvm::Triple::TvOS:
+    case llvm::Triple::WatchOS:
       TC = new toolchains::DarwinClang(*this, Target, Args);
       break;
     case llvm::Triple::DragonFly:
@@ -2253,9 +2250,6 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
     case llvm::Triple::Linux:
       if (Target.getArch() == llvm::Triple::hexagon)
         TC = new toolchains::HexagonToolChain(*this, Target, Args);
-      else if ((Target.getVendor() == llvm::Triple::MipsTechnologies) &&
-               !Target.hasEnvironment())
-        TC = new toolchains::MipsLLVMToolChain(*this, Target, Args);
       else
         TC = new toolchains::Linux(*this, Target, Args);
       break;
