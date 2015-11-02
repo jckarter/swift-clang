@@ -4378,15 +4378,7 @@ class ARMTargetInfo : public TargetInfo {
     StringRef SubArch;
 
     // cache TargetParser info
-
-    // FIXME: utterly disgusting hack to get through a merge (again). It would
-    // seem plausible to go for a specific arch if you've been told one, but we
-    // seem to assume (for example) that cortex-m4/armv7m should actually give a
-    // thumbv7em triple. That should be flexible, since it's not a supported
-    // combination.
-    ArchKind = getTriple().getSubArch() == llvm::Triple::ARMSubArch_v7k
-                   ? llvm::ARM::AK_ARMV7K
-                   : Kind;
+    ArchKind    = Kind;
     SubArch     = llvm::ARM::getSubArch(ArchKind);
     ArchProfile = llvm::ARM::parseArchProfile(SubArch);
     ArchVersion = llvm::ARM::parseArchVersion(SubArch);
@@ -4448,8 +4440,6 @@ class ARMTargetInfo : public TargetInfo {
       return "7R";
     case llvm::ARM::AK_ARMV7M:
       return "7M";
-    case llvm::ARM::AK_ARMV7K:
-      return "7K";
     case llvm::ARM::AK_ARMV7EM:
       return "7EM";
     case llvm::ARM::AK_ARMV8A:
@@ -4717,9 +4707,9 @@ public:
     // Target properties.
     Builder.defineMacro("__REGISTER_PREFIX__", "");
 
-    // Cortex-A7 has its own cpu subtargets (armv7k). However, it is also part
-    // of the 7A family. Clang should define __ARM_ARCH_7A__ as well.
-    if (CPUAttr == "7K") {
+    // Unfortunately, __ARM_ARCH_7K__ is now more of an ABI descriptor. The CPU
+    // happens to be Cortex-A7 though, so it should still get __ARM_ARCH_7A__.
+    if (getTriple().isWatchOS()) {
       Builder.defineMacro("__ARM_ARCH_7K__", "2");
       Builder.defineMacro("__ARM_ARCH_7A__");
     } else if (!CPUAttr.empty())

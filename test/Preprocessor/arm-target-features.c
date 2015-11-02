@@ -209,19 +209,11 @@
 // A5:#define __ARM_FEATURE_DSP
 // A5:#define __ARM_FP 0xE
 
-#ifndef __OPEN_SOURCE__
-// The expected output for this test on the internal branch no longer matches
-// the open-source behavior. Drop this test-case when generating open-source
-// code.
-// See <rdar://problem/15540224>.
-//
 // Test whether predefines are as expected when targeting cortex-a7.
-// RUN: %clang -target x86_64-darwin -arch armv7k -mcpu=cortex-a7 -x c -E -dM %s -o - | FileCheck --check-prefix=A7 %s
-// RUN: %clang -target x86_64-darwin -arch armv7k -mthumb -mcpu=cortex-a7 -x c -E -dM %s -o - | FileCheck --check-prefix=A7 %s
+// RUN: %clang -target armv7k -mcpu=cortex-a7 -x c -E -dM %s -o - | FileCheck --check-prefix=A7 %s
+// RUN: %clang -target armv7k -mthumb -mcpu=cortex-a7 -x c -E -dM %s -o - | FileCheck --check-prefix=A7 %s
 // A7:#define __ARM_ARCH 7
-// A7:#define __ARM_ARCH_7K__ 2
 // A7:#define __ARM_ARCH_EXT_IDIV__ 1
-#endif
 // A7:#define __ARM_ARCH_PROFILE 'A'
 // A7:#define __ARM_FEATURE_DSP
 // A7:#define __ARM_FP 0xE

@@ -4875,9 +4875,6 @@ llvm::CallingConv::ID ARMABIInfo::getLLVMDefaultCC() const {
     return llvm::CallingConv::ARM_AAPCS_VFP;
   else if (isEABI())
     return llvm::CallingConv::ARM_AAPCS;
-  else if (getTarget().getTriple().getArchName().endswith("v7k"))
-    // Special casing v7k. It uses the hybrid APCS-VFP ABI.
-    return llvm::CallingConv::ARM_AAPCS_VFP;
   else
     return llvm::CallingConv::ARM_APCS;
 }

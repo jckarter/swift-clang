@@ -572,7 +572,6 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
       StringRef MachOArchName = getMachOArchName(Args);
       unsigned Major, Minor, Micro;
       if (MachOArchName == "armv7" || MachOArchName == "armv7s" ||
-          MachOArchName == "armv7k" ||
           MachOArchName == "arm64") {
         getTriple().getiOSVersion(Major, Minor, Micro);
         llvm::raw_string_ostream(iOSTarget) << Major << '.' << Minor << '.'
