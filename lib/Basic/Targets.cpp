@@ -2398,7 +2398,8 @@ class X86TargetInfo : public TargetInfo {
 public:
   X86TargetInfo(const llvm::Triple &Triple) : TargetInfo(Triple) {
     BigEndian = false;
-    LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
+    LongDoubleFormat = Triple.isOSIAMCU() ? &llvm::APFloat::IEEEdouble
+                                          : &llvm::APFloat::x87DoubleExtended;
   }
   unsigned getFloatEvalMethod() const override {
     // X87 evaluates with 80 bits "long double" precision.
@@ -3433,6 +3434,11 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   }
   if (CPU >= CK_i586)
     Builder.defineMacro("__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8");
+
+  if (getTriple().isOSIAMCU()) {
+    Builder.defineMacro("__iamcu");
+    Builder.defineMacro("__iamcu__");
+  }
 }
 
 bool X86TargetInfo::hasFeature(StringRef Feature) const {
