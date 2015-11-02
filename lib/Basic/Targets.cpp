@@ -214,7 +214,8 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
     if (Triple.isTvOS())
       Builder.defineMacro("__ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__", Str);
     else
-      Builder.defineMacro("__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__", Str);
+      Builder.defineMacro("__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__",
+                          Str);
   } else if (Triple.isWatchOS()) {
     assert(Maj < 10 && Min < 100 && Rev < 100 && "Invalid version!");
     char Str[6];
