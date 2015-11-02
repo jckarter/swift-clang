@@ -109,6 +109,7 @@ if [ "$RC_PURPLE" = "YES" ]; then
 fi
 
 $CMAKE -G Ninja \
+    $CMAKE_OPTS \
     -DLLVM_TARGETS_TO_BUILD="X86;ARM;AArch64" \
     -DLLVM_INCLUDE_TESTS=OFF \
     -DLLVM_INCLUDE_EXAMPLES=OFF \
