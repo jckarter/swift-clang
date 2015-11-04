@@ -643,6 +643,7 @@ unsigned Decl::getIdentifierNamespaceForKind(Kind DeclKind) {
     case ExternCContext:
 
     case UsingDirective:
+    case BuiltinTemplate:
     case ClassTemplateSpecialization:
     case ClassTemplatePartialSpecialization:
     case ClassScopeFunctionSpecialization:
