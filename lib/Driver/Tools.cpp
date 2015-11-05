@@ -5160,6 +5160,23 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (rewriteKind != RK_None)
     CmdArgs.push_back("-fno-objc-infer-related-result-type");
 
+  auto doesMagicResourceFileExist = [](StringRef resourceDirectory,
+                                       StringRef magicFileName) -> bool {
+    SmallString<1024> P(resourceDirectory);
+    // 1. Strip away version.
+    // 2. Strip away 'clang'.
+    // 3. Strip away 'lib'.
+    for (unsigned i = 0 ; i < 3 ; ++i) llvm::sys::path::remove_filename(P);
+    // 4. Add 'local'.
+    llvm::sys::path::append(P, "local");
+    llvm::sys::path::append(P, "lib");
+    llvm::sys::path::append(P, "clang");
+    // 5. Add magic file name.
+    llvm::sys::path::append(P, magicFileName);
+
+    return llvm::sys::fs::exists(P.str());
+  };
+
   // Handle -fobjc-gc and -fobjc-gc-only. They are exclusive, and -fobjc-gc-only
   // takes precedence.
   const Arg *GCArg = Args.getLastArg(options::OPT_fobjc_gc_only);
@@ -5179,19 +5196,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
              JA.getType() == types::TY_LTO_BC ||
              JA.getType() == types::TY_PP_Asm))) && !ARCMTEnabled) {
 
-        SmallString<1024> P(D.ResourceDir);
-        // 1. Strip away version.
-        // 2. Strip away 'clang'.
-        // 3. Strip away 'lib'.
-        for (unsigned i = 0 ; i < 3 ; ++i) llvm::sys::path::remove_filename(P);
-        // 4. Add 'local'.
-        llvm::sys::path::append(P, "local");
-        llvm::sys::path::append(P, "lib");
-        llvm::sys::path::append(P, "clang");
-        // 5. Add magic gc file.
-        llvm::sys::path::append(P, "enable_objc_gc");
-
-        if (!llvm::sys::fs::exists(P.str()))
+        if (!doesMagicResourceFileExist(D.ResourceDir, "enable_objc_gc"))
           D.Diag(diag::err_drv_objc_gc_not_supported);
       }
     } else {
@@ -5214,6 +5219,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
         D.Diag(diag::err_objc_weak_unsupported);
     } else {
       WeakArg->render(Args, CmdArgs);
+    }
+
+    // If this isn't ARC, and the user didn't pass -fobjc-weak, and the
+    // magic file exists that says that this is an internal build,
+    // demote __weak to a warning instead of an error.
+    if (!ARC &&
+        (!WeakArg ||
+          WeakArg->getOption().matches(options::OPT_fno_objc_weak)) &&
+        doesMagicResourceFileExist(D.ResourceDir, "ignore_mrc_weak")) {
+      CmdArgs.push_back("-fignore-objc-weak");
     }
   }
 

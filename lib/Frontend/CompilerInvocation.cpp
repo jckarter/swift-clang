@@ -1550,6 +1550,10 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
       Opts.ObjCWeak = Opts.ObjCWeakRuntime;
     }
 
+    if (!Opts.ObjCWeak && Args.hasArg(OPT_fignore_objc_weak)) {
+      Opts.IgnoreObjCWeak = 1;
+    }
+
     if (Args.hasArg(OPT_fno_objc_infer_related_result_type))
       Opts.ObjCInferRelatedResultType = 0;
 

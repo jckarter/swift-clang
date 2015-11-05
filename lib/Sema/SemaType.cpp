@@ -5206,6 +5206,16 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
   if (lifetime == Qualifiers::OCL_Weak &&
       !S.getLangOpts().ObjCWeak && !NonObjCPointer) {
 
+    // If we've been asked to quietly ignore __weak, do so.
+    if (S.getLangOpts().IgnoreObjCWeak) {
+      // Warn that the interpretation of __weak might change in the future.
+      S.Diag(AttrLoc, diag::warn_objc_weak_ignored_in_mrc);
+
+      // Revert the type.
+      type = origType;
+      return true;
+    }
+
     // Use a specialized diagnostic if the runtime just doesn't support them.
     unsigned diagnostic =
       (S.getLangOpts().ObjCWeakRuntime ? diag::err_arc_weak_disabled

@@ -4644,6 +4644,12 @@ def err_synthesizing_arc_weak_property_disabled : Error<
 def err_synthesizing_arc_weak_property_no_runtime : Error<
   "cannot synthesize weak property because the current deployment target "
   "does not support weak references">;
+def warn_objc_weak_compat : Warning<
+  "the meaning of __weak has changed in manual reference-counting">,
+  InGroup<ObjCWeakCompat>, DefaultIgnore;
+def warn_objc_weak_ignored_in_mrc : Warning<
+  "ignoring __weak in file using manual reference counting">,
+  InGroup<ObjCWeakCompat>;
 def err_arc_unsupported_weak_class : Error<
   "class is incompatible with __weak references">;
 def err_arc_weak_unavailable_assign : Error<
