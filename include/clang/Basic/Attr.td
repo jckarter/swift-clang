@@ -773,7 +773,7 @@ def Format : InheritableAttr {
   let Args = [IdentifierArgument<"Type">, IntArgument<"FormatIdx">,
               IntArgument<"FirstArg">];
   let Subjects = SubjectList<[ObjCMethod, Block, HasFunctionProto], WarnDiag,
-                             "ExpectedFunction">;
+                             "ExpectedFunctionWithProtoType">;
   let Documentation = [FormatDocs];
 }
 
@@ -781,7 +781,7 @@ def FormatArg : InheritableAttr {
   let Spellings = [GCC<"format_arg">];
   let Args = [IntArgument<"FormatIdx">];
   let Subjects = SubjectList<[ObjCMethod, HasFunctionProto], WarnDiag,
-                             "ExpectedFunction">;
+                             "ExpectedFunctionWithProtoType">;
   let Documentation = [Undocumented];
 }
 
@@ -1225,7 +1225,8 @@ def Ownership : InheritableAttr {
     }
   }];
   let Args = [IdentifierArgument<"Module">, VariadicUnsignedArgument<"Args">];
-  let Subjects = SubjectList<[HasFunctionProto], WarnDiag, "ExpectedFunction">;
+  let Subjects = SubjectList<[HasFunctionProto], WarnDiag,
+                             "ExpectedFunctionWithProtoType">;
   let Documentation = [Undocumented];
 }
 
