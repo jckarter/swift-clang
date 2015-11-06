@@ -1066,7 +1066,6 @@ static bool HasFeature(const Preprocessor &PP, const IdentifierInfo *II) {
       .Case("attribute_availability_watchos", true)
       .Case("attribute_availability_swift", true)
       .Case("attribute_cf_returns_not_retained", true)
-      .Case("attribute_availability_swift", true)
       .Case("attribute_cf_returns_retained", true)
       .Case("attribute_cf_returns_on_parameters", true)
       .Case("attribute_deprecated_with_message", true)
