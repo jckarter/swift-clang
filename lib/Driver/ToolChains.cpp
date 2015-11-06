@@ -422,6 +422,8 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
     AddLinkSanitizerLibArgs(Args, CmdArgs, "asan");
   if (Sanitize.needsUbsanRt())
     AddLinkSanitizerLibArgs(Args, CmdArgs, "ubsan");
+  if (Sanitize.needsTsanRt())
+    AddLinkSanitizerLibArgs(Args, CmdArgs, "tsan");
 
   // Otherwise link libSystem, then the dynamic runtime library, and finally any
   // target specific static runtime library.
@@ -1254,6 +1256,7 @@ SanitizerMask Darwin::getSupportedSanitizers() const {
     if (!isMacosxVersionLT(10, 9))
       Res |= SanitizerKind::Vptr;
     Res |= SanitizerKind::SafeStack;
+    Res |= SanitizerKind::Thread;
   }
   return Res;
 }
