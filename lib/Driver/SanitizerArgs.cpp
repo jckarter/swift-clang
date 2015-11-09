@@ -642,7 +642,8 @@ SanitizerMask expandGroups(SanitizerMask Kinds) {
 }
 
 static bool allowedOpt(const char *Value) {
-  // We support the UndefinedBehaviorSanitizers and AddressSanitizer.
+  // We support the UndefinedBehaviorSanitizers, AddressSanitizer and
+  // ThreadSanitizer.
   return llvm::StringSwitch<bool>(Value)
     .Cases("alignment", "bounds", "float-cast-overflow", true)
     .Cases("float-divide-by-zero", "integer-divide-by-zero", true)
@@ -650,6 +651,7 @@ static bool allowedOpt(const char *Value) {
     .Cases("signed-integer-overflow", "unreachable", "vla-bound", true)
     .Cases("bool", "enum", "undefined-trap", true)
     .Case("address", true)
+    .Case("thread", true)
     .Case("safe-stack", true)
     .Default(false);
 }
@@ -681,8 +683,10 @@ SanitizerMask parseArgValues(const Driver &D, const llvm::opt::Arg *A,
         if (!allowedOpt(A->getValue(i)))
           D.Diag(clang::diag::err_drv_unsupported_option_argument)
             << A->getOption().getName() << A->getValue(i);
-        // We don't require -fsanitize-undefined-trap-on-error for ASan
+        // We don't require -fsanitize-undefined-trap-on-error for ASan and TSan
         else if (std::string(A->getValue(i)) == "address")
+          continue;
+        else if (std::string(A->getValue(i)) == "thread")
           continue;
         else if (std::string(A->getValue(i)) == "safe-stack")
           continue;

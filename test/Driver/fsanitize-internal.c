@@ -7,10 +7,6 @@
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=memory %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-MEMORY
 // CHECK-UNSUPPORTED-ARG-MEMORY: unsupported argument 'memory' to option 'fsanitize='
 
-// ThreadSanitizer
-// RUN: %clang -target x86_64-linux-gnu -fsanitize=thread %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-THREAD
-// CHECK-UNSUPPORTED-ARG-THREAD: unsupported argument 'thread' to option 'fsanitize='
-
 // IntegerSanitizer
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=unsigned-integer-overflow %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-UNSUPPORTED-ARG-UIO
 // CHECK-UNSUPPORTED-ARG-UIO: unsupported argument 'unsigned-integer-overflow' to option 'fsanitize='
