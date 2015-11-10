@@ -13,8 +13,8 @@ set(LLVM_BUILD_RUNTIME OFF CACHE BOOL "")
 set(CLANG_LINKS_TO_CREATE clang++ cc c++ CACHE STRING "")
 set(CMAKE_MACOSX_RPATH ON CACHE BOOL "")
 
-set(CMAKE_C_FLAGS_RELWITHDEBINFO "-Os -flto -gline-tables-only -DNDEBUG" CACHE STRING "")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-Os -flto -gline-tables-only -DNDEBUG" CACHE STRING "")
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -fno-stack-protector -fno-common -DNDEBUG" CACHE STRING "")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -fno-stack-protector -fno-common -DNDEBUG" CACHE STRING "")
 set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "")
 
 set(LIBCXX_INSTALL_LIBRARY OFF CACHE BOOL "")
