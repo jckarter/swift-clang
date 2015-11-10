@@ -12,6 +12,7 @@ set(CLANG_INCLUDE_TESTS OFF CACHE BOOL "")
 set(LLVM_BUILD_RUNTIME OFF CACHE BOOL "")
 set(CLANG_LINKS_TO_CREATE clang++ cc c++ CACHE STRING "")
 set(CMAKE_MACOSX_RPATH ON CACHE BOOL "")
+set(LLVM_ENABLE_PIC OFF CACHE BOOL "")
 
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -fno-stack-protector -fno-common -DNDEBUG" CACHE STRING "")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -fno-stack-protector -fno-common -DNDEBUG" CACHE STRING "")
