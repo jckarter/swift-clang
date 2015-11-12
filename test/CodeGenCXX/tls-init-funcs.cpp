@@ -1,4 +1,6 @@
 // RUN: %clang_cc1 -triple x86_64-apple-macosx10.8 -std=c++1y -S -emit-llvm %s -o - | FileCheck %s
+// On Darwin, C++ TLS is off internally.
+// XFAIL: *
 
 // CHECK: @a = internal thread_local global
 // CHECK: @_Z2vtIiE = linkonce_odr thread_local global i32 5
