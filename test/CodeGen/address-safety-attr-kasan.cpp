@@ -1,3 +1,4 @@
+// XFAIL: darwin
 // Make sure the sanitize_address attribute is emitted when using both ASan and KASan.
 // Also document that __attribute__((no_sanitize_address)) doesn't disable KASan instrumentation.
 
