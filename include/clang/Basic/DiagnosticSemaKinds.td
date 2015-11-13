@@ -4650,6 +4650,9 @@ def warn_objc_weak_compat : Warning<
 def warn_objc_weak_ignored_in_mrc : Warning<
   "ignoring __weak in file using manual reference counting">,
   InGroup<ObjCWeakCompat>;
+def warn_objc_weak_decl_ignored_in_mrc : Warning<
+  "%0 was declared with __weak, but __weak is ignored in files using manual "
+  "reference counting">, InGroup<ObjCWeakCompat>;
 def err_arc_unsupported_weak_class : Error<
   "class is incompatible with __weak references">;
 def err_arc_weak_unavailable_assign : Error<

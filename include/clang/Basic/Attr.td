@@ -1425,6 +1425,7 @@ def Unavailable : InheritableAttr {
                 ["IR_None",
                  "IR_ARCForbiddenType",
                  "IR_ForbiddenWeak",
+                 "IR_IgnoredWeak",
                  "IR_ARCForbiddenConversion",
                  "IR_ARCInitReturnsUnrelated",
                  "IR_ARCFieldWithOwnership"], 1, /*fake*/ 1>];

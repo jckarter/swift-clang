@@ -1,7 +1,9 @@
 // RUN: %clang_cc1 -fobjc-runtime-has-weak -fignore-objc-weak -fsyntax-only -verify %s
 
 __attribute__((objc_root_class))
-@interface A
+@interface Root @end
+
+@interface A : Root
 @property (weak) id wa;
 @property (weak) id wb;
 @property (weak) id wc; // expected-note {{property declared here}}
@@ -65,3 +67,43 @@ void test_cast_qualifier_inference(__weak id *value) { // expected-warning {{ign
   __unsafe_unretained id *b = (id*) value;
 }
 
+// No diagnostics here.
+@interface UnusedDeclarations {
+  __weak id _wi;
+}
+@property (readonly) __weak id wi;
+@end
+
+// The class implementation diagnoses __weak ivars.
+@interface ImplementedWithWeakIvar : Root {
+  __weak id _wi; // expected-warning {{ignoring __weak in file using manual reference counting}}
+}
+@end
+@implementation ImplementedWithWeakIvar
+@end
+
+// Uses of __weak ivars are also diagnosed.
+@interface PublicWeakIvar : Root {
+@public
+  __weak id _wi; // expected-note {{'_wi' declared here}}
+}
+@end
+
+void test_public(PublicWeakIvar *p) {
+  id x = p->_wi; // expected-warning {{'_wi' was declared with __weak, but __weak is ignored in files using manual reference counting}}
+}
+
+@interface SynthesizedWeakProperty : Root
+@property (readonly) __weak id wi; // expected-warning {{ignoring __weak in file using manual reference counting}}
+@end
+
+@implementation SynthesizedWeakProperty
+@end
+
+@interface UsedWeakProperty : Root
+@property (readonly) __weak id wi; // expected-note {{'wi' declared here}}
+@end
+
+void test_property(UsedWeakProperty *p) {
+  id x = p.wi; // expected-warning {{'wi' was declared with __weak, but __weak is ignored in files using manual reference counting}}
+}

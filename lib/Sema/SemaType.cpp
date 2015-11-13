@@ -5209,7 +5209,7 @@ static bool handleObjCOwnershipTypeAttr(TypeProcessingState &state,
     // If we've been asked to quietly ignore __weak, do so.
     if (S.getLangOpts().IgnoreObjCWeak) {
       // Warn that the interpretation of __weak might change in the future.
-      S.Diag(AttrLoc, diag::warn_objc_weak_ignored_in_mrc);
+      diagnoseOrDelay(S, AttrLoc, diag::warn_objc_weak_ignored_in_mrc, type);
 
       // Revert the type.
       type = origType;

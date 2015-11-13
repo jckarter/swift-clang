@@ -1103,6 +1103,17 @@ Decl *Sema::ActOnPropertyImplDecl(Scope *S,
   } else if (PropertyIvar)
     // @dynamic
     Diag(PropertyDiagLoc, diag::error_dynamic_property_ivar_decl);
+
+  // Warn when synthesizing a property that was declared with __weak when
+  // we ignored that at the declaration point.
+  if (Synthesize) {
+    if (auto attr = property->getAttr<UnavailableAttr>()) {
+      if (attr->isImplicit() &&
+          attr->getImplicitReason() == UnavailableAttr::IR_IgnoredWeak) {
+        Diag(property->getLocation(), diag::warn_objc_weak_ignored_in_mrc);
+      }
+    }
+  }
     
   assert (property && "ActOnPropertyImplDecl - property declaration missing");
   ObjCPropertyImplDecl *PIDecl =

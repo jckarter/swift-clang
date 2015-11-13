@@ -5799,6 +5799,19 @@ static bool isForbiddenTypeAllowed(Sema &S, Decl *decl,
       !isa<FunctionDecl>(decl))
     return false;
 
+  // If the diagnostic was the warning about __weak being ignored, try to delay
+  // that until the declaration was used.
+  if (diag.getForbiddenTypeDiagnostic()
+        == diag::warn_objc_weak_ignored_in_mrc) {
+    // Only delay if __weak was used in a property or ivar.
+    if (isa<ObjCIvarDecl>(decl) || isa<ObjCPropertyDecl>(decl)) {
+      reason = UnavailableAttr::IR_IgnoredWeak;
+      return true;
+    }
+
+    return false;
+  }
+
   // Silently accept unsupported uses of __weak in both user and system
   // declarations when it's been disabled, for ease of integration with
   // -fno-objc-arc files.  We do have to take some care against attempts
@@ -5930,6 +5943,11 @@ static void DoEmitAvailabilityWarning(Sema &S, Sema::AvailabilityDiagnostic K,
         case UnavailableAttr::IR_ARCForbiddenType:
           flagARCError();
           diag_available_here = diag::note_arc_forbidden_type;
+          break;
+
+        case UnavailableAttr::IR_IgnoredWeak:
+          diag = diag::warn_objc_weak_decl_ignored_in_mrc;
+          diag_available_here = diag::note_previous_decl;
           break;
 
         case UnavailableAttr::IR_ForbiddenWeak:

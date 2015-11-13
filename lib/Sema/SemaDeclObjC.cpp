@@ -3524,6 +3524,11 @@ static void DiagnoseWeakIvars(Sema &S, ObjCImplementationDecl *ID) {
       } else {
         S.Diag(ivar->getLocation(), diag::err_arc_weak_no_runtime);
       }
+    } else if (auto attr = ivar->getAttr<UnavailableAttr>()) {
+      if (attr->isImplicit() &&
+          attr->getImplicitReason() == UnavailableAttr::IR_IgnoredWeak) {
+        S.Diag(ivar->getLocation(), diag::warn_objc_weak_ignored_in_mrc);
+      }
     }
   }
 }
