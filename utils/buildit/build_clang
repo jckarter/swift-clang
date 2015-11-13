@@ -185,7 +185,7 @@ if [ "$BUILDING_HOST" = "YES" ]; then
 
   $CMAKE -G 'Ninja' -C $LLVM_SRCROOT/projects/compiler-rt/cmake/caches/Apple.cmake \
       $CMAKE_OPTS \
-      -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+      -DCMAKE_BUILD_TYPE=Release \
       -DLLVM_CONFIG_PATH=$OBJROOT/obj-llvm-native/bin/llvm-config \
       -DCMAKE_INSTALL_PREFIX=$TOOLCHAIN_USR/lib/clang/$FULL_VER/ \
       -DCMAKE_C_COMPILER=$TOOLCHAIN_USR/bin/clang \
