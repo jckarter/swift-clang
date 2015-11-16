@@ -30,8 +30,8 @@ void CStringAppendFormatAndArguments(CFMutableStringRef theString, CFDictionaryR
 
 void Test1(va_list argList) {
   CFAllocatorRef alloc;
-  CStringCreateWithFormatAndArguments (alloc, 0, "%s\n", argList); // expected-warning{{invalid conversion specifier 's'}}
-  CStringAppendFormatAndArguments ((CFMutableStringRef)@"AAAA", 0, "Hello %s there %d\n", argList); // expected-warning{{invalid conversion specifier 's'}}
+  CStringCreateWithFormatAndArguments (alloc, 0, "%s\n", argList);
+  CStringAppendFormatAndArguments ((CFMutableStringRef)@"AAAA", 0, "Hello %s there %d\n", argList);
   CStringCreateWithFormatAndArguments (alloc, 0, "%c\n", argList);
   CStringAppendFormatAndArguments ((CFMutableStringRef)@"AAAA", 0, "%d\n", argList);
 }
@@ -42,13 +42,13 @@ extern void XMyOSLog(int, const char* format, ...) __attribute__((format(os_trac
 extern void os_trace(const char *format, ...) __attribute__((format(os_trace, 1, 2)));
 
 void Test2() {
-  MyOSLog("%s\n", "Hello"); // expected-warning{{invalid conversion specifier 's'}}
+  MyOSLog("%s\n", "Hello");
 
-  MyFStringCreateWithFormat("%s", "Hello"); // expected-warning{{invalid conversion specifier 's'}}
-  XMyOSLog(4, "%s\n", "Hello"); // expected-warning{{invalid conversion specifier 's'}}
+  MyFStringCreateWithFormat("%s", "Hello");
+  XMyOSLog(4, "%s\n", "Hello");
 
-  os_trace("testing %@, %s, %d, %@, %m", CFSTR("object"), "string", 3, "it"); // expected-warning{{invalid conversion specifier 's'}} expected-warning 2{{invalid conversion specifier '@'}}
+  os_trace("testing %@, %s, %d, %@, %m", CFSTR("object"), "string", 3, "it"); // expected-warning{{format specifies type 'id' but the argument has type 'char *'}}
 
-  os_trace("testing %@, %s, %d, %@, %m", CFSTR("object"), "string", 3, @"ok"); // expected-warning{{invalid conversion specifier 's'}} expected-warning 2{{invalid conversion specifier '@'}}
+  os_trace("testing %@, %s, %d, %@, %m", CFSTR("object"), "string", 3, @"ok");
 }
 
