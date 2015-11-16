@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fobjc-runtime-has-weak -fignore-objc-weak -fsyntax-only -verify %s
+// RUN: %clang_cc1 -fobjc-runtime-has-weak -fignore-objc-weak -Werror -fsyntax-only -verify %s
 
 __attribute__((objc_root_class))
 @interface Root @end
