@@ -278,7 +278,8 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
                                     const Driver &D, const ArgList &Args,
                                     ArgStringList &CmdArgs,
                                     const InputInfo &Output,
-                                    const InputInfoList &Inputs) const {
+                                    const InputInfoList &Inputs,
+                                    const ToolChain *AuxToolChain) const {
   Arg *A;
 
   CheckPreprocessingOptions(D, Args);
@@ -470,12 +471,26 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
   // OBJCPLUS_INCLUDE_PATH - system includes enabled when compiling ObjC++.
   addDirectoryList(Args, CmdArgs, "-objcxx-isystem", "OBJCPLUS_INCLUDE_PATH");
 
+  // Optional AuxToolChain indicates that we need to include headers
+  // for more than one target. If that's the case, add include paths
+  // from AuxToolChain right after include paths of the same kind for
+  // the current target.
+
   // Add C++ include arguments, if needed.
-  if (types::isCXX(Inputs[0].getType()))
+  if (types::isCXX(Inputs[0].getType())) {
     getToolChain().AddClangCXXStdlibIncludeArgs(Args, CmdArgs);
+    if (AuxToolChain)
+      AuxToolChain->AddClangCXXStdlibIncludeArgs(Args, CmdArgs);
+  }
 
   // Add system include arguments.
   getToolChain().AddClangSystemIncludeArgs(Args, CmdArgs);
+  if (AuxToolChain)
+      AuxToolChain->AddClangCXXStdlibIncludeArgs(Args, CmdArgs);
+
+  // Add CUDA include arguments, if needed.
+  if (types::isCuda(Inputs[0].getType()))
+    getToolChain().AddCudaIncludeArgs(Args, CmdArgs);
 }
 
 // FIXME: Move to target hook.
@@ -3267,6 +3282,25 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("-triple");
   CmdArgs.push_back(Args.MakeArgString(TripleStr));
 
+  const ToolChain *AuxToolChain = nullptr;
+  if (IsCuda) {
+    // FIXME: We need a (better) way to pass information about
+    // particular compilation pass we're constructing here. For now we
+    // can check which toolchain we're using and pick the other one to
+    // extract the triple.
+    if (&getToolChain() == C.getCudaDeviceToolChain())
+      AuxToolChain = C.getCudaHostToolChain();
+    else if (&getToolChain() == C.getCudaHostToolChain())
+      AuxToolChain = C.getCudaDeviceToolChain();
+    else
+      llvm_unreachable("Can't figure out CUDA compilation mode.");
+    assert(AuxToolChain != nullptr && "No aux toolchain.");
+    CmdArgs.push_back("-aux-triple");
+    CmdArgs.push_back(Args.MakeArgString(AuxToolChain->getTriple().str()));
+    CmdArgs.push_back("-fcuda-target-overloads");
+    CmdArgs.push_back("-fcuda-disable-target-call-checks");
+  }
+
   if (Triple.isOSWindows() && (Triple.getArch() == llvm::Triple::arm ||
                                Triple.getArch() == llvm::Triple::thumb)) {
     unsigned Offset = Triple.getArch() == llvm::Triple::arm ? 4 : 6;
@@ -4348,7 +4382,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   //
   // FIXME: Support -fpreprocessed
   if (types::getPreprocessedType(InputType) != types::TY_INVALID)
-    AddPreprocessingOptions(C, JA, D, Args, CmdArgs, Output, Inputs);
+    AddPreprocessingOptions(C, JA, D, Args, CmdArgs, Output, Inputs,
+                            AuxToolChain);
 
   // Don't warn about "clang -c -DPIC -fPIC test.i" because libtool.m4 assumes
   // that "The compiler can only warn and ignore the option if not recognized".
@@ -6529,9 +6564,7 @@ constructHexagonLinkArgs(Compilation &C, const JobAction &JA,
   //----------------------------------------------------------------------------
   // Library Search Paths
   //----------------------------------------------------------------------------
-  const ToolChain::path_list &LibPaths = ToolChain.getFilePaths();
-  for (const auto &LibPath : LibPaths)
-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + LibPath));
+  ToolChain.AddFilePathLibArgs(Args, CmdArgs);
 
   //----------------------------------------------------------------------------
   //
@@ -6900,16 +6933,13 @@ void cloudabi::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crt0.o")));
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtbegin.o")));
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
-  const ToolChain::path_list &Paths = ToolChain.getFilePaths();
-  for (const auto &Path : Paths)
-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
+  ToolChain.AddFilePathLibArgs(Args, CmdArgs);
   Args.AddAllArgs(CmdArgs,
                   {options::OPT_T_Group, options::OPT_e, options::OPT_s,
                    options::OPT_t, options::OPT_Z_Flag, options::OPT_r});
@@ -6919,16 +6949,14 @@ void cloudabi::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (D.CCCIsCXX())
       ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
     CmdArgs.push_back("-lc");
     CmdArgs.push_back("-lcompiler_rt");
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles))
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles))
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtend.o")));
 
   const char *Exec = Args.MakeArgString(ToolChain.GetLinkerPath());
@@ -7283,8 +7311,7 @@ void darwin::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles))
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles))
     getMachOToolChain().addStartObjectFileArgs(Args, CmdArgs);
 
   // SafeStack requires its own runtime libraries
@@ -7316,12 +7343,11 @@ void darwin::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     InputFileList.push_back(II.getFilename());
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs))
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs))
     addOpenMPRuntime(CmdArgs, getToolChain(), Args);
 
-  if (isObjCRuntimeLinked(Args) && !Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (isObjCRuntimeLinked(Args) &&
+      !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     // We use arclite library for both ARC and subscripting support.
     getMachOToolChain().AddLinkARCArgs(Args, CmdArgs);
 
@@ -7342,8 +7368,7 @@ void darwin::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   getMachOToolChain().addProfileRTLibs(Args, CmdArgs);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (getToolChain().getDriver().CCCIsCXX())
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
 
@@ -7353,8 +7378,7 @@ void darwin::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     getMachOToolChain().AddLinkRuntimeLibArgs(Args, CmdArgs);
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     // endfile_spec is empty.
   }
 
@@ -7365,8 +7389,7 @@ void darwin::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   for (const Arg *A : Args.filtered(options::OPT_iframework))
     CmdArgs.push_back(Args.MakeArgString(std::string("-F") + A->getValue()));
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (Arg *A = Args.getLastArg(options::OPT_fveclib)) {
       if (A->getValue() == StringRef("Accelerate")) {
         CmdArgs.push_back("-framework");
@@ -7477,8 +7500,7 @@ void solaris::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   // Demangle C++ names in errors
   CmdArgs.push_back("-C");
 
-  if ((!Args.hasArg(options::OPT_nostdlib)) &&
-      (!Args.hasArg(options::OPT_shared))) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_shared)) {
     CmdArgs.push_back("-e");
     CmdArgs.push_back("_start");
   }
@@ -7504,8 +7526,7 @@ void solaris::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared))
       CmdArgs.push_back(
           Args.MakeArgString(getToolChain().GetFilePath("crt1.o")));
@@ -7517,17 +7538,14 @@ void solaris::Linker::ConstructJob(Compilation &C, const JobAction &JA,
         Args.MakeArgString(getToolChain().GetFilePath("crtbegin.o")));
   }
 
-  const ToolChain::path_list &Paths = getToolChain().getFilePaths();
-  for (const auto &Path : Paths)
-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
+  getToolChain().AddFilePathLibArgs(Args, CmdArgs);
 
   Args.AddAllArgs(CmdArgs, {options::OPT_L, options::OPT_T_Group,
                             options::OPT_e, options::OPT_r});
 
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (getToolChain().getDriver().CCCIsCXX())
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
     CmdArgs.push_back("-lgcc_s");
@@ -7538,8 +7556,7 @@ void solaris::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     CmdArgs.push_back(
         Args.MakeArgString(getToolChain().GetFilePath("crtend.o")));
   }
@@ -7643,8 +7660,7 @@ void openbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   else if (getToolChain().getArch() == llvm::Triple::mips64el)
     CmdArgs.push_back("-EL");
 
-  if ((!Args.hasArg(options::OPT_nostdlib)) &&
-      (!Args.hasArg(options::OPT_shared))) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_shared)) {
     CmdArgs.push_back("-e");
     CmdArgs.push_back("__start");
   }
@@ -7674,8 +7690,7 @@ void openbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared)) {
       if (Args.hasArg(options::OPT_pg))
         CmdArgs.push_back(
@@ -7703,8 +7718,7 @@ void openbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (D.CCCIsCXX()) {
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
       if (Args.hasArg(options::OPT_pg))
@@ -7734,8 +7748,7 @@ void openbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-lgcc");
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared))
       CmdArgs.push_back(
           Args.MakeArgString(getToolChain().GetFilePath("crtend.o")));
@@ -7776,8 +7789,7 @@ void bitrig::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   const Driver &D = getToolChain().getDriver();
   ArgStringList CmdArgs;
 
-  if ((!Args.hasArg(options::OPT_nostdlib)) &&
-      (!Args.hasArg(options::OPT_shared))) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_shared)) {
     CmdArgs.push_back("-e");
     CmdArgs.push_back("__start");
   }
@@ -7804,8 +7816,7 @@ void bitrig::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared)) {
       if (Args.hasArg(options::OPT_pg))
         CmdArgs.push_back(
@@ -7826,8 +7837,7 @@ void bitrig::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (D.CCCIsCXX()) {
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
       if (Args.hasArg(options::OPT_pg))
@@ -7867,8 +7877,7 @@ void bitrig::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString("-lclang_rt." + MyArch));
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared))
       CmdArgs.push_back(
           Args.MakeArgString(getToolChain().GetFilePath("crtend.o")));
@@ -8036,8 +8045,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     const char *crt1 = nullptr;
     if (!Args.hasArg(options::OPT_shared)) {
       if (Args.hasArg(options::OPT_pg))
@@ -8064,9 +8072,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
-  const ToolChain::path_list &Paths = ToolChain.getFilePaths();
-  for (const auto &Path : Paths)
-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
+  ToolChain.AddFilePathLibArgs(Args, CmdArgs);
   Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
   Args.AddAllArgs(CmdArgs, options::OPT_e);
   Args.AddAllArgs(CmdArgs, options::OPT_s);
@@ -8080,8 +8086,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   bool NeedsSanitizerDeps = addSanitizerRuntimes(ToolChain, Args, CmdArgs);
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     addOpenMPRuntime(CmdArgs, ToolChain, Args);
     if (D.CCCIsCXX()) {
       ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
@@ -8137,8 +8142,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (Args.hasArg(options::OPT_shared) || IsPIE)
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtendS.o")));
     else
@@ -8352,8 +8356,7 @@ void netbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared)) {
       CmdArgs.push_back(
           Args.MakeArgString(getToolChain().GetFilePath("crt0.o")));
@@ -8401,8 +8404,7 @@ void netbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     addOpenMPRuntime(CmdArgs, getToolChain(), Args);
     if (D.CCCIsCXX()) {
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
@@ -8429,8 +8431,7 @@ void netbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared))
       CmdArgs.push_back(
           Args.MakeArgString(getToolChain().GetFilePath("crtend.o")));
@@ -8919,8 +8920,7 @@ void gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!isAndroid) {
       const char *crt1 = nullptr;
       if (!Args.hasArg(options::OPT_shared)) {
@@ -8957,10 +8957,7 @@ void gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_L);
   Args.AddAllArgs(CmdArgs, options::OPT_u);
 
-  const ToolChain::path_list &Paths = ToolChain.getFilePaths();
-
-  for (const auto &Path : Paths)
-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
+  ToolChain.AddFilePathLibArgs(Args, CmdArgs);
 
   if (D.isUsingLTO())
     AddGoldPlugin(ToolChain, Args, CmdArgs, D.getLTOMode() == LTOK_Thin);
@@ -8973,8 +8970,8 @@ void gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   // The profile runtime also needs access to system libraries.
   getToolChain().addProfileRTLibs(Args, CmdArgs);
 
-  if (D.CCCIsCXX() && !Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (D.CCCIsCXX() &&
+      !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     bool OnlyLibstdcxxStatic = Args.hasArg(options::OPT_static_libstdcxx) &&
                                !Args.hasArg(options::OPT_static);
     if (OnlyLibstdcxxStatic)
@@ -9142,8 +9139,7 @@ void nacltools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared))
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crt1.o")));
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
@@ -9161,18 +9157,15 @@ void nacltools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_L);
   Args.AddAllArgs(CmdArgs, options::OPT_u);
 
-  const ToolChain::path_list &Paths = ToolChain.getFilePaths();
-
-  for (const auto &Path : Paths)
-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
+  ToolChain.AddFilePathLibArgs(Args, CmdArgs);
 
   if (Args.hasArg(options::OPT_Z_Xlinker__no_demangle))
     CmdArgs.push_back("--no-demangle");
 
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs);
 
-  if (D.CCCIsCXX() && !Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (D.CCCIsCXX() &&
+      !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     bool OnlyLibstdcxxStatic =
         Args.hasArg(options::OPT_static_libstdcxx) && !IsStatic;
     if (OnlyLibstdcxxStatic)
@@ -9270,8 +9263,7 @@ void minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crt1.o")));
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crti.o")));
     CmdArgs.push_back(
@@ -9286,16 +9278,14 @@ void minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   getToolChain().addProfileRTLibs(Args, CmdArgs);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     if (D.CCCIsCXX()) {
       getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
       CmdArgs.push_back("-lm");
     }
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (Args.hasArg(options::OPT_pthread))
       CmdArgs.push_back("-lpthread");
     CmdArgs.push_back("-lc");
@@ -9379,8 +9369,7 @@ void dragonfly::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_shared)) {
       if (Args.hasArg(options::OPT_pg))
         CmdArgs.push_back(
@@ -9408,8 +9397,7 @@ void dragonfly::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     // FIXME: GCC passes on -lgcc, -lgcc_pic and a whole lot of
     //         rpaths
     if (UseGCC47)
@@ -9465,8 +9453,7 @@ void dragonfly::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_pie))
       CmdArgs.push_back(
           Args.MakeArgString(getToolChain().GetFilePath("crtendS.o")));
@@ -9515,8 +9502,8 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(
         Args.MakeArgString(std::string("-out:") + Output.getFilename()));
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles) && !C.getDriver().IsCLMode())
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles) &&
+      !C.getDriver().IsCLMode())
     CmdArgs.push_back("-defaultlib:libcmt");
 
   if (!llvm::sys::Process::GetEnv("LIB")) {
@@ -9913,8 +9900,7 @@ void MinGW::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_u_Group);
   Args.AddLastArg(CmdArgs, options::OPT_Z_Flag);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_mdll)) {
       CmdArgs.push_back(Args.MakeArgString(TC.GetFilePath("dllcrt2.o")));
     } else {
@@ -9929,18 +9915,15 @@ void MinGW::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
-  const ToolChain::path_list Paths = TC.getFilePaths();
-  for (const auto &Path : Paths)
-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
-
+  TC.AddFilePathLibArgs(Args, CmdArgs);
   AddLinkerInputs(TC, Inputs, Args, CmdArgs);
 
   // TODO: Add ASan stuff here
 
   // TODO: Add profile stuff here
 
-  if (D.CCCIsCXX() && !Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (D.CCCIsCXX() &&
+      !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     bool OnlyLibstdcxxStatic = Args.hasArg(options::OPT_static_libstdcxx) &&
                                !Args.hasArg(options::OPT_static);
     if (OnlyLibstdcxxStatic)
@@ -10178,8 +10161,7 @@ void CrossWindows::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.hasArg(options::OPT_static) ? "-Bstatic"
                                                        : "-Bdynamic");
 
-    if (!Args.hasArg(options::OPT_nostdlib) &&
-        !Args.hasArg(options::OPT_nostartfiles)) {
+    if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
       CmdArgs.push_back("--entry");
       CmdArgs.push_back(Args.MakeArgString(EntryPoint));
     }
@@ -10201,8 +10183,7 @@ void CrossWindows::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(ImpLib));
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     const std::string CRTPath(D.SysRoot + "/usr/lib/");
     const char *CRTBegin;
 
@@ -10212,11 +10193,7 @@ void CrossWindows::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
-
-  const auto &Paths = TC.getFilePaths();
-  for (const auto &Path : Paths)
-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + Path));
-
+  TC.AddFilePathLibArgs(Args, CmdArgs);
   AddLinkerInputs(TC, Inputs, Args, CmdArgs);
 
   if (D.CCCIsCXX() && !Args.hasArg(options::OPT_nostdlib) &&
@@ -10354,9 +10331,9 @@ void tools::Myriad::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       static_cast<const toolchains::MyriadToolChain &>(getToolChain());
   const llvm::Triple &T = TC.getTriple();
   ArgStringList CmdArgs;
-  bool UseStartfiles = !Args.hasArg(options::OPT_nostartfiles);
-  bool UseDefaultLibs = !Args.hasArg(options::OPT_nostdlib) &&
-                        !Args.hasArg(options::OPT_nodefaultlibs);
+  bool UseStartfiles = !Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles);
+  bool UseDefaultLibs =
+      !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs);
 
   std::string StartFilesDir, BuiltinLibDir;
   TC.getCompilerSupportDir(StartFilesDir);
@@ -10584,8 +10561,7 @@ static void ConstructGoldLinkJob(const Tool &T, Compilation &C,
 
   AddPS4SanitizerArgs(ToolChain, CmdArgs);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     const char *crt1 = nullptr;
     if (!Args.hasArg(options::OPT_shared)) {
       if (Args.hasArg(options::OPT_pg))
@@ -10612,12 +10588,7 @@ static void ConstructGoldLinkJob(const Tool &T, Compilation &C,
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
-
-  const ToolChain::path_list Paths = ToolChain.getFilePaths();
-  for (ToolChain::path_list::const_iterator i = Paths.begin(), e = Paths.end();
-       i != e; ++i)
-    CmdArgs.push_back(Args.MakeArgString(StringRef("-L") + *i));
-
+  ToolChain.AddFilePathLibArgs(Args, CmdArgs);
   Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
   Args.AddAllArgs(CmdArgs, options::OPT_e);
   Args.AddAllArgs(CmdArgs, options::OPT_s);
@@ -10629,8 +10600,7 @@ static void ConstructGoldLinkJob(const Tool &T, Compilation &C,
 
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs);
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     // For PS4, we always want to pass libm, libstdc++ and libkernel
     // libraries for both C and C++ compilations.
     CmdArgs.push_back("-lkernel");
@@ -10701,8 +10671,7 @@ static void ConstructGoldLinkJob(const Tool &T, Compilation &C,
     }
   }
 
-  if (!Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nostartfiles)) {
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_pie))
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtendS.o")));
     else
