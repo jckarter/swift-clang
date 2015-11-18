@@ -287,7 +287,7 @@ if [ "x$LLVM_DEBUG" != "x1" ]; then
     #
     # Use '-l' to strip i386 modules. N.B. that flag doesn't work with kext or
     # PPC objects!
-    $STRIP -Sl $PREFIX/bin/*
+    $STRIP -Sl $TOOLCHAIN_USR/bin/*
 fi
 
 chgrp -h -R wheel $DSTROOT
