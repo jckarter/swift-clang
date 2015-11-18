@@ -30,6 +30,7 @@ add_clang_library(clangAnalysis
   UninitializedValues.cpp
 
   LINK_LIBS
+  clangAST
   clangBasic
   clangLex
   )
