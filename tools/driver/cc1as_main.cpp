@@ -411,7 +411,7 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
       // is emitted in __LLVM,__asm section to tell the linker to add
       // the macho object into the bundle
       MCSection *AsmLabel = Ctx.getMachOSection(
-          "__LLVM", "__asm", MachO::S_REGULAR, 4, SectionKind::getDataNoRel());
+          "__LLVM", "__asm", MachO::S_REGULAR, 4, SectionKind::getReadOnly());
       Str.get()->SwitchSection(AsmLabel);
       Str.get()->EmitZeros(1);
     }
