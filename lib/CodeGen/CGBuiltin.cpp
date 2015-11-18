@@ -1948,6 +1948,13 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     }
     return RValue::get(FormatStr);
   }
+
+  case Builtin::BI__builtin_os_log_format_buffer_size: {
+    analyze_os_log::OSLogBufferLayout Layout;
+    analyze_os_log::computeOSLogBufferLayout(CGM.getContext(), E, Layout);
+    return RValue::get(ConstantInt::get(ConvertType(E->getType()),
+                                        Layout.getSize().getQuantity()));
+  }
   }
 
   // If this is an alias for a lib function (e.g. __builtin_sin), emit
