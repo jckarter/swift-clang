@@ -673,18 +673,11 @@ if (CLANG_ENABLE_BOOTSTRAP)
                 # We shouldn't need to set this here, but INSTALL_DIR doesn't
                 # seem to work, so instead I'm passing this through
                 -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
-                -DPACKAGE_VERSION=${PACKAGE_VERSION}
-                -DLLVM_VERSION_MAJOR=${LLVM_VERSION_MAJOR}
-                -DLLVM_VERSION_MINOR=${LLVM_VERSION_MINOR}
-                -DLLVM_VERSION_PATCH=${LLVM_VERSION_PATCH}
-                -DLLVM_VERSION_SUFFIX=${LLVM_VERSION_SUFFIX}
-                -DCLANG_REPOSITORY_STRING=${CLANG_REPOSITORY_STRING}
                 ${CLANG_BOOTSTRAP_CMAKE_ARGS}
                 ${BOOTSTRAP_EXTRA_ARGS}
                 -DCMAKE_CXX_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang++
                 -DCMAKE_C_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang
                 -DCMAKE_ASM_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang
-                -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
                 ${LTO_LIBRARY} ${LTO_AR} ${LTO_RANLIB} ${verbose}
     INSTALL_COMMAND ""
     STEP_TARGETS configure build

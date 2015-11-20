@@ -57,6 +57,11 @@ if [ "${SDKROOT_PATH#*$OSX}" != "$SDKROOT_PATH"  ]; then
   BUILDING_HOST=YES
   CMAKE_TOOLCHAIN_FLAGS=""
   ORDER_FILE=$IB_ROOT/static-order-files/x86_64/clang.order
+  PROFILE_DATA=$IB_ROOT/clang.profdata.bz2
+  if [ -e $PROFILE_DATA ]; then
+    bzcat $PROFILE_DATA > $OBJROOT/clang.profdata
+    PROFDATA_FILE_CMAKE_FLAG="-DBOOTSTRAP_LLVM_PROFDATA_FILE=$OBJROOT/clang.profdata"
+  fi
 fi
 
 if [ -e $ORDER_FILE ]; then
