@@ -1245,6 +1245,10 @@ private:
           FormatTok->isOneOf(tok::kw_struct, tok::kw_union, tok::kw_delete)) {
         FormatTok->Tok.setKind(tok::identifier);
         FormatTok->Tok.setIdentifierInfo(nullptr);
+      } else if (Style.Language == FormatStyle::LK_JavaScript &&
+                 FormatTok->isOneOf(tok::kw_struct, tok::kw_union)) {
+        FormatTok->Tok.setKind(tok::identifier);
+        FormatTok->Tok.setIdentifierInfo(nullptr);
       }
     } else if (FormatTok->Tok.is(tok::greatergreater)) {
       FormatTok->Tok.setKind(tok::greater);
@@ -1776,11 +1780,20 @@ tooling::Replacements sortIncludes(const FormatStyle &Style, StringRef Code,
   for (const auto &Category : Style.IncludeCategories)
     CategoryRegexs.emplace_back(Category.Regex);
 
+  bool FormattingOff = false;
+
   for (;;) {
     auto Pos = Code.find('\n', SearchFrom);
     StringRef Line =
         Code.substr(Prev, (Pos != StringRef::npos ? Pos : Code.size()) - Prev);
-    if (!Line.endswith("\\")) {
+
+    StringRef Trimmed = Line.trim();
+    if (Trimmed == "// clang-format off")
+      FormattingOff = true;
+    else if (Trimmed == "// clang-format on")
+      FormattingOff = false;
+
+    if (!FormattingOff && !Line.endswith("\\")) {
       if (IncludeRegex.match(Line, &Matches)) {
         StringRef IncludeName = Matches[2];
         unsigned Category;
