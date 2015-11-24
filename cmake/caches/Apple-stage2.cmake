@@ -21,8 +21,8 @@ set(LLVM_ENABLE_BACKTRACES OFF CACHE BOOL "")
 set(CLANG_PLUGIN_SUPPORT OFF CACHE BOOL "")
 set(CLANG_BOOTSTRAP_PASSTHROUGH CLANG_ORDER_FILE LLVM_PROFDATA_FILE CACHE STRING "")
 
-set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -fno-stack-protector -fno-common -DNDEBUG" CACHE STRING "")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -fno-stack-protector -fno-common -DNDEBUG" CACHE STRING "")
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -fno-stack-protector -fno-common -DNDEBUG -Wno-profile-instr-unprofiled" CACHE STRING "")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -fno-stack-protector -fno-common -DNDEBUG -Wno-profile-instr-unprofiled" CACHE STRING "")
 set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "")
 
 set(LIBCXX_INSTALL_LIBRARY OFF CACHE BOOL "")
