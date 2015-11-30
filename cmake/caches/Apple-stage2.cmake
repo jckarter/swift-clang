@@ -37,3 +37,7 @@ set(LLVM_TOOLCHAIN_TOOLS
   llvm-nm
   llvm-size
   CACHE STRING "")
+
+# test args
+
+set(LLVM_LIT_ARGS "--xunit-xml-output=testresults.xunit.xml -v" CACHE STRING "")
