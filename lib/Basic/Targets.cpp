@@ -4933,6 +4933,9 @@ public:
 
     if (Opts.UnsafeFPMath)
       Builder.defineMacro("__ARM_FP_FAST", "1");
+
+    if (ArchKind == llvm::ARM::AK_ARMV8_1A)
+      Builder.defineMacro("__ARM_FEATURE_QRDMX", "1");
   }
 
   ArrayRef<Builtin::Info> getTargetBuiltins() const override {
@@ -5314,6 +5317,7 @@ class AArch64TargetInfo : public TargetInfo {
   unsigned CRC;
   unsigned Crypto;
   unsigned Unaligned;
+  unsigned V8_1A;
 
   static const Builtin::Info BuiltinInfo[];
 
@@ -5436,6 +5440,9 @@ public:
     if (Unaligned)
       Builder.defineMacro("__ARM_FEATURE_UNALIGNED", "1");
 
+    if (V8_1A)
+      Builder.defineMacro("__ARM_FEATURE_QRDMX", "1");
+
     // All of the __sync_(bool|val)_compare_and_swap_(1|2|4|8) builtins work.
     Builder.defineMacro("__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1");
     Builder.defineMacro("__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2");
@@ -5461,6 +5468,7 @@ public:
     CRC = 0;
     Crypto = 0;
     Unaligned = 1;
+    V8_1A = 0;
 
     for (const auto &Feature : Features) {
       if (Feature == "+neon")
@@ -5471,6 +5479,8 @@ public:
         Crypto = 1;
       if (Feature == "+strict-align")
         Unaligned = 0;
+      if (Feature == "+v8.1a")
+        V8_1A = 1;
     }
 
     setDataLayoutString();
