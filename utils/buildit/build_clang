@@ -18,7 +18,7 @@ LLVM_OPTIMIZED="$2"
 
 SDKROOT_PATH=`xcodebuild -version -sdk $SDKROOT Path`
 
-if [ "$LLVM_OPTIMIZED" = "yes" ]; then
+if [ "$LLVM_OPTIMIZED" = "1" ]; then
     BUILD_TYPE=RelWithDebInfo
 else
     BUILD_TYPE=Debug
