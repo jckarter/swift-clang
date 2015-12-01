@@ -262,6 +262,8 @@ rm $TOOLCHAIN_USR/lib/clang/$FULL_VER/asan_blacklist.txt
 rm $TOOLCHAIN_USR/lib/clang/$FULL_VER/cfi_blacklist.txt
 echo 1 > $OBJROOT/enable_objc_gc
 install -m 0444 $OBJROOT/enable_objc_gc $TOOLCHAIN_USR/local/lib/clang/enable_objc_gc
+echo 1 > $OBJROOT/ignore_mrc_weak
+install -m 0444 $OBJROOT/ignore_mrc_weak $TOOLCHAIN_USR/local/lib/clang/ignore_mrc_weak
 
 #install licenses and manpages
 if [ -d $IB_ROOT ]; then
