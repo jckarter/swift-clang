@@ -294,26 +294,9 @@ cd $SYMROOT || exit 1
 # Clean out SYM_DIR in case -noclean was passed to buildit.
 rm -rf * || exit 1
 
-# Generate .dSYM files
-DSYMUTIL=`xcrun -find dsymutil`
-find $PREFIX -perm -0111 -type f \
-    -print | xargs -n 1 -P ${SYSCTL} ${DSYMUTIL}
-
-# Save .dSYM files and .a archives
+# Save .dSYM files
 cd $PREFIX || exit 1
-find . \( -path \*.dSYM/\* \) -print \
-    | cpio -pdml $SYMROOT || exit 1
-
-find $PREFIX -name \*.dSYM -print | xargs rm -r || exit 1
-
-STRIP=`xcrun -find strip`
-if [ "x$LLVM_DEBUG" != "x1" ]; then
-    # Strip local symbols from llvm libraries.
-    #
-    # Use '-l' to strip i386 modules. N.B. that flag doesn't work with kext or
-    # PPC objects!
-    $STRIP -Sl $TOOLCHAIN_USR/bin/*
-fi
+find $OBJROOT/obj-llvm/tools/clang/bootstrap-bins/ -name \*.dSYM -exec cp -r {} $SYMROOT/ \; || exit 1
 
 chgrp -h -R wheel $DSTROOT
 chgrp -R wheel $DSTROOT
