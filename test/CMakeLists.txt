@@ -66,6 +66,7 @@ if( NOT CLANG_BUILT_STANDALONE )
     llvm-profdata
     llvm-readobj
     llvm-symbolizer
+    LTO
     opt
     )
 endif()
