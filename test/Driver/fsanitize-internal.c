@@ -1,3 +1,6 @@
+// <rdar://23715723>.  Later, we should merge this into fsanitize.c.
+// XFAIL: *
+
 //
 // We do not support these sanitizers on the internal branches.
 // rdar://12799898
