@@ -7260,7 +7260,6 @@ private:
                    clang::WebAssembly::LastTSBuiltin - Builtin::FirstTSBuiltin);
   }
   BuiltinVaListKind getBuiltinVaListKind() const final {
-    // TODO: Implement va_list properly.
     return VoidPtrBuiltinVaList;
   }
   ArrayRef<const char *> getGCCRegNames() const final {
