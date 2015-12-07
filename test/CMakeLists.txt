@@ -62,6 +62,7 @@ if( NOT CLANG_BUILT_STANDALONE )
     llvm-bcanalyzer
     llvm-config
     llvm-dwarfdump
+    llvm-lto
     llvm-objdump
     llvm-profdata
     llvm-readobj

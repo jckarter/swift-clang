@@ -337,6 +337,8 @@ void OMPClauseProfiler::VisitOMPThreadsClause(const OMPThreadsClause *) {}
 
 void OMPClauseProfiler::VisitOMPSIMDClause(const OMPSIMDClause *) {}
 
+void OMPClauseProfiler::VisitOMPNogroupClause(const OMPNogroupClause *) {}
+
 template<typename T>
 void OMPClauseProfiler::VisitOMPClauseList(T *Node) {
   for (auto *E : Node->varlists()) {
@@ -462,6 +464,9 @@ void OMPClauseProfiler::VisitOMPThreadLimitClause(
 }
 void OMPClauseProfiler::VisitOMPPriorityClause(const OMPPriorityClause *C) {
   Profiler->VisitStmt(C->getPriority());
+}
+void OMPClauseProfiler::VisitOMPGrainsizeClause(const OMPGrainsizeClause *C) {
+  Profiler->VisitStmt(C->getGrainsize());
 }
 }
 

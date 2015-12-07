@@ -3591,7 +3591,8 @@ static Distro DetectDistro(const Driver &D, llvm::Triple::ArchType Arch) {
 static std::string getMultiarchTriple(const Driver &D,
                                       const llvm::Triple &TargetTriple,
                                       StringRef SysRoot) {
-  llvm::Triple::EnvironmentType TargetEnvironment = TargetTriple.getEnvironment();
+  llvm::Triple::EnvironmentType TargetEnvironment =
+      TargetTriple.getEnvironment();
 
   // For most architectures, just use whatever we have rather than trying to be
   // clever.
@@ -4422,7 +4423,8 @@ MyriadToolChain::MyriadToolChain(const Driver &D, const llvm::Triple &Triple,
   // choose the myriad installation when targeting a non-myriad sparc install.
   switch (Triple.getArch()) {
   default:
-    D.Diag(diag::err_target_unsupported_arch) << Triple.getArchName() << "myriad";
+    D.Diag(diag::err_target_unsupported_arch) << Triple.getArchName()
+                                              << "myriad";
   case llvm::Triple::sparc:
   case llvm::Triple::sparcel:
   case llvm::Triple::shave:
@@ -4458,8 +4460,8 @@ void MyriadToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
     addSystemInclude(DriverArgs, CC1Args, getDriver().SysRoot + "/include");
 }
 
-void MyriadToolChain::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
-                                                   ArgStringList &CC1Args) const {
+void MyriadToolChain::AddClangCXXStdlibIncludeArgs(
+    const ArgList &DriverArgs, ArgStringList &CC1Args) const {
   if (DriverArgs.hasArg(options::OPT_nostdlibinc) ||
       DriverArgs.hasArg(options::OPT_nostdincxx))
     return;
@@ -4470,8 +4472,9 @@ void MyriadToolChain::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
   StringRef TripleStr = GCCInstallation.getTriple().str();
   const Multilib &Multilib = GCCInstallation.getMultilib();
 
-  addLibStdCXXIncludePaths(LibDir.str() + "/../" + TripleStr.str() + "/include/c++/" + Version.Text,
-                           "", TripleStr, "", "", Multilib.includeSuffix(), DriverArgs, CC1Args);
+  addLibStdCXXIncludePaths(
+      LibDir.str() + "/../" + TripleStr.str() + "/include/c++/" + Version.Text,
+      "", TripleStr, "", "", Multilib.includeSuffix(), DriverArgs, CC1Args);
 }
 
 // MyriadToolChain handles several triples:
@@ -4545,11 +4548,11 @@ PS4CPU::PS4CPU(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   } else {
     PS4SDKDir = getDriver().Dir;
     llvm::sys::path::append(PS4SDKDir, "/../../");
-  } 
+  }
 
-  // By default, the driver won't report a warning if it can't find 
+  // By default, the driver won't report a warning if it can't find
   // PS4's include or lib directories. This behavior could be changed if
-  // -Weverything or -Winvalid-or-nonexistent-directory options are passed.  
+  // -Weverything or -Winvalid-or-nonexistent-directory options are passed.
   // If -isysroot was passed, use that as the SDK base path.
   std::string PrefixDir;
   if (const Arg *A = Args.getLastArg(options::OPT_isysroot)) {
