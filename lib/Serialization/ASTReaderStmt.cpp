@@ -1811,6 +1811,9 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_simd:
     C = new (Context) OMPSIMDClause();
     break;
+  case OMPC_nogroup:
+    C = new (Context) OMPNogroupClause();
+    break;
   case OMPC_private:
     C = OMPPrivateClause::CreateEmpty(Context, Record[Idx++]);
     break;
@@ -1858,6 +1861,9 @@ OMPClause *OMPClauseReader::readClause() {
     break;
   case OMPC_priority:
     C = new (Context) OMPPriorityClause();
+    break;
+  case OMPC_grainsize:
+    C = new (Context) OMPGrainsizeClause();
     break;
   }
   Visit(C);
@@ -1948,6 +1954,8 @@ void OMPClauseReader::VisitOMPSeqCstClause(OMPSeqCstClause *) {}
 void OMPClauseReader::VisitOMPThreadsClause(OMPThreadsClause *) {}
 
 void OMPClauseReader::VisitOMPSIMDClause(OMPSIMDClause *) {}
+
+void OMPClauseReader::VisitOMPNogroupClause(OMPNogroupClause *) {}
 
 void OMPClauseReader::VisitOMPPrivateClause(OMPPrivateClause *C) {
   C->setLParenLoc(Reader->ReadSourceLocation(Record, Idx));
@@ -2198,6 +2206,11 @@ void OMPClauseReader::VisitOMPPriorityClause(OMPPriorityClause *C) {
   C->setLParenLoc(Reader->ReadSourceLocation(Record, Idx));
 }
 
+void OMPClauseReader::VisitOMPGrainsizeClause(OMPGrainsizeClause *C) {
+  C->setGrainsize(Reader->Reader.ReadSubExpr());
+  C->setLParenLoc(Reader->ReadSourceLocation(Record, Idx));
+}
+
 //===----------------------------------------------------------------------===//
 // OpenMP Directives.
 //===----------------------------------------------------------------------===//
@@ -2425,6 +2438,10 @@ void ASTStmtReader::VisitOMPTaskLoopDirective(OMPTaskLoopDirective *D) {
 }
 
 void ASTStmtReader::VisitOMPTaskLoopSimdDirective(OMPTaskLoopSimdDirective *D) {
+  VisitOMPLoopDirective(D);
+}
+
+void ASTStmtReader::VisitOMPDistributeDirective(OMPDistributeDirective *D) {
   VisitOMPLoopDirective(D);
 }
 
@@ -3063,6 +3080,14 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       unsigned CollapsedNum = Record[ASTStmtReader::NumStmtFields + 1];
       S = OMPTaskLoopSimdDirective::CreateEmpty(Context, NumClauses,
                                                 CollapsedNum, Empty);
+      break;
+    }
+
+    case STMT_OMP_DISTRIBUTE_DIRECTIVE: {
+      unsigned NumClauses = Record[ASTStmtReader::NumStmtFields];
+      unsigned CollapsedNum = Record[ASTStmtReader::NumStmtFields + 1];
+      S = OMPDistributeDirective::CreateEmpty(Context, NumClauses, CollapsedNum,
+                                              Empty);
       break;
     }
 
