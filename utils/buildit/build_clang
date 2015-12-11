@@ -274,6 +274,7 @@ if [ -d $IB_ROOT ]; then
   mkdir -p $TOOLCHAIN_USR/local/OpenSourceVersions/
   install -m 0444 $IB_ROOT/clang.plist $TOOLCHAIN_USR/local/OpenSourceVersions/clang.plist
   install -m 0444 $IB_ROOT/llvm-cov.1 $TOOLCHAIN_USR/share/man/man1/llvm-cov.1
+  install -m 0444 $IB_ROOT/llvm-profdata.1 $TOOLCHAIN_USR/share/man/man1/llvm-profdata.1
   install -m 0444 $IB_ROOT/clang.1 $TOOLCHAIN_USR/share/man/man1/clang.1
 fi
 mkdir -p $TOOLCHAIN_USR/local/OpenSourceLicenses/
