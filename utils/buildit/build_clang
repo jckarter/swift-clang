@@ -16,6 +16,8 @@ LLVM_ASSERTIONS="$1"
 # build.
 LLVM_OPTIMIZED="$2"
 
+CLANG_VERSION="$3"
+
 SDKROOT_PATH=`xcodebuild -version -sdk $SDKROOT Path`
 
 if [ "$LLVM_OPTIMIZED" = "1" ]; then
@@ -50,7 +52,6 @@ VERSION=`echo $RC_ProjectSourceVersion | sed 's/\..*//'`
 MAJOR_VERISON=${VERSION:0:1}
 MINOR_VERISON=${VERSION:2:3}
 MAJ_MIN_VER=${MAJOR_VERISON}.${MINOR_VERISON}
-FULL_VER=${MAJOR_VERISON}.${MINOR_VERISON}.0
 
 SUBMISSION_MAJOR=`echo $RC_ProjectSourceVersion | awk -F'.' '{print $1}'`
 SUBMISSION_MINOR=`echo $RC_ProjectSourceVersion | awk -F'.' '{print $2}'`
@@ -171,7 +172,7 @@ $CMAKE -G 'Ninja' -C $CACHE_FILE \
     -DLLVM_TABLEGEN=$OBJROOT/obj-llvm-native/bin/llvm-tblgen \
     -DCLANG_TABLEGEN=$OBJROOT/obj-llvm-native/bin/clang-tblgen \
     -DCMAKE_INSTALL_PREFIX=$TOOLCHAIN_USR \
-    -DPACKAGE_VERSION=$FULL_VER \
+    -DPACKAGE_VERSION=$CLANG_VERSION \
     -DLLVM_VERSION_MAJOR=$SUBMISSION_MAJOR \
     -DLLVM_VERSION_MINOR=$SUBMISSION_MINOR \
     -DLLVM_VERSION_PATCH=$SUBMISSION_PATCH \
@@ -216,7 +217,7 @@ if [ "$BUILDING_HOST" = "YES" ]; then
       $CMAKE_OPTS \
       -DCMAKE_BUILD_TYPE=Release \
       -DLLVM_CONFIG_PATH=$OBJROOT/obj-llvm-native/bin/llvm-config \
-      -DCMAKE_INSTALL_PREFIX=$TOOLCHAIN_USR/lib/clang/$FULL_VER/ \
+      -DCMAKE_INSTALL_PREFIX=$TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/ \
       -DCMAKE_C_COMPILER=$TOOLCHAIN_USR/bin/clang \
       -DCMAKE_CXX_COMPILER=$TOOLCHAIN_USR/bin/clang++ \
       "$LLVM_SRCROOT/projects/compiler-rt" \
@@ -262,8 +263,8 @@ install -m 0444 $LLVM_SRCROOT/tools/clang/include/clang-c/module.modulemap $TOOL
 install  $LLVM_SRCROOT/utils/clang-parse-diagnostics-file $DSTROOT/usr/local/bin/clang-parse-diagnostics-file
 rm -rf $TOOLCHAIN_USR/share/clang
 rm -rf $TOOLCHAIN_USR/include/c++/v1/support/
-rm $TOOLCHAIN_USR/lib/clang/$FULL_VER/asan_blacklist.txt
-rm $TOOLCHAIN_USR/lib/clang/$FULL_VER/cfi_blacklist.txt
+rm $TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/asan_blacklist.txt
+rm $TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/cfi_blacklist.txt
 echo 1 > $OBJROOT/enable_objc_gc
 install -m 0444 $OBJROOT/enable_objc_gc $TOOLCHAIN_USR/local/lib/clang/enable_objc_gc
 echo 1 > $OBJROOT/ignore_mrc_weak
