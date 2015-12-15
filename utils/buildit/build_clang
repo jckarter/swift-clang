@@ -48,9 +48,9 @@ else
   IB_ROOT=$LLVM_SRCROOT/tools/clang/utils/ib
 fi
 
-MAJOR_VERISON=`echo $CLANG_VERSION | awk -F'.' '{print $1}'`
-MINOR_VERISON=`echo $CLANG_VERSION | awk -F'.' '{print $2}'`
-MAJ_MIN_VER=${MAJOR_VERISON}.${MINOR_VERISON}
+MAJOR_VERSION=`echo $CLANG_VERSION | awk -F'.' '{print $1}'`
+MINOR_VERSION=`echo $CLANG_VERSION | awk -F'.' '{print $2}'`
+MAJ_MIN_VER=${MAJOR_VERSION}.${MINOR_VERSION}
 
 SUBMISSION_MAJOR=`echo $RC_ProjectSourceVersion | awk -F'.' '{print $1}'`
 SUBMISSION_MINOR=`echo $RC_ProjectSourceVersion | awk -F'.' '{print $2}'`
