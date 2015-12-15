@@ -302,10 +302,13 @@ rm -rf * || exit 1
 # Save .dSYM files
 cd $PREFIX || exit 1
 if [ "$BUILDING_HOST" = "YES" ]; then
-  find $OBJROOT/obj-llvm/tools/clang/bootstrap-bins/ -name \*.dSYM -exec cp -r {} $SYMROOT/ \; || exit 1
+  OBJECT_DIR=$OBJROOT/obj-llvm/tools/clang/bootstrap-bins/
 else
-  find $OBJROOT/obj-llvm/ -name \*.dSYM -exec cp -r {} $SYMROOT/ \; || exit 1
+  OBJECT_DIR=$OBJROOT/obj-llvm/
 fi
+
+find $OBJECT_DIR -name \*.dSYM -exec cp -r {} $SYMROOT/ \; || exit 1
+find $OBJECT_DIR -type f -perm +111 -exec cp -r {} $SYMROOT/ \; || exit 1
 
 chgrp -h -R wheel $DSTROOT
 chgrp -R wheel $DSTROOT
