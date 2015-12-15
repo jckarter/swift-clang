@@ -648,6 +648,10 @@ if (CLANG_ENABLE_BOOTSTRAP)
     COMMENT "Clobberring bootstrap build and stamp directories"
     )
 
+  if(CMAKE_VERBOSE_MAKEFILE)
+    set(verbose -DCMAKE_VERBOSE_MAKEFILE=On)
+  endif()
+
   ExternalProject_Add(bootstrap
     DEPENDS clang ${LTO_DEP}
     PREFIX bootstrap
@@ -670,7 +674,7 @@ if (CLANG_ENABLE_BOOTSTRAP)
                 -DCMAKE_C_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang
                 -DCMAKE_ASM_COMPILER=${LLVM_RUNTIME_OUTPUT_INTDIR}/clang
                 -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
-                ${LTO_LIBRARY} ${LTO_AR} ${LTO_RANLIB}
+                ${LTO_LIBRARY} ${LTO_AR} ${LTO_RANLIB} ${verbose}
     INSTALL_COMMAND ""
     STEP_TARGETS configure build
     ${cmake_3_4_USES_TERMINAL_OPTIONS}
