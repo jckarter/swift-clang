@@ -156,7 +156,7 @@ cd $OBJROOT/obj-llvm || exit 1
 
 if [ "$BUILDING_HOST" = "YES" ]; then
   CACHE_FILE=$LLVM_SRCROOT/tools/clang/cmake/caches/Apple-stage1.cmake
-  BUILD_TARGET=bootstrap-install
+  BUILD_TARGET=stage2-install
 else
   CACHE_FILE=$LLVM_SRCROOT/tools/clang/cmake/caches/Apple-device.cmake
   BUILD_TARGET=install
@@ -203,7 +203,7 @@ fi
 
 $NINJA -v $BUILD_TARGET
 if ! test $? == 0 ; then
-    echo "error: LLVM 'ninja bootstrap-install' failed!"
+    echo "error: LLVM 'ninja stage2-install' failed!"
     exit 1
 fi
 
@@ -240,7 +240,7 @@ mkdir -p $TOOLCHAIN_USR/share/man/man1/
 mkdir -p $DSTROOT/usr/local/bin/
 
 # fixup bin
-cp $OBJROOT/obj-llvm/tools/clang/bootstrap-bins/bin/c-index-test $TOOLCHAIN_USR/local/bin/
+cp $OBJROOT/obj-llvm/tools/clang/stage2-bins/bin/c-index-test $TOOLCHAIN_USR/local/bin/
 mv $TOOLCHAIN_USR/bin/clang-format $TOOLCHAIN_USR/local/bin/
 rm $TOOLCHAIN_USR/bin/git-clang-format
 rm $TOOLCHAIN_USR/bin/clang-check
@@ -303,7 +303,7 @@ rm -rf * || exit 1
 # Save .dSYM files
 cd $PREFIX || exit 1
 if [ "$BUILDING_HOST" = "YES" ]; then
-  OBJECT_DIR=$OBJROOT/obj-llvm/tools/clang/bootstrap-bins/
+  OBJECT_DIR=$OBJROOT/obj-llvm/tools/clang/stage2-bins/
 else
   OBJECT_DIR=$OBJROOT/obj-llvm/
 fi
