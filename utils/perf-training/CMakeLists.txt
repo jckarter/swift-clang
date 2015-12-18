@@ -7,6 +7,21 @@ if(LLVM_BUILD_INSTRUMENTED)
 
   string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} CLANG_TOOLS_DIR ${LLVM_RUNTIME_OUTPUT_INTDIR})
 
+  if(APPLE)
+    # Apple Internal-only change. This is to support a PCH used in one of our tests
+    execute_process(
+      COMMAND xcodebuild -version -sdk macosx Path
+      OUTPUT_VARIABLE sdkroot
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_FILE /dev/null
+    )
+
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch
+      COMMAND $<TARGET_FILE:clang> -isysroot ${sdkroot} -x objective-c-header ${CMAKE_CURRENT_SOURCE_DIR}/AppleInternal/Cocoa_Prefix.h -o ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch)
+    add_custom_target(Cocoa_Prefix_Precompiled
+      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch)
+  endif()
+
   configure_lit_site_cfg(
     ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.in
     ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
@@ -14,7 +29,7 @@ if(LLVM_BUILD_INSTRUMENTED)
 
   add_lit_testsuite(generate-profraw "Generating clang PGO data"
     ${CMAKE_CURRENT_BINARY_DIR}
-    DEPENDS clang clear-profraw
+    DEPENDS clang clear-profraw Cocoa_Prefix_Precompiled
     )
 
   add_custom_target(clear-profraw
