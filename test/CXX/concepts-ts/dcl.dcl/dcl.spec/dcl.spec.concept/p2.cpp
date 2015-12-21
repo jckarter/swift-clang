@@ -1,5 +1,4 @@
 // RUN:  %clang_cc1 -std=c++14 -fconcepts-ts -x c++ -verify %s
-// REQUIRES: tls
 
 // XFAIL: *
 
