@@ -2872,7 +2872,7 @@ bool Sema::SemaBuiltinOSLogFormat(CallExpr *TheCall) {
   bool IsSizeCall = BuiltinID == Builtin::BI__builtin_os_log_format_buffer_size;
     
   unsigned NumArgs = TheCall->getNumArgs();
-  unsigned NumRequiredArgs = IsSizeCall ? 2 : 1;
+  unsigned NumRequiredArgs = IsSizeCall ? 1 : 2;
   if (NumArgs < NumRequiredArgs) {
     return Diag(TheCall->getLocEnd(),
                 diag::err_typecheck_call_too_few_args)
@@ -2897,8 +2897,9 @@ bool Sema::SemaBuiltinOSLogFormat(CallExpr *TheCall) {
     TheCall->setArg(i, Arg.get());
     i++;
   }
-  
+
   // Check string literal arg.
+  unsigned FormatIdx = i;
   {
     ExprResult Arg = CheckOSLogFormatStringArg(TheCall->getArg(i));
     if (Arg.isInvalid()) return true;
@@ -2906,22 +2907,12 @@ bool Sema::SemaBuiltinOSLogFormat(CallExpr *TheCall) {
     i++;
   }
 
-  // Check formatting specifiers. NOTE: We're only doing this for the non-size
-  // call to avoid duplicate diagnostics.
-  if (!IsSizeCall) {
-    llvm::SmallBitVector CheckedVarArgs(NumArgs, false);
-    ArrayRef<const Expr *> Args(TheCall->getArgs(), TheCall->getNumArgs());
-    bool Success = CheckFormatArguments(Args, /*HasVAListArg*/false,
-                                        /*format_idx*/i - 1, /*firstDataArg*/i, 
-                                        FST_OSLog, VariadicFunction,
-                                        TheCall->getLocStart(), SourceRange(),
-                                        CheckedVarArgs);
-    if (!Success) return true;
-  }
-
   // Make sure variadic args are scalar.
+  unsigned FirstDataArg = i;
   while (i < NumArgs) {
-    ExprResult Arg = DefaultLvalueConversion(TheCall->getArg(i));
+    ExprResult Arg = DefaultVariadicArgumentPromotion(TheCall->getArg(i),
+                                                      VariadicFunction,
+                                                      nullptr);
     if (Arg.isInvalid()) return true;
     CharUnits ArgSize = Context.getTypeSizeInChars(Arg.get()->getType());
     if (ArgSize.getQuantity() >= 0x100) {
@@ -2934,6 +2925,19 @@ bool Sema::SemaBuiltinOSLogFormat(CallExpr *TheCall) {
     i++;
   }
   
+  // Check formatting specifiers. NOTE: We're only doing this for the non-size
+  // call to avoid duplicate diagnostics.
+  if (!IsSizeCall) {
+    llvm::SmallBitVector CheckedVarArgs(NumArgs, false);
+    ArrayRef<const Expr *> Args(TheCall->getArgs(), TheCall->getNumArgs());
+    bool Success = CheckFormatArguments(Args, /*HasVAListArg*/false, FormatIdx,
+                                        FirstDataArg, FST_OSLog,
+                                        VariadicFunction,
+                                        TheCall->getLocStart(), SourceRange(),
+                                        CheckedVarArgs);
+    if (!Success) return true;
+  }
+
   if (IsSizeCall) {
     TheCall->setType(Context.getSizeType());
   } else {

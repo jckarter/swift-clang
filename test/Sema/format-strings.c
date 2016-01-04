@@ -631,4 +631,8 @@ void test_os_log_format(char c, const char *pc, int i, int *pi, void *p, void *b
 
   printf("%{private}s", pc); // expected-warning {{using 'private' format specifier annotation outside of os_log()/os_trace()}}
   __builtin_os_log_format(buf, "%{private}s", pc);
+
+  // <rdar://problem/23835805>
+  __builtin_os_log_format_buffer_size("no-args");
+  __builtin_os_log_format(buf, "%s", "hi");
 }
