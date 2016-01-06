@@ -943,8 +943,8 @@ static void getARMTargetFeatures(const ToolChain &TC,
     Features.push_back("+no-movt");
 }
 
-void Clang::AddARMTargetArgs(const llvm::Triple &Triple, const ArgList &Args,
-                             ArgStringList &CmdArgs, bool KernelOrKext) const {
+void Clang::AddARMABIArgs(const llvm::Triple &Triple, const ArgList &Args,
+                          ArgStringList &CmdArgs) const {
   // Select the ABI to use.
   // FIXME: Support -meabi.
   // FIXME: Parts of this are duplicated in the backend, unify this somehow.
@@ -1003,6 +1003,11 @@ void Clang::AddARMTargetArgs(const llvm::Triple &Triple, const ArgList &Args,
     CmdArgs.push_back("-mfloat-abi");
     CmdArgs.push_back("hard");
   }
+}
+
+void Clang::AddARMTargetArgs(const llvm::Triple &Triple, const ArgList &Args,
+                             ArgStringList &CmdArgs, bool KernelOrKext) const {
+  AddARMABIArgs(Triple, Args, CmdArgs);
 
   // Forward the -mglobal-merge option for explicit control over the pass.
   if (Arg *A = Args.getLastArg(options::OPT_mglobal_merge,
@@ -3744,42 +3749,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     case llvm::Triple::armeb:
     case llvm::Triple::thumb:
     case llvm::Triple::thumbeb:
-      {
-        StringRef MArch, MCPU;
-        getARMArchCPUFromArgs(Args, MArch, MCPU);
-        std::string CPUName = arm::getARMTargetCPU(MCPU, MArch, Triple);
-        if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ)) {
-          ABIName = A->getValue();
-        } else {
-          if (Triple.getEnvironment() == llvm::Triple::EABI ||
-              StringRef(CPUName).startswith("cortex-m")) {
-            ABIName = "aapcs";
-          } else if (Triple.getArchName().endswith("v7k")) {
-            ABIName = "apcs-vfp";
-          } else {
-            ABIName = "apcs-gnu";
-          }
-        }
-        CmdArgs.push_back("-target-abi");
-        CmdArgs.push_back(ABIName);
-
-        // Determine floating point ABI from the options & target defaults.
-        arm::FloatABI CurrentFloatABI =
-            tools::arm::getARMFloatABI(getToolChain(), Args);
-        if (CurrentFloatABI == arm::FloatABI::Soft) {
-          CmdArgs.push_back("-msoft-float");
-          CmdArgs.push_back("-mfloat-abi");
-          CmdArgs.push_back("soft");
-        } else if (CurrentFloatABI == arm::FloatABI::SoftFP) {
-          CmdArgs.push_back("-mfloat-abi");
-          CmdArgs.push_back("soft");
-        } else {
-          assert(CurrentFloatABI == arm::FloatABI::Hard && "Invalid float abi!");
-          CmdArgs.push_back("-mfloat-abi");
-          CmdArgs.push_back("hard");
-        }
-
-      }
+      AddARMABIArgs(Triple, Args, CmdArgs);
       break;
     case llvm::Triple::aarch64:
     case llvm::Triple::aarch64_be:

@@ -62,6 +62,9 @@ private:
 
   void AddAArch64TargetArgs(const llvm::opt::ArgList &Args,
                             llvm::opt::ArgStringList &CmdArgs) const;
+  void AddARMABIArgs(const llvm::Triple &Triple,
+                     const llvm::opt::ArgList &Args,
+                     llvm::opt::ArgStringList &CmdArgs) const;
   void AddARMTargetArgs(const llvm::Triple &Triple,
                         const llvm::opt::ArgList &Args,
                         llvm::opt::ArgStringList &CmdArgs,

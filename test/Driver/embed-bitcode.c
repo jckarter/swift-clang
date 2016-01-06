@@ -96,3 +96,18 @@
 // RUN:   | FileCheck %s -check-prefix=CHECK-ARM-OPTIONS
 // CHECK-ARM-OPTIONS: .section __LLVM,__cmdline
 // CHECK-ARM-OPTIONS: -triple\000thumbv7-apple-ios8.0.0\000-S\000-disable-llvm-optzns\000-mdisable-tail-calls\000-mlimit-float-precision\00016\000-menable-no-infs\000-menable-no-nans\000-menable-unsafe-fp-math\000-fno-signed-zeros\000-freciprocal-math\000-ffp-contract=fast\000-target-abi\000aapcs\000-mfloat-abi\000soft\000-O0
+
+// RUN: %clang -target x86_64-apple-darwin -arch armv7k -fembed-bitcode %s -### 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=CHECK-ARMV7K-ABI
+// CHECK-ARMV7K-ABI: "-target-abi" "aapcs16"
+// CHECK-ARMv7K-ABI: "-mfloat-abi" "hard"
+
+// RUN: %clang -target x86_64-apple-darwin -arch armv7s -fembed-bitcode %s -### 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=CHECK-ARMV7S-ABI
+// CHECK-ARMV7S-ABI: "-target-feature" "+soft-float-abi"
+// CHECK-ARMV7S-ABI: "-target-abi" "apcs-gnu"
+// CHECK-ARMv7S-ABI: "-mfloat-abi" "soft"
+
+// RUN: %clang -target x86_64-apple-darwin -arch armv7s -mcpu=cortex-m3 -fembed-bitcode %s -### 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=CHECK-ARMV7S-ABI
+
