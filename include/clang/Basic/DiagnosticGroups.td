@@ -617,6 +617,7 @@ def Most : DiagGroup<"most", [
     CharSubscript,
     Comment,
     DeleteNonVirtualDtor,
+    ForLoopAnalysis,
     Format,
     Implicit,
     InfiniteRecursion,
