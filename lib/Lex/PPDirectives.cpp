@@ -611,8 +611,6 @@ const FileEntry *Preprocessor::LookupFile(
     SmallVectorImpl<char> *RelativePath,
     ModuleMap::KnownHeader *SuggestedModule,
     bool SkipCache) {
-  Module *RequestingModule = getModuleForLocation(FilenameLoc); 
-
   // If the header lookup mechanism may be relative to the current inclusion
   // stack, record the parent #includes.
   SmallVector<std::pair<const FileEntry *, const DirectoryEntry *>, 16>
@@ -665,8 +663,8 @@ const FileEntry *Preprocessor::LookupFile(
     const DirectoryLookup *TmpFromDir = nullptr;
     while (const FileEntry *FE = HeaderInfo.LookupFile(
                Filename, FilenameLoc, isAngled, TmpFromDir, TmpCurDir,
-               Includers, SearchPath, RelativePath, RequestingModule,
-               SuggestedModule, SkipCache)) {
+               Includers, SearchPath, RelativePath, SuggestedModule,
+               SkipCache)) {
       // Keep looking as if this file did a #include_next.
       TmpFromDir = TmpCurDir;
       ++TmpFromDir;
@@ -682,11 +680,11 @@ const FileEntry *Preprocessor::LookupFile(
   // Do a standard file entry lookup.
   const FileEntry *FE = HeaderInfo.LookupFile(
       Filename, FilenameLoc, isAngled, FromDir, CurDir, Includers, SearchPath,
-      RelativePath, RequestingModule, SuggestedModule, SkipCache);
+      RelativePath, SuggestedModule, SkipCache);
   if (FE) {
     if (SuggestedModule && !LangOpts.AsmPreprocessor)
       HeaderInfo.getModuleMap().diagnoseHeaderInclusion(
-          RequestingModule, FilenameLoc, Filename, FE);
+          getModuleForLocation(FilenameLoc), FilenameLoc, Filename, FE);
     return FE;
   }
 
@@ -698,11 +696,10 @@ const FileEntry *Preprocessor::LookupFile(
     if ((CurFileEnt = CurPPLexer->getFileEntry())) {
       if ((FE = HeaderInfo.LookupSubframeworkHeader(Filename, CurFileEnt,
                                                     SearchPath, RelativePath,
-                                                    RequestingModule,
                                                     SuggestedModule))) {
         if (SuggestedModule && !LangOpts.AsmPreprocessor)
           HeaderInfo.getModuleMap().diagnoseHeaderInclusion(
-              RequestingModule, FilenameLoc, Filename, FE);
+              getModuleForLocation(FilenameLoc), FilenameLoc, Filename, FE);
         return FE;
       }
     }
@@ -714,10 +711,10 @@ const FileEntry *Preprocessor::LookupFile(
       if ((CurFileEnt = ISEntry.ThePPLexer->getFileEntry())) {
         if ((FE = HeaderInfo.LookupSubframeworkHeader(
                 Filename, CurFileEnt, SearchPath, RelativePath,
-                RequestingModule, SuggestedModule))) {
+                SuggestedModule))) {
           if (SuggestedModule && !LangOpts.AsmPreprocessor)
             HeaderInfo.getModuleMap().diagnoseHeaderInclusion(
-                RequestingModule, FilenameLoc, Filename, FE);
+                getModuleForLocation(FilenameLoc), FilenameLoc, Filename, FE);
           return FE;
         }
       }
