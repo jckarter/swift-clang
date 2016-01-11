@@ -247,6 +247,9 @@ rm $TOOLCHAIN_USR/bin/clang-check
 rm $TOOLCHAIN_USR/bin/clang
 mv $TOOLCHAIN_USR/bin/clang-$MAJ_MIN_VER $TOOLCHAIN_USR/bin/clang
 
+# fixup share
+rm -rf $TOOLCHAIN_USR/usr/share/scan-view/
+
 # fixup headers
 mv $TOOLCHAIN_USR/include/llvm-c $TOOLCHAIN_USR/local/include/llvm-c
 mv $TOOLCHAIN_USR/include/clang-c $TOOLCHAIN_USR/local/include/clang-c
