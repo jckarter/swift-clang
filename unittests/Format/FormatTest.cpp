@@ -1022,6 +1022,15 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
                    "  lineWith(); // comment\n"
                    "  // at start\n"
                    "}"));
+  EXPECT_EQ("int xy; // a\n"
+            "int z;  // b",
+            format("int xy;    // a\n"
+                   "int z;    //b"));
+  EXPECT_EQ("int xy; // a\n"
+            "int z; // bb",
+            format("int xy;    // a\n"
+                   "int z;    //bb",
+                   getLLVMStyleWithColumns(12)));
 
   verifyFormat("#define A                                                  \\\n"
                "  int i; /* iiiiiiiiiiiiiiiiiiiii */                       \\\n"
@@ -5492,7 +5501,7 @@ TEST_F(FormatTest, UnderstandsOverloadedOperators) {
   verifyFormat("template <typename AAAAAAA, typename BBBBBBB>\n"
                "AAAAAAA operator/(const AAAAAAA &a, BBBBBBB &b);");
   verifyFormat("aaaaaaaaaaaaaaaaaaaaaa operator,(\n"
-               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) const;");
+               "    aaaaaaaaaaaaaaaaaaaaa &aaaaaaaaaaaaaaaaaaaaaaaaaa) const;");
 
   verifyFormat(
       "ostream &operator<<(ostream &OutputStream,\n"
