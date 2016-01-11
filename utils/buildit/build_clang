@@ -247,11 +247,6 @@ rm $TOOLCHAIN_USR/bin/clang-check
 rm $TOOLCHAIN_USR/bin/clang
 mv $TOOLCHAIN_USR/bin/clang-$MAJ_MIN_VER $TOOLCHAIN_USR/bin/clang
 
-# fixup lib
-rm $TOOLCHAIN_USR/lib/libLTO.dylib
-rm $TOOLCHAIN_USR/lib/libLTO.$SUB_MAJ_MIN_VER.dylib
-mv $TOOLCHAIN_USR/lib/libLTO.$RC_ProjectSourceVersion.dylib $TOOLCHAIN_USR/lib/libLTO.dylib
-
 # fixup headers
 mv $TOOLCHAIN_USR/include/llvm-c $TOOLCHAIN_USR/local/include/llvm-c
 mv $TOOLCHAIN_USR/include/clang-c $TOOLCHAIN_USR/local/include/clang-c
