@@ -6032,11 +6032,6 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
       } else
         Diag(D.getDeclSpec().getThreadStorageClassSpecLoc(),
              diag::err_thread_unsupported);
-    } else if (TSCS == DeclSpec::TSCS_thread_local &&
-             Context.getTargetInfo().getTriple().isOSDarwin()) {
-      // C++11 thread_local is unsupported on Darwin
-      Diag(D.getDeclSpec().getThreadStorageClassSpecLoc(),
-           diag::err_thread_unsupported);
     } else
       NewVD->setTSCSpec(TSCS);
   }
