@@ -284,11 +284,12 @@ ln -sf clang.1 clang++.1
 ln -sf clang++.1 c++.1
 ln -sf llvm-cov.1 gcov.1
 
-# symlink dsymutil and gcov
+# symlink dsymutil, gcov and objdump
 cd $TOOLCHAIN_USR/bin
 
 ln -s llvm-dsymutil dsymutil
 ln -s llvm-cov gcov
+ln -s llvm-objdump objdump
 
 cd $SYMROOT || exit 1
 
