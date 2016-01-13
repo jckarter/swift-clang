@@ -4203,13 +4203,22 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
                                                   specifierLen);
   }
 
-  // Check for use of private annotation outside of os_log().
-  if (FSType != Sema::FST_OSLog && FS.isPrivate().isSet()) {
-    EmitFormatDiagnostic(
-      S.PDiag(diag::warn_format_invalid_private),
-      getLocationOfByte(FS.isPrivate().getPosition()),
-      /*IsStringLocation*/false,
-      getSpecifierRange(startSpecifier, specifierLen));
+  // Check for use of public/private annotation outside of os_log().
+  if (FSType != Sema::FST_OSLog) {
+    if (FS.isPublic().isSet()) {
+      EmitFormatDiagnostic(
+        S.PDiag(diag::warn_format_invalid_annotation) << "public",
+        getLocationOfByte(FS.isPublic().getPosition()),
+        /*IsStringLocation*/false,
+        getSpecifierRange(startSpecifier, specifierLen));
+    }
+    if (FS.isPrivate().isSet()) {
+      EmitFormatDiagnostic(
+        S.PDiag(diag::warn_format_invalid_annotation) << "private",
+        getLocationOfByte(FS.isPrivate().getPosition()),
+        /*IsStringLocation*/false,
+        getSpecifierRange(startSpecifier, specifierLen));
+    }
   }
 
   // Check for invalid use of field width

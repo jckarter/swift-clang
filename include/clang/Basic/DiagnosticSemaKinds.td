@@ -7077,8 +7077,8 @@ def warn_format_non_standard: Warning<
 def warn_format_non_standard_conversion_spec: Warning<
   "using length modifier '%0' with conversion specifier '%1' is not supported by ISO C">,
   InGroup<FormatNonStandard>, DefaultIgnore;
-def warn_format_invalid_private : Warning<
-  "using 'private' format specifier annotation outside of os_log()/os_trace()">,
+def warn_format_invalid_annotation : Warning<
+  "using '%0' format specifier annotation outside of os_log()/os_trace()">,
   InGroup<Format>;
 def warn_format_P_no_precision : Warning<
   "using '%%P' format specifier without precision">,

@@ -272,11 +272,11 @@ void test_builtin_os_log(void *buf, int i, const char *data) {
   // CHECK: store i8* [[DATA]], i8** [[DATA_ADDR:%.*]], align 8
 
   // CHECK: store volatile i32 34
-  len = __builtin_os_log_format_buffer_size("%d %s %.16P", i, data, data);
+  len = __builtin_os_log_format_buffer_size("%d %{public}s %{private}.16P", i, data, data);
 
   // CHECK: [[BUF2:%.*]] = load i8*, i8** [[BUF_ADDR]]
   // CHECK: [[SUMMARY:%.*]] = getelementptr i8, i8* [[BUF2]], i64 0
-  // CHECK: store i8 2, i8* [[SUMMARY]]
+  // CHECK: store i8 3, i8* [[SUMMARY]]
   // CHECK: [[NUM_ARGS:%.*]] = getelementptr i8, i8* [[BUF2]], i64 1
   // CHECK: store i8 4, i8* [[NUM_ARGS]]
   //
@@ -290,7 +290,7 @@ void test_builtin_os_log(void *buf, int i, const char *data) {
   // CHECK: store i32 [[I2]], i32* [[ARG1_INT]]
 
   // CHECK: [[ARG2_DESC:%.*]] = getelementptr i8, i8* [[BUF2]], i64 8
-  // CHECK: store i8 32, i8* [[ARG2_DESC]]
+  // CHECK: store i8 34, i8* [[ARG2_DESC]]
   // CHECK: [[ARG2_SIZE:%.*]] = getelementptr i8, i8* [[BUF2]], i64 9
   // CHECK: store i8 8, i8* [[ARG2_SIZE]]
   // CHECK: [[ARG2:%.*]] = getelementptr i8, i8* [[BUF2]], i64 10 
@@ -299,7 +299,7 @@ void test_builtin_os_log(void *buf, int i, const char *data) {
   // CHECK: store i8* [[DATA2]], i8** [[ARG2_PTR]]
 
   // CHECK: [[ARG3_DESC:%.*]] = getelementptr i8, i8* [[BUF2]], i64 18
-  // CHECK: store i8 16, i8* [[ARG3_DESC]]
+  // CHECK: store i8 17, i8* [[ARG3_DESC]]
   // CHECK: [[ARG3_SIZE:%.*]] = getelementptr i8, i8* [[BUF2]], i64 19
   // CHECK: store i8 4, i8* [[ARG3_SIZE]]
   // CHECK: [[ARG3:%.*]] = getelementptr i8, i8* [[BUF2]], i64 20
@@ -307,7 +307,7 @@ void test_builtin_os_log(void *buf, int i, const char *data) {
   // CHECK: store i32 16, i32* [[ARG3_INT]]
 
   // CHECK: [[ARG4_DESC:%.*]] = getelementptr i8, i8* [[BUF2]], i64 24
-  // CHECK: store i8 48, i8* [[ARG4_DESC]]
+  // CHECK: store i8 49, i8* [[ARG4_DESC]]
   // CHECK: [[ARG4_SIZE:%.*]] = getelementptr i8, i8* [[BUF2]], i64 25
   // CHECK: store i8 8, i8* [[ARG4_SIZE]]
   // CHECK: [[ARG4:%.*]] = getelementptr i8, i8* [[BUF2]], i64 26
@@ -315,7 +315,7 @@ void test_builtin_os_log(void *buf, int i, const char *data) {
   // CHECK: [[DATA3:%.*]] = load i8*, i8** [[DATA_ADDR]]
   // CHECK: store i8* [[DATA3]], i8** [[ARG4_PTR]]
 
-  __builtin_os_log_format(buf, "%d %s %.16P", i, data, data);
+  __builtin_os_log_format(buf, "%d %{public}s %{private}.16P", i, data, data);
 }
 
 #endif

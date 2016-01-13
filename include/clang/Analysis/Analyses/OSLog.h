@@ -48,25 +48,33 @@ public:
     ObjCObjKind
   };
 
+  enum {
+    // The item is marked "private" in the format string.
+    IsPrivate = 0x1,
+
+    // The item is marked "public" in the format string.
+    IsPublic = 0x2
+  };
+
 private:
   Kind TheKind = ScalarKind;
   const Expr *TheExpr = nullptr;
   CharUnits ConstValue;
   CharUnits Size; // size of the data, not including the header bytes
-  bool IsPrivate = false;
+  unsigned Flags = 0;
 
 public:
-  OSLogBufferItem(Kind kind, const Expr *expr, CharUnits size,
-                  bool isPrivate = false)
-    : TheKind(kind), TheExpr(expr), Size(size), IsPrivate(isPrivate) {}
+  OSLogBufferItem(Kind kind, const Expr *expr, CharUnits size, unsigned flags)
+    : TheKind(kind), TheExpr(expr), Size(size), Flags(flags) {}
 
-  OSLogBufferItem(ASTContext &Ctx, CharUnits value, bool isPrivate = false)
+  OSLogBufferItem(ASTContext &Ctx, CharUnits value, unsigned flags)
     : TheKind(CountKind), ConstValue(value),
-      Size(Ctx.getTypeSizeInChars(Ctx.IntTy)), IsPrivate(isPrivate) {}
+      Size(Ctx.getTypeSizeInChars(Ctx.IntTy)), Flags(flags) {}
 
   unsigned char getDescriptorByte() const {
     unsigned char result = 0;
     if (getIsPrivate()) result |= 0x01;
+    if (getIsPublic()) result |= 0x02;
     result |= ((unsigned)getKind()) << 4;
     return result;
   }
@@ -76,7 +84,8 @@ public:
   }
 
   Kind getKind() const { return TheKind; }
-  bool getIsPrivate() const { return IsPrivate; }
+  bool getIsPrivate() const { return (Flags & IsPrivate) != 0; }
+  bool getIsPublic() const { return (Flags & IsPublic) != 0; }
 
   const Expr *getExpr() const { return TheExpr; }
   CharUnits getConstValue() const { return ConstValue; }
@@ -100,6 +109,11 @@ public:
   bool getHasPrivateItems() const {
     return std::any_of(Items.begin(), Items.end(),
       [](const OSLogBufferItem &item) { return item.getIsPrivate(); });
+  }
+
+  bool getHasPublicItems() const {
+    return std::any_of(Items.begin(), Items.end(),
+      [](const OSLogBufferItem &item) { return item.getIsPublic(); });
   }
 
   bool getHasNonScalar() const {

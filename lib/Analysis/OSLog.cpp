@@ -21,12 +21,12 @@ private:
   ArrayRef<const Expr *> Args;
   SmallVector<Optional<OSLogBufferItem::Kind>, 4> ArgKind;
   SmallVector<Optional<unsigned>, 4> ArgSize;
-  llvm::SmallBitVector ArgIsPrivate;
+  SmallVector<unsigned char, 4> ArgFlags;
 
 public:
   OSLogFormatStringHandler(ArrayRef<const Expr *> args)
     : FormatStringHandler(), Args(args), ArgKind(args.size(), None),
-      ArgSize(args.size(), None), ArgIsPrivate(args.size(), false)
+      ArgSize(args.size(), None), ArgFlags(args.size(), 0)
   {}
 
   virtual bool HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
@@ -90,7 +90,12 @@ public:
       break;
     }
 
-    ArgIsPrivate[argIndex] = (bool)FS.isPrivate();
+    if (FS.isPrivate()) {
+      ArgFlags[argIndex] |= OSLogBufferItem::IsPrivate;
+    }
+    if (FS.isPublic()) {
+      ArgFlags[argIndex] |= OSLogBufferItem::IsPublic;
+    }
     return true;
   }
 
@@ -100,14 +105,14 @@ public:
       const Expr *arg = Args[i];
       if (ArgSize[i]) {
         layout.Items.emplace_back(Ctx, CharUnits::fromQuantity(*ArgSize[i]),
-                                  ArgIsPrivate[i]);
+                                  ArgFlags[i]);
       }
       CharUnits size = Ctx.getTypeSizeInChars(arg->getType());
       if (ArgKind[i]) {
-        layout.Items.emplace_back(*ArgKind[i], arg, size, ArgIsPrivate[i]);
+        layout.Items.emplace_back(*ArgKind[i], arg, size, ArgFlags[i]);
       } else {
         layout.Items.emplace_back(OSLogBufferItem::ScalarKind, arg, size,
-                                  ArgIsPrivate[i]);
+                                  ArgFlags[i]);
       }
     }
   }
