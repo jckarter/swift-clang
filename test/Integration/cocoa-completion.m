@@ -9,6 +9,10 @@ void foo() {
 
 // FIXME: it would be great to test more of Cocoa, but it's too slow.
 
+// FIXME: We fail to find the resource-dir when libclang is built statically.
+// rdar://problem/24142671
+// REQUIRES: disabled
+
 // CHECK-TOP-LEVEL: macro definition:{TypedText EOF} (70)
 // CHECK-TOP-LEVEL: TypedefDecl:{TypedText FILE} (50)
 // CHECK-TOP-LEVEL: ObjCInterfaceDecl:{TypedText NSObject} (50)
