@@ -16,6 +16,7 @@ set(LLVM_ENABLE_BACKTRACES OFF CACHE BOOL "")
 set(LLVM_EXTERNALIZE_DEBUGINFO ON CACHE BOOL "")
 set(CLANG_PLUGIN_SUPPORT OFF CACHE BOOL "")
 set(CLANG_BOOTSTRAP_PASSTHROUGH CLANG_ORDER_FILE LLVM_PROFDATA_FILE CACHE STRING "")
+set(BUG_REPORT_URL "http://developer.apple.com/bugreporter/" CACHE STRING "")
 
 set(CMAKE_C_FLAGS "-fno-stack-protector -fno-common -Wno-profile-instr-unprofiled" CACHE STRING "")
 set(CMAKE_CXX_FLAGS "-fno-stack-protector -fno-common -Wno-profile-instr-unprofiled" CACHE STRING "")
