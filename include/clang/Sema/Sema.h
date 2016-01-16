@@ -1487,9 +1487,8 @@ public:
 
   ParsedType getTypeName(const IdentifierInfo &II, SourceLocation NameLoc,
                          Scope *S, CXXScopeSpec *SS = nullptr,
-                         bool isClassName = false,
-                         bool HasTrailingDot = false,
-                         ParsedType ObjectType = ParsedType(),
+                         bool isClassName = false, bool HasTrailingDot = false,
+                         ParsedType ObjectType = nullptr,
                          bool IsCtorOrDtorName = false,
                          bool WantNontrivialTypeSourceInfo = false,
                          IdentifierInfo **CorrectedII = nullptr);
