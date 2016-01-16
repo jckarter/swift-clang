@@ -216,8 +216,8 @@ namespace clang {
       Gen->HandleVTable(RD);
     }
 
-    void HandleLinkerOptionPragma(llvm::StringRef Opts) override {
-      Gen->HandleLinkerOptionPragma(Opts);
+    void HandleLinkerOption(llvm::StringRef Opts) override {
+      Gen->HandleLinkerOption(Opts);
     }
 
     void HandleDetectMismatch(llvm::StringRef Name,

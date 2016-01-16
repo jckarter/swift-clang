@@ -254,6 +254,8 @@ def dependent_lib : Joined<["--"], "dependent-lib=">,
   HelpText<"Add dependent library">;
 def fapple_kext_vtable_mitigation : Flag<["-"], "fapple-kext-vtable-mitigation">,
   HelpText<"Enable mitigation for kernel v-table exploits through null pointers">;
+def linker_option : Joined<["--"], "linker-option=">,
+  HelpText<"Add linker option">;
 def fsanitize_coverage_type : Joined<["-"], "fsanitize-coverage-type=">,
                               HelpText<"Sanitizer coverage type">;
 def fsanitize_coverage_indirect_calls
