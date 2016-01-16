@@ -18,6 +18,11 @@ set(CLANG_PLUGIN_SUPPORT OFF CACHE BOOL "")
 set(CLANG_BOOTSTRAP_PASSTHROUGH CLANG_ORDER_FILE LLVM_PROFDATA_FILE CACHE STRING "")
 set(BUG_REPORT_URL "http://developer.apple.com/bugreporter/" CACHE STRING "")
 
+# Make unit tests (if present) part of the ALL target
+set(LLVM_BUILD_TESTS ON CACHE BOOL "")
+# Don't build or run the compiler-rt tests
+set(COMPILER_RT_INCLUDE_TESTS OFF CACHE BOOL "")
+
 set(CMAKE_C_FLAGS "-fno-stack-protector -fno-common -Wno-profile-instr-unprofiled" CACHE STRING "")
 set(CMAKE_CXX_FLAGS "-fno-stack-protector -fno-common -Wno-profile-instr-unprofiled" CACHE STRING "")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -DNDEBUG" CACHE STRING "")
