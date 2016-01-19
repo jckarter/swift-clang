@@ -10,22 +10,22 @@ endif ()
 
 string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} CLANG_TOOLS_DIR ${LLVM_RUNTIME_OUTPUT_INTDIR})
 
+if(APPLE)
+  # Apple Internal-only change. This is to support a PCH used in one of our tests
+  execute_process(
+    COMMAND xcodebuild -version -sdk macosx Path
+    OUTPUT_VARIABLE sdkroot
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_FILE /dev/null
+  )
+
+  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch
+    COMMAND $<TARGET_FILE:clang> -isysroot ${sdkroot} -x objective-c-header ${CMAKE_CURRENT_SOURCE_DIR}/AppleInternal/Cocoa_Prefix.h -o ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch)
+  add_custom_target(Cocoa_Prefix_Precompiled
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch)
+endif()
+
 if(LLVM_BUILD_INSTRUMENTED)
-
-  if(APPLE)
-    # Apple Internal-only change. This is to support a PCH used in one of our tests
-    execute_process(
-      COMMAND xcodebuild -version -sdk macosx Path
-      OUTPUT_VARIABLE sdkroot
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_FILE /dev/null
-    )
-
-    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch
-      COMMAND $<TARGET_FILE:clang> -isysroot ${sdkroot} -x objective-c-header ${CMAKE_CURRENT_SOURCE_DIR}/AppleInternal/Cocoa_Prefix.h -o ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch)
-    add_custom_target(Cocoa_Prefix_Precompiled
-      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch)
-  endif()
   
   configure_lit_site_cfg(
     ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.in
@@ -64,7 +64,7 @@ if(DTRACE)
 
   add_lit_testsuite(generate-dtrace-logs "Generating clang dtrace data"
     ${CMAKE_CURRENT_BINARY_DIR}/order-files/
-    DEPENDS clang clear-dtrace-logs
+    DEPENDS clang clear-dtrace-logs Cocoa_Prefix_Precompiled
     )
 
   add_custom_target(clear-dtrace-logs
