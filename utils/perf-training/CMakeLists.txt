@@ -23,6 +23,8 @@ if(APPLE)
     COMMAND $<TARGET_FILE:clang> -isysroot ${sdkroot} -x objective-c-header ${CMAKE_CURRENT_SOURCE_DIR}/AppleInternal/Cocoa_Prefix.h -o ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch)
   add_custom_target(Cocoa_Prefix_Precompiled
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Cocoa_Prefix_Precompiled.h.gch)
+
+  set(PCH_DEP Cocoa_Prefix_Precompiled)
 endif()
 
 if(LLVM_BUILD_INSTRUMENTED)
@@ -34,7 +36,7 @@ if(LLVM_BUILD_INSTRUMENTED)
 
   add_lit_testsuite(generate-profraw "Generating clang PGO data"
     ${CMAKE_CURRENT_BINARY_DIR}/pgo-data/
-    DEPENDS clang clear-profraw Cocoa_Prefix_Precompiled
+    DEPENDS clang clear-profraw ${PCH_DEP}
     )
 
   add_custom_target(clear-profraw
@@ -64,7 +66,7 @@ if(DTRACE)
 
   add_lit_testsuite(generate-dtrace-logs "Generating clang dtrace data"
     ${CMAKE_CURRENT_BINARY_DIR}/order-files/
-    DEPENDS clang clear-dtrace-logs Cocoa_Prefix_Precompiled
+    DEPENDS clang clear-dtrace-logs ${PCH_DEP}
     )
 
   add_custom_target(clear-dtrace-logs
