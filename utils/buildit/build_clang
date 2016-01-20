@@ -96,14 +96,9 @@ if [ -e $ORDER_FILE ]; then
   ORDER_FILE_CMAKE_FLAG="-DCLANG_ORDER_FILE=$ORDER_FILE"
 fi
 
-# Figure out how many make processes to run.
-SYSCTL=`sysctl -n hw.activecpu`
-# sysctl -n hw.* does not work when invoked via B&I chroot /BuildRoot.
-# Builders can default to 2, since even if they are single processor,
-# nothing else is running on the machine.
-if [ -z "$SYSCTL" ]; then
-    SYSCTL=2
-fi
+# calculate the link pool
+mem=`sysctl hw.memsize | cut -d: -f2-`
+link_threads=`expr $mem / 3500000000`
 
 CMAKE=`xcrun -find cmake`
 NINJA=`xcrun -find ninja`
@@ -116,7 +111,9 @@ CMAKE_OPTS="\
   -DCMAKE_INSTALL_PREFIX=$PREFIX \
   -DCMAKE_MAKE_PROGRAM=$NINJA \
   -DCMAKE_CXX_COMPILER=$CXX \
-  -DCMAKE_C_COMPILER=$CC"
+  -DCMAKE_C_COMPILER=$CC \
+  -DLLVM_PARALLEL_LINK_JOBS=$link_threads \
+  -DBOOTSTRAP_LLVM_PARALLEL_LINK_JOBS=$link_threads"
 
 ################################################################################
 
