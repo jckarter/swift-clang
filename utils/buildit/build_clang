@@ -272,6 +272,7 @@ rm -rf $TOOLCHAIN_USR/share/clang
 rm -rf $TOOLCHAIN_USR/include/c++/v1/support/
 rm $TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/asan_blacklist.txt
 rm $TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/cfi_blacklist.txt
+rm -rf $TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/lib/darwin/libclang_rt.safestack_*
 echo 1 > $OBJROOT/enable_objc_gc
 install -m 0444 $OBJROOT/enable_objc_gc $TOOLCHAIN_USR/local/lib/clang/enable_objc_gc
 echo 1 > $OBJROOT/ignore_mrc_weak
