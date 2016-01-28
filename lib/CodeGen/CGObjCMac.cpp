@@ -2883,7 +2883,7 @@ PushProtocolProperties(llvm::SmallPtrSet<const IdentifierInfo*,16> &PropertySet,
                        const ObjCCommonTypesHelper &ObjCTypes) {
   for (const auto *P : Proto->protocols()) 
     PushProtocolProperties(PropertySet, Properties, Container, P, ObjCTypes);
-  for (const auto *PD : Proto->properties()) {
+  for (const auto *PD : Proto->instance_properties()) {
     if (!PropertySet.insert(PD->getIdentifier()).second)
       continue;
     llvm::Constant *Prop[] = {
@@ -2920,11 +2920,11 @@ llvm::Constant *CGObjCCommonMac::EmitPropertyList(Twine Name,
   };
   if (const ObjCInterfaceDecl *OID = dyn_cast<ObjCInterfaceDecl>(OCD))
     for (const ObjCCategoryDecl *ClassExt : OID->known_extensions())
-      for (auto *PD : ClassExt->properties()) {
+      for (auto *PD : ClassExt->instance_properties()) {
         PropertySet.insert(PD->getIdentifier());
         AddProperty(PD);
       }
-  for (const auto *PD : OCD->properties()) {
+  for (const auto *PD : OCD->instance_properties()) {
     // Don't emit duplicate metadata for properties that were already in a
     // class extension.
     if (!PropertySet.insert(PD->getIdentifier()).second)
@@ -5361,6 +5361,7 @@ ObjCTypesHelper::ObjCTypesHelper(CodeGen::CodeGenModule &cgm)
   //   char *class_name;
   //   struct _objc_method_list *instance_method;
   //   struct _objc_method_list *class_method;
+  //   struct _objc_protocol_list *protocols;
   //   uint32_t size;  // sizeof(struct _objc_category)
   //   struct _objc_property_list *instance_properties;// category's @property
   // }
