@@ -224,7 +224,8 @@ if [ "$BUILDING_HOST" = "YES" ]; then
   mkdir -p $OBJROOT/obj-rt || exit 1
   cd $OBJROOT/obj-rt|| exit 1
 
-
+  OLD_OSX_DEPLOYMENT_TARGET=OSX_DEPLOYMENT_TARGET
+  OSX_DEPLOYMENT_TARGET=
   $CMAKE -G 'Ninja' -C $LLVM_SRCROOT/projects/compiler-rt/cmake/caches/Apple.cmake \
       $CMAKE_OPTS \
       -DCMAKE_BUILD_TYPE=Release \
@@ -232,6 +233,7 @@ if [ "$BUILDING_HOST" = "YES" ]; then
       -DCMAKE_INSTALL_PREFIX=$TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/ \
       -DCMAKE_C_COMPILER=$TOOLCHAIN_USR/bin/clang \
       -DCMAKE_CXX_COMPILER=$TOOLCHAIN_USR/bin/clang++ \
+      -DCMAKE_OSX_DEPLOYMENT_TARGET=10.7 \
       "$LLVM_SRCROOT/projects/compiler-rt" \
       || exit 1
 
@@ -240,7 +242,7 @@ if [ "$BUILDING_HOST" = "YES" ]; then
       echo "error: LLVM 'ninja install (compiler-rt)' failed!"
       exit 1
   fi
-
+  OSX_DEPLOYMENT_TARGET=OLD_OSX_DEPLOYMENT_TARGET
 fi
 
 # DSTROOT fixups
