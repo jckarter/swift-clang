@@ -2748,6 +2748,9 @@ static OpenMPRuntimeKind getOpenMPRuntime(const ToolChain &TC,
                 .Case("libiomp5", OMPRT_IOMP5)
                 .Default(OMPRT_Unknown);
 
+  // APPLE INTERNAL: We do not yet support OpenMP (rdar://problem/12844522)
+  RT = OMPRT_Unknown;
+
   if (RT == OMPRT_Unknown) {
     if (A)
       TC.getDriver().Diag(diag::err_drv_unsupported_option_argument)
