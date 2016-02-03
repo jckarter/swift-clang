@@ -321,6 +321,9 @@ fi
 find $OBJECT_DIR -name \*.dSYM -exec cp -r {} $SYMROOT/ \; || exit 1
 find $OBJECT_DIR -type f -perm +111 -exec cp -r {} $SYMROOT/ \; || exit 1
 
+mv $SYMROOT/clang-$MAJ_MIN_VER $SYMROOT/clang
+mv $SYMROOT/clang-$MAJ_MIN_VER.dSYM $SYMROOT/clang.dSYM
+
 chgrp -h -R wheel $DSTROOT
 chgrp -R wheel $DSTROOT
 
