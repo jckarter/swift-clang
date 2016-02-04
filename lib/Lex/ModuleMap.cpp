@@ -18,6 +18,7 @@
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
+#include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/Lex/LexDiagnostic.h"
@@ -834,6 +835,15 @@ void ModuleMap::addHeader(Module *Mod, Module::Header Header,
     // set the isModuleHeader flag itself.
     HeaderInfo.MarkFileModuleHeader(Header.Entry, Role,
                                     isCompilingModuleHeader);
+
+    // Collect this header if a module collector is available. This guarantees
+    // that all dependencies for a module are correctly placed inside a VFS
+    // cache output by the crash reproducer.
+    StringRef HeaderName = Header.Entry->getName();
+    std::shared_ptr<ModuleDependencyCollector> MDC =
+        SourceMgr.getFileManager().getModuleDepCollector();
+    if (MDC && llvm::sys::path::is_absolute(HeaderName))
+      MDC->collectFile(HeaderName);
   }
 }
 

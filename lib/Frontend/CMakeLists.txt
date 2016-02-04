@@ -29,7 +29,7 @@ add_clang_library(clangFrontend
   LangStandards.cpp
   LayoutOverrideSource.cpp
   LogDiagnosticPrinter.cpp
-  ModuleDependencyCollector.cpp
+  ModuleDependencyListener.cpp
   MultiplexConsumer.cpp
   PCHContainerOperations.cpp
   PrintPreprocessedOutput.cpp

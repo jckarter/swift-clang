@@ -2397,7 +2397,28 @@ ASTReader::ReadControlBlock(ModuleFile &F,
         if (F.Kind != MK_ExplicitModule) {
           const DirectoryEntry *BuildDir =
               PP.getFileManager().getDirectory(Blob);
-          if (!BuildDir || BuildDir != M->Directory) {
+          bool ModRelocated = !BuildDir;
+          if (BuildDir) {
+            if (BuildDir->hasVFSEntry()) {
+              // If the directory has an entry in the VFS, the BuildDir must
+              // be part of that path.
+              // FIXME: The file manager finds the same directory regardless
+              // of case sensitivity in the directory path, mimic the behavior
+              // here and avoid mismatch by module name capitalization...
+              StringRef FullPath(M->Directory->getName());
+              // FIXME: come up with a more reliable way to detect and check
+              // case sensitivity. For now assume case sensitive as default.
+              std::shared_ptr<ModuleDependencyCollector> MDC =
+                  SourceMgr.getFileManager().getModuleDepCollector();
+              bool IsCaseSensitive = !MDC || MDC->isCaseSensitive();
+              ModRelocated = IsCaseSensitive ?
+                !FullPath.endswith(BuildDir->getName()) :
+                !FullPath.endswith_lower(BuildDir->getName());
+            } else if (BuildDir != M->Directory)
+              ModRelocated = true;
+          }
+
+          if (ModRelocated) {
             if ((ClientLoadCapabilities & ARR_OutOfDate) == 0)
               Diag(diag::err_imported_module_relocated)
                   << F.ModuleName << Blob << M->Directory->getName();

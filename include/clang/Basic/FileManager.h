@@ -39,10 +39,12 @@ class FileSystemStatCache;
 /// the virtual file system).
 class DirectoryEntry {
   const char *Name;   // Name of the directory.
+  bool HasVFSEntry = true;   // Track entries in the VFS overlay.
   friend class FileManager;
 public:
   DirectoryEntry() : Name(nullptr) {}
   const char *getName() const { return Name; }
+  bool hasVFSEntry() const { return HasVFSEntry; }
 };
 
 /// \brief Cached information about one file (either on disk
@@ -170,6 +172,13 @@ class FileManager : public RefCountedBase<FileManager> {
   /// or a directory) as virtual directories.
   void addAncestorsAsVirtualDirs(StringRef Path);
 
+  /// The module dependency collector is needed to collect header files
+  /// during module parsing and make them available to be copied out to a VFS
+  /// cache in a crash reproducer.
+  /// FIXME: This might not be the right place for the module dep collector but
+  /// given no other reliable alternatives, use it here.
+  std::shared_ptr<ModuleDependencyCollector> ModuleDepCollector;
+
 public:
   FileManager(const FileSystemOptions &FileSystemOpts,
               IntrusiveRefCntPtr<vfs::FileSystem> FS = nullptr);
@@ -281,6 +290,14 @@ public:
   StringRef getCanonicalName(const DirectoryEntry *Dir);
 
   void PrintStats() const;
+
+  /// Return the ModuleDependencyCollector object used to collect
+  /// header files found while parsing module maps.
+  std::shared_ptr<ModuleDependencyCollector> getModuleDepCollector() const;
+
+  /// Setup the ModuleDependencyCollector.
+  void
+  setModuleDepCollector(std::shared_ptr<ModuleDependencyCollector> Collector);
 };
 
 }  // end namespace clang
