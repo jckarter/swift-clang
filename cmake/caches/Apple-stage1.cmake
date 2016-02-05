@@ -33,6 +33,14 @@ set(LIBCXX_INSTALL_LIBRARY OFF CACHE BOOL "")
 set(LIBCXX_INSTALL_HEADERS ON CACHE BOOL "")
 set(LIBCXX_OVERRIDE_DARWIN_INSTALL ON CACHE BOOL "")
 
+set(CLANG_BOOTSTRAP_TARGETS
+  generate-order-file
+  check-all
+  check-llvm
+  check-clang
+  test-suite
+  clang CACHE STRING "")
+
 #bootstrap
 set(CLANG_ENABLE_BOOTSTRAP ON CACHE BOOL "")
 set(CLANG_BOOTSTRAP_CMAKE_ARGS
