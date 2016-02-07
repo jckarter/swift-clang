@@ -2047,7 +2047,7 @@ llvm::Value *
 CodeGenFunction::EmitARCRetainAutoreleasedReturnValue(llvm::Value *value) {
   emitAutoreleasedReturnValueMarker(*this);
   return emitARCValueOperation(*this, value,
-                     CGM.getObjCEntrypoints().objc_retainAutoreleasedReturnValue,
+              CGM.getObjCEntrypoints().objc_retainAutoreleasedReturnValue,
                                "objc_retainAutoreleasedReturnValue");
 }
 
@@ -2062,7 +2062,7 @@ llvm::Value *
 CodeGenFunction::EmitARCUnsafeClaimAutoreleasedReturnValue(llvm::Value *value) {
   emitAutoreleasedReturnValueMarker(*this);
   return emitARCValueOperation(*this, value,
-                CGM.getObjCEntrypoints().objc_unsafeClaimAutoreleasedReturnValue,
+              CGM.getObjCEntrypoints().objc_unsafeClaimAutoreleasedReturnValue,
                                "objc_unsafeClaimAutoreleasedReturnValue");
 }
 
@@ -2558,7 +2558,6 @@ static llvm::Value *emitARCUnsafeClaimCallResult(CodeGenFunction &CGF,
 llvm::Value *CodeGenFunction::EmitARCReclaimReturnedObject(const Expr *E,
                                                       bool allowUnsafeClaim) {
   if (allowUnsafeClaim &&
-      CGM.getCodeGenOpts().ObjCARCUnsafeClaim &&
       CGM.getLangOpts().ObjCRuntime.hasARCUnsafeClaimAutoreleasedReturnValue()) {
     return emitARCUnsafeClaimCallResult(*this, E);
   } else {
