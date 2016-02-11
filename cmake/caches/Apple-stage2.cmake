@@ -23,10 +23,11 @@ set(LLVM_BUILD_TESTS ON CACHE BOOL "")
 # Don't build or run the compiler-rt tests
 set(COMPILER_RT_INCLUDE_TESTS OFF CACHE BOOL "")
 
+set(LLVM_ENABLE_LTO ON CACHE BOOL "")
 set(CMAKE_C_FLAGS "-fno-stack-protector -fno-common -Wno-profile-instr-unprofiled" CACHE STRING "")
 set(CMAKE_CXX_FLAGS "-fno-stack-protector -fno-common -Wno-profile-instr-unprofiled" CACHE STRING "")
-set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -DNDEBUG" CACHE STRING "")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -flto -gline-tables-only -DNDEBUG" CACHE STRING "")
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -gline-tables-only -DNDEBUG" CACHE STRING "")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -gline-tables-only -DNDEBUG" CACHE STRING "")
 set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "")
 
 set(LIBCXX_INSTALL_LIBRARY OFF CACHE BOOL "")

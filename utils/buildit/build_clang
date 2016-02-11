@@ -18,12 +18,18 @@ LLVM_OPTIMIZED="$2"
 
 CLANG_VERSION="$3"
 
+ENABLE_LTO="$4"
+
 SDKROOT_PATH=`xcodebuild -version -sdk $SDKROOT Path`
 
 if [ "$LLVM_OPTIMIZED" = "1" ]; then
     BUILD_TYPE=RelWithDebInfo
 else
     BUILD_TYPE=Debug
+fi
+
+if [ "$ENABLE_LTO" = "1" ]; then
+    LTO_OPTION="-DBOOTSTRAP_LLVM_ENABLE_LTO=On"
 fi
 
 if [ "$LLVM_INCLUDE_TESTS" = "yes" ]; then
@@ -202,6 +208,7 @@ $CMAKE -G 'Ninja' -C $CACHE_FILE \
     $ORDER_FILE_CMAKE_FLAG \
     $PROFDATA_FILE_CMAKE_FLAG \
     $INSTRUMENTATION_FLAGS \
+    $LTO_OPTION \
     "$LLVM_SRCROOT" \
     || exit 1
 
