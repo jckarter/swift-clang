@@ -29,7 +29,9 @@ else
 fi
 
 if [ "$ENABLE_LTO" = "1" ]; then
-    LTO_OPTION="-DBOOTSTRAP_LLVM_ENABLE_LTO=On"
+  LTO_OPTION="-DBOOTSTRAP_LLVM_ENABLE_LTO=On"
+else
+  LTO_OPTION="-DBOOTSTRAP_LLVM_ENABLE_LTO=Off"
 fi
 
 if [ "$LLVM_INCLUDE_TESTS" = "yes" ]; then
