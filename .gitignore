@@ -34,5 +34,8 @@ tools/extra
 docs/_build
 docs/analyzer/_build
 
+# debug info testsuite
+test/debuginfo-tests
+
 # Apple Internal Text-based API tool
 tools/tapi

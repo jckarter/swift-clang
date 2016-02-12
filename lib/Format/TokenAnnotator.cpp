@@ -42,11 +42,24 @@ public:
 
 private:
   bool parseAngle() {
-    if (!CurrentToken)
+    if (!CurrentToken || !CurrentToken->Previous)
       return false;
+    if (NonTemplateLess.count(CurrentToken->Previous))
+      return false;
+
+    const FormatToken& Previous = *CurrentToken->Previous;
+    if (Previous.Previous) {
+      if (Previous.Previous->Tok.isLiteral())
+        return false;
+      if (Previous.Previous->is(tok::r_paren) && Contexts.size() > 1 &&
+          (!Previous.Previous->MatchingParen ||
+           !Previous.Previous->MatchingParen->is(TT_OverloadedOperatorLParen)))
+        return false;
+    }
+
     FormatToken *Left = CurrentToken->Previous;
     Left->ParentBracket = Contexts.back().ContextKind;
-    ScopedContextCreator ContextCreator(*this, tok::less, 10);
+    ScopedContextCreator ContextCreator(*this, tok::less, 12);
 
     // If this angle is in the context of an expression, we need to be more
     // hesitant to detect it as opening template parameters.
@@ -550,11 +563,7 @@ private:
         return false;
       break;
     case tok::less:
-      if (!NonTemplateLess.count(Tok) &&
-          (!Tok->Previous ||
-           (!Tok->Previous->Tok.isLiteral() &&
-            !(Tok->Previous->is(tok::r_paren) && Contexts.size() > 1))) &&
-          parseAngle()) {
+      if (parseAngle()) {
         Tok->Type = TT_TemplateOpener;
       } else {
         Tok->Type = TT_BinaryOperator;
@@ -887,8 +896,8 @@ private:
            Previous && Previous->isOneOf(tok::star, tok::amp);
            Previous = Previous->Previous)
         Previous->Type = TT_PointerOrReference;
-      if (Line.MustBeDeclaration)
-        Contexts.back().IsExpression = Contexts.front().InCtorInitializer;
+      if (Line.MustBeDeclaration && !Contexts.front().InCtorInitializer)
+        Contexts.back().IsExpression = false;
     } else if (Current.Previous &&
                Current.Previous->is(TT_CtorInitializerColon)) {
       Contexts.back().IsExpression = true;
