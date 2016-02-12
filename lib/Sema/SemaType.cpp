@@ -6940,9 +6940,6 @@ QualType Sema::BuildTypeofExprType(Expr *E, SourceLocation Loc) {
   if (ER.isInvalid()) return QualType();
   E = ER.get();
 
-  if (!getLangOpts().CPlusPlus && E->refersToBitField())
-    Diag(E->getExprLoc(), diag::err_sizeof_alignof_typeof_bitfield) << 2;
-
   if (!E->isTypeDependent()) {
     QualType T = E->getType();
     if (const TagType *TT = T->getAs<TagType>())
