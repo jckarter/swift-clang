@@ -17,6 +17,7 @@ set(LLVM_EXTERNALIZE_DEBUGINFO ON CACHE BOOL "")
 set(CLANG_PLUGIN_SUPPORT OFF CACHE BOOL "")
 set(CLANG_BOOTSTRAP_PASSTHROUGH CLANG_ORDER_FILE LLVM_PROFDATA_FILE CACHE STRING "")
 set(BUG_REPORT_URL "http://developer.apple.com/bugreporter/" CACHE STRING "")
+set(LLVM_ENABLE_TIMESTAMPS OFF CACHE BOOL "Don't time-stamp shipping builds - this makes builds reproducible")
 
 # Make unit tests (if present) part of the ALL target
 set(LLVM_BUILD_TESTS ON CACHE BOOL "")
