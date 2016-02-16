@@ -13,9 +13,11 @@
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/Index/IndexingAction.h"
 #include "clang/Index/IndexDataConsumer.h"
+#include "clang/Index/IndexRecordReader.h"
 #include "clang/Index/USRGeneration.h"
 #include "clang/Index/CodegenNameGenerator.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/PrettyStackTrace.h"
@@ -31,6 +33,7 @@ namespace {
 enum class ActionType {
   None,
   PrintSourceSymbols,
+  PrintRecord,
 };
 
 namespace options {
@@ -42,8 +45,13 @@ Action(cl::desc("Action:"), cl::init(ActionType::None),
        cl::values(
           clEnumValN(ActionType::PrintSourceSymbols,
                      "print-source-symbols", "Print symbols from source"),
+          clEnumValN(ActionType::PrintRecord,
+                     "print-record", "Print record info"),
           clEnumValEnd),
        cl::cat(IndexTestCoreCategory));
+
+static cl::list<std::string>
+InputFiles(cl::Positional, cl::desc("<filename>..."));
 
 static cl::extrahelp MoreHelp(
   "\nAdd \"-- <compiler arguments>\" at the end to setup the compiler "
@@ -164,6 +172,34 @@ static bool printSourceSymbols(ArrayRef<const char *> Args) {
 }
 
 //===----------------------------------------------------------------------===//
+// Print Record
+//===----------------------------------------------------------------------===//
+
+static void printSymbol(const IndexRecordDecl &Rec, raw_ostream &OS);
+static void printSymbol(const IndexRecordOccurrence &Rec, raw_ostream &OS);
+
+static int printRecord(StringRef Filename, raw_ostream &OS) {
+  std::string Error;
+  auto Reader = IndexRecordReader::create(Filename, Error);
+  if (!Reader) {
+    errs() << Error << '\n';
+    return true;
+  }
+
+  Reader->foreachDecl([&](const IndexRecordDecl *Rec)->bool {
+    printSymbol(*Rec, OS);
+    return true;
+  });
+  OS << "------------\n";
+  Reader->foreachOccurrence([&](const IndexRecordOccurrence &Rec)->bool {
+    printSymbol(Rec, OS);
+    return true;
+  });
+
+  return false;
+};
+
+//===----------------------------------------------------------------------===//
 // Helper Utils
 //===----------------------------------------------------------------------===//
 
@@ -187,6 +223,62 @@ static void printSymbolNameAndUSR(const Decl *D, ASTContext &Ctx,
     OS << "<no-usr>";
   } else {
     OS << USRBuf;
+  }
+}
+
+static void printSymbol(const IndexRecordDecl &Rec, raw_ostream &OS) {
+  SymbolInfo SymInfo{ Rec.Kind, Rec.CXXTemplateKind, Rec.Lang };
+  printSymbolInfo(SymInfo, OS);
+  OS << " | ";
+
+  if (Rec.Name.empty())
+    OS << "<no-name>";
+  else
+    OS << Rec.Name;
+  OS << " | ";
+
+  if (Rec.USR.empty())
+    OS << "<no-usr>";
+  else
+    OS << Rec.USR;
+  OS << " | ";
+
+  if (Rec.CodeGenName.empty())
+    OS << "<no-cgname>";
+  else
+    OS << Rec.CodeGenName;
+  OS << " | ";
+
+  printSymbolRoles(Rec.Roles, OS);
+  OS << " - ";
+  printSymbolRoles(Rec.RelatedRoles, OS);
+  OS << '\n';
+}
+
+static void printSymbol(const IndexRecordOccurrence &Rec, raw_ostream &OS) {
+  OS << Rec.Line << ':' << Rec.Column << " | ";
+  SymbolInfo SymInfo{ Rec.Dcl->Kind, Rec.Dcl->CXXTemplateKind, Rec.Dcl->Lang };
+  printSymbolInfo(SymInfo, OS);
+  OS << " | ";
+
+  if (Rec.Dcl->USR.empty())
+    OS << "<no-usr>";
+  else
+    OS << Rec.Dcl->USR;
+  OS << " | ";
+
+  printSymbolRoles(Rec.Roles, OS);
+  OS << " | ";
+  OS << "rel: " << Rec.Relations.size() << '\n';
+  for (auto &Rel : Rec.Relations) {
+    OS << '\t';
+    printSymbolRoles(Rel.Roles, OS);
+    OS << " | ";
+    if (Rec.Dcl->USR.empty())
+      OS << "<no-usr>";
+    else
+      OS << Rec.Dcl->USR;
+    OS << '\n';
   }
 }
 
@@ -219,6 +311,25 @@ int indextest_core_main(int argc, const char **argv) {
       return 1;
     }
     return printSourceSymbols(CompArgs);
+  }
+
+  if (options::Action == ActionType::PrintRecord) {
+    if (options::InputFiles.empty()) {
+      errs() << "error: missing input file or directory\n";
+      return 1;
+    }
+
+    if (sys::fs::is_directory(options::InputFiles[0])) {
+      std::error_code EC;
+      for (auto It = sys::fs::directory_iterator(options::InputFiles[0], EC),
+                  End = sys::fs::directory_iterator();
+                 !EC && It != End; It.increment(EC)) {
+        if (printRecord(It->path(), outs()))
+          return 1;
+      }
+    }
+    else
+      return printRecord(options::InputFiles[0], outs());
   }
 
   return 0;

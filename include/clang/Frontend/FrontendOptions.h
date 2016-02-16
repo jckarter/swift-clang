@@ -209,6 +209,8 @@ public:
   std::string MTMigrateDir;
   std::string ARCMTMigrateReportOut;
 
+  std::string IndexStorePath;
+
   /// The input files and their types.
   std::vector<FrontendInputFile> Inputs;
 

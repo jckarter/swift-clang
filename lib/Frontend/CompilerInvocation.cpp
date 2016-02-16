@@ -1179,6 +1179,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   if (Args.hasArg(OPT_migration_for_xct))
     Opts.XCTMigrate = true;
 
+  Opts.IndexStorePath = Args.getLastArgValue(OPT_index_store_path);
+
   InputKind DashX = IK_None;
   if (const Arg *A = Args.getLastArg(OPT_x)) {
     DashX = llvm::StringSwitch<InputKind>(A->getValue())

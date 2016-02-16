@@ -4612,6 +4612,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasArg(options::OPT__migrate_xct))
     CmdArgs.push_back("-migration-for-xct");
 
+  Args.AddLastArg(CmdArgs, options::OPT_index_store_path);
+
+  if (const char *IdxArena = ::getenv("CLANG_INDEX_STORE_PATH")) {
+    CmdArgs.push_back("-index-arena-path");
+    CmdArgs.push_back(IdxArena);
+  }
+
   // Add preprocessing options like -I, -D, etc. if we are using the
   // preprocessor.
   //
@@ -7601,6 +7608,8 @@ void darwin::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   // comes from specs (starting with link_command). Consult gcc for
   // more information.
   ArgStringList CmdArgs;
+
+  Args.ClaimAllArgs(options::OPT_index_store_path);
 
   /// Hack(tm) to ignore linking errors when we are doing ARC migration.
   if (Args.hasArg(options::OPT_ccc_arcmt_check,

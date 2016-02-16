@@ -22,6 +22,7 @@
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/FrontendPluginRegistry.h"
 #include "clang/Frontend/Utils.h"
+#include "clang/Index/IndexingAction.h"
 #include "clang/Rewrite/Frontend/FrontendActions.h"
 #include "clang/StaticAnalyzer/Frontend/FrontendActions.h"
 #include "llvm/Option/OptTable.h"
@@ -156,6 +157,14 @@ CreateFrontendAction(CompilerInstance &CI) {
     }
   }
 #endif
+
+  if (!FEOpts.IndexStorePath.empty()) {
+    index::RecordingOptions RecordOpts;
+    index::IndexingOptions IndexOpts;
+    RecordOpts.DataDirPath = FEOpts.IndexStorePath;
+    Act = index::createIndexDataRecordingAction(IndexOpts, RecordOpts,
+                                                std::move(Act));
+  }
 
   // If there are any AST files to merge, create a frontend action
   // adaptor to perform the merge.
