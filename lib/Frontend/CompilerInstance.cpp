@@ -26,6 +26,7 @@
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/Utils.h"
 #include "clang/Frontend/VerifyDiagnosticConsumer.h"
+#include "clang/Index/IndexingAction.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/PTHManager.h"
 #include "clang/Lex/Preprocessor.h"
@@ -998,20 +999,30 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
     SourceMgr.overrideFileContents(ModuleMapFile, std::move(ModuleMapBuffer));
   }
 
+  std::unique_ptr<FrontendAction> CreateModuleAction;
+
   // Construct a module-generating action. Passing through the module map is
   // safe because the FileManager is shared between the compiler instances.
-  GenerateModuleAction CreateModuleAction(
-      ModMap.getModuleMapFileForUniquing(Module), Module->IsSystem);
+  CreateModuleAction.reset(new GenerateModuleAction(
+      ModMap.getModuleMapFileForUniquing(Module), Module->IsSystem));
 
   ImportingInstance.getDiagnostics().Report(ImportLoc,
                                             diag::remark_module_build)
     << Module->Name << ModuleFileName;
 
+  if (!FrontendOpts.IndexStorePath.empty()) {
+    index::IndexingOptions IndexOpts;
+    index::RecordingOptions RecordOpts;
+    RecordOpts.DataDirPath = FrontendOpts.IndexStorePath;
+    CreateModuleAction = index::createIndexDataRecordingAction(IndexOpts,
+                                     RecordOpts, std::move(CreateModuleAction));
+  }
+
   // Execute the action to actually build the module in-place. Use a separate
   // thread so that we get a stack large enough.
   const unsigned ThreadStackSize = 8 << 20;
   llvm::CrashRecoveryContext CRC;
-  CRC.RunSafelyOnThread([&]() { Instance.ExecuteAction(CreateModuleAction); },
+  CRC.RunSafelyOnThread([&]() { Instance.ExecuteAction(*CreateModuleAction); },
                         ThreadStackSize);
 
   ImportingInstance.getDiagnostics().Report(ImportLoc,

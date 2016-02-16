@@ -224,6 +224,9 @@ def objcmt_whitelist_dir_path: Joined<["-"], "objcmt-whitelist-dir-path=">, Flag
 def : Joined<["-"], "objcmt-white-list-dir-path=">, Flags<[CC1Option]>,
     Alias<objcmt_whitelist_dir_path>;
 
+def index_store_path : Separate<["-"], "index-store-path">, Flags<[CC1Option]>,
+  HelpText<"Enable indexing with the specified data store path">;
+
 // Make sure all other -ccc- options are rejected.
 def ccc_ : Joined<["-"], "ccc-">, Group<internal_Group>, Flags<[Unsupported]>;
 
