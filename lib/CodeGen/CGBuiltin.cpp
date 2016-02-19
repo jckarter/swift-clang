@@ -408,6 +408,17 @@ CodeGenFunction::emitBuiltinObjectSize(const Expr *E, unsigned Type,
   return Builder.CreateCall(F, {EmitScalarExpr(E), CI});
 }
 
+namespace {
+  struct CallObjCArcUse final : EHScopeStack::Cleanup {
+    CallObjCArcUse(llvm::Value *object) : object(object) {}
+    llvm::Value *object;
+
+    void Emit(CodeGenFunction &CGF, Flags flags) override {
+      CGF.EmitARCIntrinsicUse(object);
+    }
+  };
+}
+
 RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
                                         unsigned BuiltinID, const CallExpr *E,
                                         ReturnValueSlot ReturnValue) {
@@ -1979,6 +1990,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     Builder.CreateStore(
       Builder.getInt8(Layout.getNumArgsByte()),
       Builder.CreateConstByteGEP(BufAddr, offset++, "numArgs"));
+
+    llvm::SmallVector<llvm::Value *, 4> RetainableOperands;
     for (const auto &item : Layout.Items) {
       Builder.CreateStore(
         Builder.getInt8(item.getDescriptorByte()),
@@ -1990,7 +2003,21 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       if (const Expr *expr = item.getExpr()) {
         addr = Builder.CreateElementBitCast(addr,
                                             ConvertTypeForMem(expr->getType()));
-        EmitAnyExprToMem(expr, addr, Qualifiers(), /*isInit*/true);
+        // Check if this is a retainable type.
+        if (expr->getType()->isObjCRetainableType()) {
+          assert(getEvaluationKind(expr->getType()) == TEK_Scalar &&
+                 "Only scalar can be a ObjC retainable type");
+          llvm::Value *SV = EmitScalarExpr(expr, /*Ignore*/ false);
+          RValue RV = RValue::get(SV);
+          LValue LV = MakeAddrLValue(addr, expr->getType());
+          EmitStoreThroughLValue(RV, LV);
+          // Check if the object is constant, if not, save it in
+          // RetainableOperands.
+          if (!isa<Constant>(SV))
+            RetainableOperands.push_back(SV);
+        } else {
+          EmitAnyExprToMem(expr, addr, Qualifiers(), /*isInit*/true);
+        }
       } else {
         addr = Builder.CreateElementBitCast(addr, Int32Ty);
         Builder.CreateStore(
@@ -1998,6 +2025,16 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       }
       offset += item.getSize();
     }
+
+    // Push a clang.arc.use cleanup for each object in RetainableOperands. The
+    // cleanup will cause the use to appear after the final log call, keeping
+    // the object valid while it’s held in the log buffer.  Note that if there’s
+    // a release cleanup on the object, it will already be active; since
+    // cleanups are emitted in reverse order, the use will occur before the
+    // object is released.
+    if (!RetainableOperands.empty())
+      for (llvm::Value *object : RetainableOperands)
+         pushFullExprCleanup<CallObjCArcUse>(getARCCleanupKind(), object);
     return RValue::get(FormatStr);
   }
 
