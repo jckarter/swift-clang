@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "IndexUnitWriter.h"
+#include "IndexDataStoreUtils.h"
 #include "clang/Basic/FileManager.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Hashing.h"
@@ -19,10 +20,10 @@ using namespace clang;
 using namespace clang::index;
 using namespace llvm;
 
-IndexUnitWriter::IndexUnitWriter(StringRef ArenaPath, StringRef OutputFile,
+IndexUnitWriter::IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
                                  StringRef TargetTriple) {
-  this->UnitsPath = ArenaPath;
-  this->UnitsPath += "/clang/units";
+  this->UnitsPath = StorePath;
+  store::makeUnitSubDir(this->UnitsPath);
   this->OutputFile = OutputFile;
   this->TargetTriple = TargetTriple;
 }

@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Index/IndexRecordReader.h"
-#include "IndexBitCodes.h"
+#include "IndexDataStoreUtils.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Bitcode/BitstreamReader.h"
 #include "llvm/Support/FileSystem.h"
@@ -18,7 +18,7 @@
 
 using namespace clang;
 using namespace clang::index;
-using namespace clang::index::record;
+using namespace clang::index::store;
 using namespace llvm;
 
 namespace {
@@ -400,12 +400,11 @@ public:
                           RecordDataImpl &Record, StringRef Blob) {
     switch (BlockID) {
     case VERSION_BLOCK_ID: {
-      unsigned Major = Record[0];
-      unsigned Minor = Record[1];
-      if (Major != VERSION_MAJOR) {
+      unsigned StoreFormatVersion = Record[0];
+      if (StoreFormatVersion != STORE_FORMAT_VERSION) {
         llvm::raw_string_ostream OS(*Error);
-        OS << "Major version mismatch: " << Major << '.' << Minor;
-        OS << " , expected: " << VERSION_MAJOR << '.' << VERSION_MINOR;
+        OS << "Store format version mismatch: " << StoreFormatVersion;
+        OS << " , expected: " << STORE_FORMAT_VERSION;
         return StreamVisit::Abort;
       }
       break;

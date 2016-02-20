@@ -12,6 +12,7 @@
 
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallString.h"
 #include <string>
 #include <vector>
 
@@ -23,7 +24,7 @@ namespace index {
   class FileIndexRecord;
 
 class IndexUnitWriter {
-  std::string UnitsPath;
+  SmallString<64> UnitsPath;
   std::string OutputFile;
   std::string TargetTriple;
   std::vector<const FileEntry *> Files;
@@ -31,7 +32,7 @@ class IndexUnitWriter {
   std::vector<std::pair<std::string, unsigned>> Records;
 
 public:
-  IndexUnitWriter(StringRef ArenaPath, StringRef OutputFile,
+  IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
                   StringRef TargetTriple);
   ~IndexUnitWriter();
 

@@ -13,6 +13,7 @@
 #include "IndexingContext.h"
 #include "IndexRecordWriter.h"
 #include "IndexUnitWriter.h"
+#include "IndexDataStoreUtils.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/Frontend/MultiplexConsumer.h"
@@ -302,11 +303,11 @@ protected:
 void IndexRecordActionBase::finish(CompilerInstance &CI) {
   SourceManager &SM = CI.getSourceManager();
   DiagnosticsEngine &Diag = CI.getDiagnostics();
-  StringRef ArenaPath = RecordOpts.DataDirPath;
+  StringRef DataPath = RecordOpts.DataDirPath;
 
   using namespace llvm::sys;
-  std::string SubPath = ArenaPath;
-  SubPath += "/clang/records";
+  SmallString<128> SubPath = DataPath;
+  store::makeRecordSubDir(SubPath);
   std::error_code EC = fs::create_directories(SubPath);
   if (EC) {
     unsigned DiagID = Diag.getCustomDiagID(DiagnosticsEngine::Error,
@@ -314,8 +315,8 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
     Diag.Report(DiagID) << SubPath << EC.message();
     return;
   }
-  SubPath = ArenaPath;
-  SubPath += "/clang/units";
+  SubPath = DataPath;
+  store::makeUnitSubDir(SubPath);
   EC = fs::create_directory(SubPath);
   if (EC) {
     unsigned DiagID = Diag.getCustomDiagID(DiagnosticsEngine::Error,
@@ -330,7 +331,7 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
     OutputFile += ".o";
   }
 
-  IndexUnitWriter UnitWriter(ArenaPath, OutputFile, CI.getTargetOpts().Triple);
+  IndexUnitWriter UnitWriter(DataPath, OutputFile, CI.getTargetOpts().Triple);
 
   FileManager &FileMgr = SM.getFileManager();
   for (auto &Dep : DepCollector.getDependencies()) {

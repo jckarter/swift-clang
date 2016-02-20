@@ -9,7 +9,7 @@
 
 #include "IndexRecordWriter.h"
 #include "FileIndexRecord.h"
-#include "IndexBitCodes.h"
+#include "IndexDataStoreUtils.h"
 #include "clang/Index/IndexSymbol.h"
 #include "clang/Index/IndexRecordReader.h"
 #include "clang/Index/USRGeneration.h"
@@ -29,7 +29,7 @@
 
 using namespace clang;
 using namespace clang::index;
-using namespace clang::index::record;
+using namespace clang::index::store;
 using namespace llvm;
 
 StringRef IndexRecordWriter::getUSR(const Decl *D) {
@@ -57,7 +57,7 @@ IndexRecordWriter::IndexRecordWriter(ASTContext &Ctx, RecordingOptions Opts)
     RecordOpts(std::move(Opts)),
     Hasher(Ctx) {
   RecordsPath = RecordOpts.DataDirPath;
-  RecordsPath += "/clang/records";
+  store::makeRecordSubDir(RecordsPath);
   if (Opts.RecordSymbolCodeGenName)
     CGNameGen.reset(new CodegenNameGenerator(Ctx));
 }
@@ -224,14 +224,12 @@ static void writeVersionInfo(BitstreamWriter &Stream) {
 
   BitCodeAbbrev *Abbrev = new BitCodeAbbrev();
   Abbrev->Add(BitCodeAbbrevOp(REC_VERSION));
-  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Major
-  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Minor
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Store format version
   unsigned AbbrevCode = Stream.EmitAbbrev(Abbrev);
 
   RecordData Record;
   Record.push_back(REC_VERSION);
-  Record.push_back(VERSION_MAJOR);
-  Record.push_back(VERSION_MINOR);
+  Record.push_back(STORE_FORMAT_VERSION);
   Stream.EmitRecordWithAbbrev(AbbrevCode, Record);
 
   Stream.ExitBlock();
