@@ -13,6 +13,7 @@
 #include "IndexRecordHasher.h"
 #include "clang/Index/IndexingAction.h"
 #include "clang/Index/CodegenNameGenerator.h"
+#include "llvm/ADT/SmallString.h"
 
 namespace clang {
   class ASTContext;
@@ -25,7 +26,7 @@ class IndexRecordWriter {
   ASTContext &Ctx;
   RecordingOptions RecordOpts;
 
-  std::string RecordsPath;
+  SmallString<64> RecordsPath;
   std::unique_ptr<CodegenNameGenerator> CGNameGen;
   llvm::BumpPtrAllocator Allocator;
   llvm::DenseMap<const Decl *, StringRef> USRByDecl;

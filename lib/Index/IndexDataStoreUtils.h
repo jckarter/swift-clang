@@ -1,4 +1,4 @@
-//===--- IndexBitCodes.h - Index record common for de/serialization -------===//
+//===--- IndexDataStoreUtils.h - Functions/constants for the data store ---===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,21 +7,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_LIB_INDEX_INDEXBITCODES_H
-#define LLVM_CLANG_LIB_INDEX_INDEXBITCODES_H
+#ifndef LLVM_CLANG_LIB_INDEX_INDEXDATASTOREUTILS_H
+#define LLVM_CLANG_LIB_INDEX_INDEXDATASTOREUTILS_H
 
 #include "llvm/Bitcode/BitCodes.h"
 
 namespace clang {
 namespace index {
+namespace store {
 
-typedef SmallVector<uint64_t, 64> RecordData;
-typedef SmallVectorImpl<uint64_t> RecordDataImpl;
+static const unsigned STORE_FORMAT_VERSION = 1;
 
-namespace record {
-
-static const unsigned VERSION_MAJOR = 1;
-static const unsigned VERSION_MINOR = 0;
+void makeUnitSubDir(SmallVectorImpl<char> &StorePathBuf);
+void makeRecordSubDir(SmallVectorImpl<char> &StorePathBuf);
 
 enum BitRecord {
   REC_VERSION,
@@ -37,7 +35,10 @@ enum BitBlock {
   DECLOCCURRENCES_BLOCK_ID,
 };
 
-} // end namespace record
+typedef SmallVector<uint64_t, 64> RecordData;
+typedef SmallVectorImpl<uint64_t> RecordDataImpl;
+
+} // end namespace store
 } // end namespace index
 } // end namespace clang
 
