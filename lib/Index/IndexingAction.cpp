@@ -85,7 +85,8 @@ protected:
     : DataConsumer(std::move(dataConsumer)),
       IndexCtx(Opts, *DataConsumer) {}
 
-  std::unique_ptr<IndexASTConsumer> createIndexASTConsumer() {
+  std::unique_ptr<IndexASTConsumer> createIndexASTConsumer(CompilerInstance &CI) {
+    IndexCtx.setSysrootPath(CI.getHeaderSearchOpts().Sysroot);
     return llvm::make_unique<IndexASTConsumer>(IndexCtx);
   }
 
@@ -103,7 +104,7 @@ public:
 protected:
   std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
                                                  StringRef InFile) override {
-    return createIndexASTConsumer();
+    return createIndexASTConsumer(CI);
   }
 
   void EndSourceFileAction() override {
@@ -147,7 +148,7 @@ WrappingIndexAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
 
   std::vector<std::unique_ptr<ASTConsumer>> Consumers;
   Consumers.push_back(std::move(OtherConsumer));
-  Consumers.push_back(createIndexASTConsumer());
+  Consumers.push_back(createIndexASTConsumer(CI));
   return llvm::make_unique<MultiplexConsumer>(std::move(Consumers));
 }
 
@@ -239,6 +240,8 @@ protected:
 
   std::unique_ptr<IndexASTConsumer>
   createIndexASTConsumer(CompilerInstance &CI) {
+    IndexCtx.setSysrootPath(CI.getHeaderSearchOpts().Sysroot);
+
     Preprocessor &PP = CI.getPreprocessor();
     DepCollector.attachToPreprocessor(PP);
 
