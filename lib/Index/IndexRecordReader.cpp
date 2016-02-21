@@ -425,20 +425,35 @@ public:
 } // anonymous namespace
 
 std::unique_ptr<IndexRecordReader>
-IndexRecordReader::create(StringRef FilePath, std::string &Error) {
-  auto ErrOrBuf = MemoryBuffer::getFile(FilePath, /*FileSize=*/-1, /*RequiresNullTerminator=*/false);
+IndexRecordReader::createWithRecordFilename(StringRef RecordFilename,
+                                            StringRef StorePath,
+                                            std::string &Error) {
+  SmallString<128> PathBuf = StorePath;
+  makeRecordSubDir(PathBuf);
+  sys::path::append(PathBuf, RecordFilename);
+  return createWithFilePath(PathBuf.str(), Error);
+}
+
+std::unique_ptr<IndexRecordReader>
+IndexRecordReader::createWithFilePath(StringRef FilePath, std::string &Error) {
+  auto ErrOrBuf = MemoryBuffer::getFile(FilePath, /*FileSize=*/-1,
+                                        /*RequiresNullTerminator=*/false);
   if (!ErrOrBuf) {
-    Error = "failed opening index record '";
-    Error += FilePath;
-    Error += "': ";
-    Error += ErrOrBuf.getError().message();
+    raw_string_ostream(Error) << "failed opening index record '"
+      << FilePath << "': " << ErrOrBuf.getError().message();
     return nullptr;
   }
+  return createWithBuffer(std::move(*ErrOrBuf), Error);
+}
+
+std::unique_ptr<IndexRecordReader>
+IndexRecordReader::createWithBuffer(std::unique_ptr<llvm::MemoryBuffer> Buffer,
+                                    std::string &Error) {
 
   std::unique_ptr<IndexRecordReader> Reader;
   Reader.reset(new IndexRecordReader());
   auto &Impl = Reader->Impl;
-  Impl.Buffer = std::move(*ErrOrBuf);
+  Impl.Buffer = std::move(Buffer);
   Impl.BitReader.init((const unsigned char *)Impl.Buffer->getBufferStart(),
                       (const unsigned char *)Impl.Buffer->getBufferEnd());
 

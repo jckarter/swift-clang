@@ -4612,10 +4612,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-migration-for-xct");
 
   Args.AddLastArg(CmdArgs, options::OPT_index_store_path);
+  Args.AddLastArg(CmdArgs, options::OPT_index_ignore_system_symbols);
+  Args.AddLastArg(CmdArgs, options::OPT_index_record_codegen_name);
+  Args.AddLastArg(CmdArgs, options::OPT_index_record_system_dependencies);
 
-  if (const char *IdxArena = ::getenv("CLANG_INDEX_STORE_PATH")) {
-    CmdArgs.push_back("-index-arena-path");
-    CmdArgs.push_back(IdxArena);
+  if (const char *IdxStorePath = ::getenv("CLANG_PROJECT_INDEX_PATH")) {
+    CmdArgs.push_back("-index-store-path");
+    CmdArgs.push_back(IdxStorePath);
+    CmdArgs.push_back("-index-ignore-system-symbols");
+    CmdArgs.push_back("-index-record-codegen-name");
+    CmdArgs.push_back("-index-record-system-dependencies");
   }
 
   // Add preprocessing options like -I, -D, etc. if we are using the
@@ -7607,6 +7613,9 @@ void darwin::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   ArgStringList CmdArgs;
 
   Args.ClaimAllArgs(options::OPT_index_store_path);
+  Args.ClaimAllArgs(options::OPT_index_ignore_system_symbols);
+  Args.ClaimAllArgs(options::OPT_index_record_codegen_name);
+  Args.ClaimAllArgs(options::OPT_index_record_system_dependencies);
 
   /// Hack(tm) to ignore linking errors when we are doing ARC migration.
   if (Args.hasArg(options::OPT_ccc_arcmt_check,

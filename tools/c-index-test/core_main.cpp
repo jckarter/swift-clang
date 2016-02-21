@@ -16,6 +16,7 @@
 #include "clang/Index/IndexRecordReader.h"
 #include "clang/Index/USRGeneration.h"
 #include "clang/Index/CodegenNameGenerator.h"
+#include "JSONAggregation.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Signals.h"
@@ -34,6 +35,7 @@ enum class ActionType {
   None,
   PrintSourceSymbols,
   PrintRecord,
+  AggregateAsJSON,
 };
 
 namespace options {
@@ -47,8 +49,14 @@ Action(cl::desc("Action:"), cl::init(ActionType::None),
                      "print-source-symbols", "Print symbols from source"),
           clEnumValN(ActionType::PrintRecord,
                      "print-record", "Print record info"),
+          clEnumValN(ActionType::AggregateAsJSON,
+                     "aggregate-json", "Aggregate index data in JSON format"),
           clEnumValEnd),
        cl::cat(IndexTestCoreCategory));
+
+static cl::opt<std::string>
+OutputFile("o", cl::desc("output file"),
+           cl::cat(IndexTestCoreCategory));
 
 static cl::list<std::string>
 InputFiles(cl::Positional, cl::desc("<filename>..."));
@@ -159,7 +167,7 @@ static void printSymbol(const IndexRecordOccurrence &Rec, raw_ostream &OS);
 
 static int printRecord(StringRef Filename, raw_ostream &OS) {
   std::string Error;
-  auto Reader = IndexRecordReader::create(Filename, Error);
+  auto Reader = IndexRecordReader::createWithFilePath(Filename, Error);
   if (!Reader) {
     errs() << Error << '\n';
     return true;
@@ -309,6 +317,23 @@ int indextest_core_main(int argc, const char **argv) {
     }
     else
       return printRecord(options::InputFiles[0], outs());
+  }
+
+  if (options::Action == ActionType::AggregateAsJSON) {
+    if (options::InputFiles.empty()) {
+      errs() << "error: missing input data store directory\n";
+      return 1;
+    }
+    StringRef storePath = options::InputFiles[0];
+    if (options::OutputFile.empty())
+      return aggregateDataAsJSON(storePath, outs());
+    std::error_code EC;
+    raw_fd_ostream OS(options::OutputFile, EC, llvm::sys::fs::F_None);
+    if (EC) {
+      errs() << "failed to open output file: " << EC.message() << '\n';
+      return 1;
+    }
+    return aggregateDataAsJSON(storePath, OS);
   }
 
   return 0;

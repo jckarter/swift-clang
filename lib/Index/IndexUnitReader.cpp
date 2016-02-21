@@ -103,6 +103,10 @@ StringRef IndexUnitReaderImpl::getOutputFile() const {
   return OutputFile;
 }
 
+StringRef IndexUnitReaderImpl::getTarget() const {
+  return Target;
+}
+
 ArrayRef<StringRef> IndexUnitReaderImpl::getDependencies() const {
   return Dependencies;
 }
@@ -189,6 +193,10 @@ StringRef IndexUnitReader::getWorkingDirectory() const {
 
 StringRef IndexUnitReader::getOutputFile() const {
   return IMPL->getOutputFile();
+}
+
+StringRef IndexUnitReader::getTarget() const {
+  return IMPL->getTarget();
 }
 
 ArrayRef<StringRef> IndexUnitReader::getDependencies() const {
