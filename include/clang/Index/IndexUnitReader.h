@@ -32,6 +32,7 @@ public:
   llvm::sys::TimeValue getModificationTime() const;
   StringRef getWorkingDirectory() const;
   StringRef getOutputFile() const;
+  StringRef getTarget() const;
 
   ArrayRef<StringRef> getDependencies() const;
 

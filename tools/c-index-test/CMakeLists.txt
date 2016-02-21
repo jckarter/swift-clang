@@ -5,6 +5,7 @@ set(LLVM_LINK_COMPONENTS
 add_clang_executable(c-index-test
   c-index-test.c
   core_main.cpp
+  JSONAggregation.cpp
   )
 
 if(NOT MSVC)

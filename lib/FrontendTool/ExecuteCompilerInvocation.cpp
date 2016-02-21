@@ -162,6 +162,13 @@ CreateFrontendAction(CompilerInstance &CI) {
     index::RecordingOptions RecordOpts;
     index::IndexingOptions IndexOpts;
     RecordOpts.DataDirPath = FEOpts.IndexStorePath;
+    if (FEOpts.IndexIgnoreSystemSymbols) {
+      IndexOpts.SystemSymbolFilter =
+        index::IndexingOptions::SystemSymbolFilterKind::None;
+    }
+    RecordOpts.RecordSymbolCodeGenName = FEOpts.IndexRecordCodegenName;
+    RecordOpts.RecordSystemDependencies =
+      FEOpts.IndexRecordSystemDependencies;
     Act = index::createIndexDataRecordingAction(IndexOpts, RecordOpts,
                                                 std::move(Act));
   }

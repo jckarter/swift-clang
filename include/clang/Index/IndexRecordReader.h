@@ -15,6 +15,10 @@
 #include "llvm/ADT/StringRef.h"
 #include <memory>
 
+namespace llvm {
+  class MemoryBuffer;
+}
+
 namespace clang {
 namespace index {
 
@@ -51,8 +55,14 @@ class IndexRecordReader {
   IndexRecordReader();
 
 public:
-  static std::unique_ptr<IndexRecordReader> create(StringRef Path,
-                                                   std::string &Error);
+  static std::unique_ptr<IndexRecordReader>
+    createWithRecordFilename(StringRef RecordFilename, StringRef StorePath,
+                             std::string &Error);
+  static std::unique_ptr<IndexRecordReader>
+    createWithFilePath(StringRef FilePath, std::string &Error);
+  static std::unique_ptr<IndexRecordReader>
+    createWithBuffer(std::unique_ptr<llvm::MemoryBuffer> Buffer,
+                     std::string &Error);
 
   ~IndexRecordReader();
 
