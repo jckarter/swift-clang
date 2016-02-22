@@ -149,10 +149,10 @@ bool IndexRecordWriter::writeRecord(StringRef Filename,
 
   SmallString<512> Buffer;
   BitstreamWriter Stream(Buffer);
-  Stream.Emit('C', 8);
   Stream.Emit('I', 8);
   Stream.Emit('D', 8);
   Stream.Emit('X', 8);
+  Stream.Emit('S', 8);
 
   writeBlockInfo(Stream);
   writeVersionInfo(Stream);

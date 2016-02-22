@@ -460,10 +460,10 @@ IndexRecordReader::createWithBuffer(std::unique_ptr<llvm::MemoryBuffer> Buffer,
   llvm::BitstreamCursor Stream(Impl.BitReader);
 
   // Sniff for the signature.
-  if (Stream.Read(8) != 'C' ||
-      Stream.Read(8) != 'I' ||
+  if (Stream.Read(8) != 'I' ||
       Stream.Read(8) != 'D' ||
-      Stream.Read(8) != 'X') {
+      Stream.Read(8) != 'X' ||
+      Stream.Read(8) != 'S') {
     Error = "not a serialized clang index record file";
     return nullptr;
   }
