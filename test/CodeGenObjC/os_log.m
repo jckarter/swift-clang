@@ -11,9 +11,9 @@ extern __attribute__((visibility("default"))) NSString * GenString();
 
 // Behavior of __builtin_os_log differs between platforms, so only test on X86
 #ifdef __x86_64__
-// CHECK-LABEL: define void @test_builtin_os_log
-void test_builtin_os_log(void *buf) {
-  __builtin_os_log_format(buf, "capabilities: %@", GenString());
+// CHECK-LABEL: define i8* @test_builtin_os_log
+void *test_builtin_os_log(void *buf) {
+  return __builtin_os_log_format(buf, "capabilities: %@", GenString());
 
   // CHECK: [[BUF:%.*]] = load i8*, i8**
 
@@ -38,6 +38,7 @@ void test_builtin_os_log(void *buf) {
   // CHECK: call void (...) @clang.arc.use({{.*}} [[AUTO_CAST]])
   // CHECK: [[AUTO_CAST2:%.*]] = bitcast {{.*}} [[AUTO_CAST]] to i8*
   // CHECK: call void @objc_release(i8* [[AUTO_CAST2]])
+  // CHECK: ret i8* [[BUF]]
 }
 
 #endif

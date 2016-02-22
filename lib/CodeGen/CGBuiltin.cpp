@@ -1982,7 +1982,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     analyze_os_log::OSLogBufferLayout Layout;
     analyze_os_log::computeOSLogBufferLayout(CGM.getContext(), E, Layout);
     Address BufAddr = EmitPointerWithAlignment(E->getArg(0));
-    llvm::Value *FormatStr = EmitScalarExpr(E->getArg(1));
+    // Ignore argument 1, the format string. It is not currently used.
     CharUnits offset;
     Builder.CreateStore(
       Builder.getInt8(Layout.getSummaryByte()),
@@ -2035,7 +2035,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     if (!RetainableOperands.empty())
       for (llvm::Value *object : RetainableOperands)
          pushFullExprCleanup<CallObjCArcUse>(getARCCleanupKind(), object);
-    return RValue::get(FormatStr);
+
+    return RValue::get(BufAddr.getPointer());
   }
 
   case Builtin::BI__builtin_os_log_format_buffer_size: {

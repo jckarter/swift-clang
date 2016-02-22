@@ -2941,7 +2941,7 @@ bool Sema::SemaBuiltinOSLogFormat(CallExpr *TheCall) {
   if (IsSizeCall) {
     TheCall->setType(Context.getSizeType());
   } else {
-    TheCall->setType(Context.getPointerType(Context.CharTy.withConst()));
+    TheCall->setType(Context.VoidPtrTy);
   }
   return false;
 }
