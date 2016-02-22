@@ -114,7 +114,7 @@ protected:
 };
 
 class WrappingIndexAction : public WrapperFrontendAction, IndexActionBase {
-  bool IndexActionFailed = false;
+  bool CreatedASTConsumer = false;
 
 public:
   WrappingIndexAction(std::unique_ptr<FrontendAction> WrappedAction,
@@ -134,18 +134,17 @@ protected:
 void WrappingIndexAction::EndSourceFileAction() {
   // Invoke wrapped action's method.
   WrapperFrontendAction::EndSourceFileAction();
-  if (!IndexActionFailed)
+  if (CreatedASTConsumer)
     finish();
 }
 
 std::unique_ptr<ASTConsumer>
 WrappingIndexAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   auto OtherConsumer = WrapperFrontendAction::CreateASTConsumer(CI, InFile);
-  if (!OtherConsumer) {
-    IndexActionFailed = true;
+  if (!OtherConsumer)
     return nullptr;
-  }
 
+  CreatedASTConsumer = true;
   std::vector<std::unique_ptr<ASTConsumer>> Consumers;
   Consumers.push_back(std::move(OtherConsumer));
   Consumers.push_back(createIndexASTConsumer(CI));
@@ -269,7 +268,7 @@ protected:
 };
 
 class WrappingIndexRecordAction : public WrapperFrontendAction, IndexRecordActionBase {
-  bool IndexActionFailed = false;
+  bool CreatedASTConsumer = false;
 
 public:
   WrappingIndexRecordAction(std::unique_ptr<FrontendAction> WrappedAction,
@@ -282,11 +281,10 @@ protected:
   std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
                                                  StringRef InFile) override {
     auto OtherConsumer = WrapperFrontendAction::CreateASTConsumer(CI, InFile);
-    if (!OtherConsumer) {
-      IndexActionFailed = true;
+    if (!OtherConsumer)
       return nullptr;
-    }
 
+    CreatedASTConsumer = true;
     std::vector<std::unique_ptr<ASTConsumer>> Consumers;
     Consumers.push_back(std::move(OtherConsumer));
     Consumers.push_back(createIndexASTConsumer(CI));
@@ -296,7 +294,7 @@ protected:
   void EndSourceFileAction() override {
     // Invoke wrapped action's method.
     WrapperFrontendAction::EndSourceFileAction();
-    if (!IndexActionFailed)
+    if (CreatedASTConsumer)
       finish(getCompilerInstance());
   }
 };
