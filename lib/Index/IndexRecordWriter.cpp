@@ -24,6 +24,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Signals.h"
 
 #include <unistd.h>
 
@@ -147,6 +148,8 @@ bool IndexRecordWriter::writeRecord(StringRef Filename,
     return true;
   }
 
+  sys::RemoveFileOnSignal(RecordPath.str());
+
   SmallString<512> Buffer;
   BitstreamWriter Stream(Buffer);
   Stream.Emit('I', 8);
@@ -163,6 +166,8 @@ bool IndexRecordWriter::writeRecord(StringRef Filename,
 
   OS.write(Buffer.data(), Buffer.size());
   OS.close();
+
+  sys::DontRemoveFileOnSignal(RecordPath.str());
 
   return false;
 }
