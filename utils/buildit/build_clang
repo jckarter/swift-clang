@@ -303,6 +303,9 @@ mkdir -p $TOOLCHAIN_USR/local/OpenSourceLicenses/
 install -m 0444 $LLVM_SRCROOT/LICENSE.TXT $TOOLCHAIN_USR/local/OpenSourceLicenses/clang-llvm.txt
 install -m 0444 $LLVM_SRCROOT/tools/clang/LICENSE.TXT $TOOLCHAIN_USR/local/OpenSourceLicenses/clang.txt
 
+if [ "$BUILDING_HOST" != "YES" ]; then
+  rm -rf $DSTROOT/usr/local/include/llvm*
+fi
 
 cd $TOOLCHAIN_USR/share/man/man1
 ln -sf clang.1 cc.1
