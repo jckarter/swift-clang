@@ -58,7 +58,7 @@ public:
 
 /// Describes API notes data for any entity.
 ///
-/// This is used as the base of
+/// This is used as the base of all API notes.
 class CommonEntityInfo {
 public:
   /// Message to use when this entity is unavailable.
@@ -67,12 +67,20 @@ public:
   /// Whether this entity is marked unavailable.
   unsigned Unavailable : 1;
 
-  CommonEntityInfo() : Unavailable(0) { }
+  /// Whether this entity is marked unavailable in Swift.
+  unsigned UnavailableInSwift : 1;
+
+  /// Swift name of this entity.
+  std::string SwiftName;
+
+  CommonEntityInfo() : Unavailable(0), UnavailableInSwift(0) { }
 
   friend bool operator==(const CommonEntityInfo &lhs,
                          const CommonEntityInfo &rhs) {
     return lhs.UnavailableMsg == rhs.UnavailableMsg &&
-           lhs.Unavailable == rhs.Unavailable;
+           lhs.Unavailable == rhs.Unavailable &&
+           lhs.UnavailableInSwift == rhs.UnavailableInSwift &&
+           lhs.SwiftName == rhs.SwiftName;
   }
 
   friend bool operator!=(const CommonEntityInfo &lhs,
@@ -90,6 +98,18 @@ public:
         lhs.UnavailableMsg = rhs.UnavailableMsg;
       }
     }
+
+    if (rhs.UnavailableInSwift) {
+      lhs.UnavailableInSwift = true;
+      if (rhs.UnavailableMsg.length() != 0 &&
+          lhs.UnavailableMsg.length() == 0) {
+        lhs.UnavailableMsg = rhs.UnavailableMsg;
+      }
+    }
+
+    if (rhs.SwiftName.length() != 0 &&
+        lhs.SwiftName.length() == 0)
+      lhs.SwiftName = rhs.SwiftName;
 
     return lhs;
   }

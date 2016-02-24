@@ -44,7 +44,7 @@
 
  Availability: OSX        # Optional: Specifies which platform the API is
                           # available on. [OSX / iOS / TVOS / WatchOS / none/
-                          #                available]
+                          #                available / nonswift]
 
  AvailabilityMsg: ""  # Optional: Custom availability message to display to
                           # the user, when API is not available.
@@ -145,6 +145,7 @@ namespace {
     TvOS,
     WatchOS,
     None,
+    NonSwift,
   };
 
   enum class MethodKind {
@@ -169,6 +170,7 @@ namespace {
     NullabilitySeq Nullability;
     llvm::Optional<NullabilityKind> NullabilityOfRet;
     AvailabilityItem Availability;
+    StringRef SwiftName;
     api_notes::FactoryAsInitKind FactoryAsInit
       = api_notes::FactoryAsInitKind::Infer;
     bool DesignatedInit = false;
@@ -180,6 +182,7 @@ namespace {
     StringRef Name;
     llvm::Optional<NullabilityKind> Nullability;
     AvailabilityItem Availability;
+    StringRef SwiftName;
   };
   typedef std::vector<Property> PropertiesSeq;
 
@@ -187,6 +190,7 @@ namespace {
     StringRef Name;
     bool AuditedForNullability = false;
     AvailabilityItem Availability;
+    StringRef SwiftName;
     MethodsSeq Methods;
     PropertiesSeq Properties;
   };
@@ -197,6 +201,7 @@ namespace {
     NullabilitySeq Nullability;
     llvm::Optional<NullabilityKind> NullabilityOfRet;
     AvailabilityItem Availability;
+    StringRef SwiftName;
   };
   typedef std::vector<Function> FunctionsSeq;
 
@@ -204,6 +209,7 @@ namespace {
     StringRef Name;
     llvm::Optional<NullabilityKind> Nullability;
     AvailabilityItem Availability;
+    StringRef SwiftName;
   };
   typedef std::vector<GlobalVariable> GlobalVariablesSeq;
 
@@ -268,6 +274,7 @@ namespace llvm {
         io.enumCase(value, "TVOS",      APIAvailability::TvOS);
         io.enumCase(value, "WatchOS",   APIAvailability::WatchOS);
         io.enumCase(value, "none",      APIAvailability::None);
+        io.enumCase(value, "nonswift",  APIAvailability::NonSwift);
         io.enumCase(value, "available", APIAvailability::Available);
       }
     };
@@ -280,6 +287,7 @@ namespace llvm {
                                           AbsentNullability);
         io.mapOptional("Availability",    p.Availability.Mode);
         io.mapOptional("AvailabilityMsg", p.Availability.Msg);
+        io.mapOptional("SwiftName",       p.SwiftName);
       }
     };
 
@@ -293,6 +301,7 @@ namespace llvm {
                                             AbsentNullability);
         io.mapOptional("Availability",    m.Availability.Mode);
         io.mapOptional("AvailabilityMsg", m.Availability.Msg);
+        io.mapOptional("SwiftName",       m.SwiftName);
         io.mapOptional("FactoryAsInit",   m.FactoryAsInit,
                                           api_notes::FactoryAsInitKind::Infer);
         io.mapOptional("DesignatedInit",  m.DesignatedInit, false);
@@ -307,6 +316,7 @@ namespace llvm {
         io.mapOptional("AuditedForNullability", c.AuditedForNullability, false);
         io.mapOptional("Availability",          c.Availability.Mode);
         io.mapOptional("AvailabilityMsg",       c.Availability.Msg);
+        io.mapOptional("SwiftName",             c.SwiftName);
         io.mapOptional("Methods",               c.Methods);
         io.mapOptional("Properties",            c.Properties);
       }
@@ -321,6 +331,7 @@ namespace llvm {
                                            AbsentNullability);
         io.mapOptional("Availability",     f.Availability.Mode);
         io.mapOptional("AvailabilityMsg",  f.Availability.Msg);
+        io.mapOptional("SwiftName",        f.SwiftName);
       }
     };
 
@@ -332,6 +343,7 @@ namespace llvm {
                                           AbsentNullability);
         io.mapOptional("Availability",    v.Availability.Mode);
         io.mapOptional("AvailabilityMsg", v.Availability.Msg);
+        io.mapOptional("SwiftName",       v.SwiftName);
       }
     };
 
@@ -414,9 +426,10 @@ static bool compile(const Module &module,
     bool convertAvailability(const AvailabilityItem &in,
                              CommonEntityInfo &outInfo,
                              llvm::StringRef apiName) {
-      // Populate the 'Unavailable' information.
+      // Populate the unavailability information.
       outInfo.Unavailable = (in.Mode == APIAvailability::None);
-      if (outInfo.Unavailable) {
+      outInfo.UnavailableInSwift = (in.Mode == APIAvailability::NonSwift);
+      if (outInfo.Unavailable || outInfo.UnavailableInSwift) {
         outInfo.UnavailableMsg = in.Msg;
       } else {
         if (!in.Msg.empty()) {
@@ -464,6 +477,7 @@ static bool compile(const Module &module,
         return;
 
       convertAvailability(meth.Availability, mInfo, meth.Selector);
+      mInfo.SwiftName = meth.SwiftName;
 
       // Check if the selector ends with ':' to determine if it takes arguments.
       bool takesArguments = meth.Selector.endswith(":");
@@ -506,6 +520,7 @@ static bool compile(const Module &module,
         return;
 
       convertAvailability(cl.Availability, cInfo, cl.Name);
+      cInfo.SwiftName = cl.SwiftName;
 
       if (cl.AuditedForNullability)
         cInfo.setDefaultNullability(*DefaultNullability);
@@ -546,6 +561,7 @@ static bool compile(const Module &module,
         if (!isAvailable(prop.Availability))
           continue;
         convertAvailability(prop.Availability, pInfo, prop.Name);
+        pInfo.SwiftName = prop.SwiftName;
         if (prop.Nullability)
           pInfo.setNullabilityAudited(*prop.Nullability);
         Writer->addObjCProperty(clID, prop.Name, pInfo);
@@ -599,6 +615,7 @@ static bool compile(const Module &module,
         if (!isAvailable(global.Availability))
           continue;
         convertAvailability(global.Availability, info, global.Name);
+        info.SwiftName = global.SwiftName;
         if (global.Nullability)
           info.setNullabilityAudited(*global.Nullability);
         Writer->addGlobalVariable(global.Name, info);
@@ -618,6 +635,7 @@ static bool compile(const Module &module,
         if (!isAvailable(function.Availability))
           continue;
         convertAvailability(function.Availability, info, function.Name);
+        info.SwiftName = function.SwiftName;
         convertNullability(function.Nullability,
                            function.NullabilityOfRet,
                            info, function.Name);
@@ -708,6 +726,8 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
 
       // Handle class information.
       handleAvailability(record.Availability, info);
+      record.SwiftName = copyString(info.SwiftName);
+
       if (info.getDefaultNullability()) {
         record.AuditedForNullability = true;
       }
@@ -718,6 +738,11 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
                             const CommonEntityInfo &info) {
       if (info.Unavailable) {
         availability.Mode = APIAvailability::None;
+        availability.Msg = copyString(info.UnavailableMsg);
+      }
+
+      if (info.UnavailableInSwift) {
+        availability.Mode = APIAvailability::NonSwift;
         availability.Msg = copyString(info.UnavailableMsg);
       }
     }
@@ -767,6 +792,7 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
       handleNullability(method.Nullability, method.NullabilityOfRet, info,
                         selector.count(':'));
       handleAvailability(method.Availability, info);
+      method.SwiftName = copyString(info.SwiftName);
       method.FactoryAsInit = info.getFactoryAsInitKind();
       method.DesignatedInit = info.DesignatedInit;
       method.Required = info.Required;
@@ -783,6 +809,7 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
       Property property;
       property.Name = name;
       handleAvailability(property.Availability, info);
+      property.SwiftName = copyString(info.SwiftName);
 
       // FIXME: No way to represent "not audited for nullability".
       if (auto nullability = info.getNullability()) {
@@ -801,6 +828,7 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
       Function function;
       function.Name = name;
       handleAvailability(function.Availability, info);
+      function.SwiftName = copyString(info.SwiftName);
       if (info.NumAdjustedNullable > 0)
         handleNullability(function.Nullability, function.NullabilityOfRet,
                           info, info.NumAdjustedNullable-1);
@@ -813,6 +841,7 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
       GlobalVariable global;
       global.Name = name;
       handleAvailability(global.Availability, info);
+      global.SwiftName = copyString(info.SwiftName);
 
       // FIXME: No way to represent "not audited for nullability".
       if (auto nullability = info.getNullability()) {
