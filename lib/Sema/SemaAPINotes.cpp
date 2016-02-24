@@ -192,6 +192,12 @@ static void ProcessAPINotes(Sema &S, ObjCMethodDecl *D,
     }
   }
 
+  if (Info.getFactoryAsInitKind()
+        == api_notes::FactoryAsInitKind::AsClassMethod &&
+      !D->getAttr<SwiftNameAttr>()) {
+    D->addAttr(SwiftSuppressFactoryAsInitAttr::CreateImplicit(S.Context));
+  }
+
   // Handle common function information.
   ProcessAPINotes(S, FunctionOrMethod(D),
                   static_cast<const api_notes::FunctionInfo &>(Info));
@@ -208,10 +214,7 @@ static void ProcessAPINotes(Sema &S, ObjCContainerDecl *D,
 /// Process API notes that are associated with this declaration, mapping them
 /// to attributes as appropriate.
 void Sema::ProcessAPINotes(Decl *D) {
-  if (!Context.getLangOpts().APINotes)
-    return;
-  
-  if (!D || D->getLocation().isInvalid())
+  if (!D)
     return;
 
   // Globals.
