@@ -6540,7 +6540,7 @@ static bool tryEvaluateBuiltinObjectSize(const Expr *E, unsigned Type,
   if (End.InvalidBase && SubobjectOnly && Type == 1 &&
       End.Designator.Entries.size() == End.Designator.MostDerivedPathLength &&
       End.Designator.MostDerivedIsArrayElement &&
-      End.Designator.MostDerivedArraySize < 2 &&
+      // End.Designator.MostDerivedArraySize < 2 &&
       isDesignatorAtObjectEnd(Info.Ctx, End))
     return false;
 

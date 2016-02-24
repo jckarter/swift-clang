@@ -276,7 +276,10 @@ void test23(struct Test23Ty *p) {
 
   // CHECK: call i64 @llvm.objectsize.i64.p0i8(i8* %{{.*}}, i1 false)
   gi = __builtin_object_size(&p->t[5], 0);
-  // CHECK: store i32 20
+  // APPLE INTERNAL: Treat size of array at end of struct as unknown.
+  // rdar://problem/24701869
+  // SKIP: store i32 20
+  // CHECK: call i64 @llvm.objectsize.i64.p0i8(i8* %{{.*}}, i1 false)
   gi = __builtin_object_size(&p->t[5], 1);
   // CHECK: call i64 @llvm.objectsize.i64.p0i8(i8* %{{.*}}, i1 true)
   gi = __builtin_object_size(&p->t[5], 2);
@@ -444,7 +447,10 @@ void test29(struct DynStructVar *dv, struct DynStruct0 *d0,
 
   // CHECK: call i64 @llvm.objectsize.i64.p0i8(i8* %{{.*}}, i1 false)
   gi = __builtin_object_size(ss->snd, 0);
-  // CHECK: store i32 2
+  // APPLE INTERNAL: Treat size of array at end of struct as unknown.
+  // rdar://problem/24701869
+  // SKIP: store i32 2
+  // CHECK: call i64 @llvm.objectsize.i64.p0i8(i8* %{{.*}}, i1 false)
   gi = __builtin_object_size(ss->snd, 1);
   // CHECK: call i64 @llvm.objectsize.i64.p0i8(i8* %{{.*}}, i1 true)
   gi = __builtin_object_size(ss->snd, 2);
@@ -505,7 +511,10 @@ void test31() {
   // CHECK: call i64 @llvm.objectsize.i64.p0i8(i8* %{{.*}}, i1 false)
   gi = __builtin_object_size(ds1[9].snd, 1);
 
-  // CHECH: store i32 2
+  // APPLE INTERNAL: Treat size of array at end of struct as unknown.
+  // rdar://problem/24701869
+  // SKIP: store i32 2
+  // CHECK: call i64 @llvm.objectsize.i64.p0i8(i8* %{{.*}}, i1 false)
   gi = __builtin_object_size(&ss[9].snd[0], 1);
 
   // CHECK: call i64 @llvm.objectsize.i64.p0i8(i8* %{{.*}}, i1 false)
