@@ -72,16 +72,20 @@ public:
   };
   typedef DeclSearchReturn(DeclSearchCheck)(const IndexRecordDecl &);
 
-  /// Goes through the decls and populates a vector of record decls, based on
-  /// what the given function returns.
+  /// Goes through and passes record decls, after filtering using a \c Checker
+  /// function.
   ///
-  /// Resulting vector can be used as filter for \c foreachOccurrence. This
+  /// Resulting decls can be used as filter for \c foreachOccurrence. This
   /// allows allocating memory only for the record decls that the caller is
   /// interested in.
-  void searchDecls(llvm::function_ref<DeclSearchCheck> Checker,
-                   SmallVectorImpl<const IndexRecordDecl *> &FoundDecls);
+  bool searchDecls(llvm::function_ref<DeclSearchCheck> Checker,
+                   llvm::function_ref<void(const IndexRecordDecl *)> Receiver);
 
-  bool foreachDecl(llvm::function_ref<bool(const IndexRecordDecl *)> Receiver);
+  /// \param NoCache if true, avoids allocating memory for the decls.
+  /// Useful when the caller does not intend to keep \c IndexRecordReader
+  /// for more queries.
+  bool foreachDecl(bool NoCache,
+                   llvm::function_ref<bool(const IndexRecordDecl *)> Receiver);
 
   /// \param DeclsFilter if non-empty indicates the list of decls that we want
   /// to get occurrences for. An empty array indicates that we want occurrences

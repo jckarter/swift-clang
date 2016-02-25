@@ -198,15 +198,15 @@ struct IndexRecordReader::Implementation {
   ///
   /// The advantage of this function is to allocate memory only for the record
   /// decls that the caller is interested in.
-  void searchDecls(llvm::function_ref<DeclSearchCheck> Checker,
-                   SmallVectorImpl<const IndexRecordDecl *> &FoundDecls) {
+  bool searchDecls(llvm::function_ref<DeclSearchCheck> Checker,
+                   llvm::function_ref<void(const IndexRecordDecl *)> Receiver) {
     for (unsigned I = 0, E = getNumDecls(); I != E; ++I) {
       if (const IndexRecordDecl *D = Decls[I]) {
         DeclSearchReturn Ret = Checker(*D);
         if (Ret.AcceptDecl)
-          FoundDecls.push_back(D);
+          Receiver(D);
         if (!Ret.ContinueSearch)
-          return;
+          return false;
         continue;
       }
 
@@ -217,11 +217,12 @@ struct IndexRecordReader::Implementation {
         IndexRecordDecl *D = Allocator.Allocate<IndexRecordDecl>();
         *D = LocalD;
         Decls[I] = D;
-        FoundDecls.push_back(D);
+        Receiver(D);
       }
       if (!Ret.ContinueSearch)
-        return;
+        return false;
     }
+    return true;
   }
 
   void readDecl(unsigned Index, IndexRecordDecl &RecD) {
@@ -303,10 +304,24 @@ struct IndexRecordReader::Implementation {
     return true;
   }
 
-  bool foreachDecl(function_ref<bool(const IndexRecordDecl *)> Receiver) {
-    for (unsigned i = 0, e = getNumDecls(); i != e; ++i) {
-      if (!Receiver(getDecl(i)))
-        return false;
+  bool foreachDecl(bool NoCache,
+                   function_ref<bool(const IndexRecordDecl *)> Receiver) {
+    for (unsigned I = 0, E = getNumDecls(); I != E; ++I) {
+      if (const IndexRecordDecl *D = Decls[I]) {
+        if (!Receiver(D))
+          return false;
+        continue;
+      }
+
+      if (NoCache) {
+        IndexRecordDecl LocalD;
+        readDecl(I, LocalD);
+        if (!Receiver(&LocalD))
+          return false;
+      } else {
+        if (!Receiver(getDecl(I)))
+          return false;
+      }
     }
     return true;
   }
@@ -484,14 +499,15 @@ IndexRecordReader::~IndexRecordReader() {
   delete &Impl;
 }
 
-void IndexRecordReader::searchDecls(
+bool IndexRecordReader::searchDecls(
                         llvm::function_ref<DeclSearchCheck> Checker,
-                        SmallVectorImpl<const IndexRecordDecl *> &FoundDecls) {
-  return Impl.searchDecls(std::move(Checker), FoundDecls);
+                  llvm::function_ref<void(const IndexRecordDecl *)> Receiver) {
+  return Impl.searchDecls(std::move(Checker), std::move(Receiver));
 }
 
-bool IndexRecordReader::foreachDecl(function_ref<bool(const IndexRecordDecl *)> Receiver) {
-  return Impl.foreachDecl(std::move(Receiver));
+bool IndexRecordReader::foreachDecl(bool NoCache,
+                                    function_ref<bool(const IndexRecordDecl *)> Receiver) {
+  return Impl.foreachDecl(NoCache, std::move(Receiver));
 }
 
 bool IndexRecordReader::foreachOccurrence(

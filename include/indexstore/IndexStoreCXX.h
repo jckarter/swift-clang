@@ -1,0 +1,320 @@
+//===--- IndexStoreCXX.h - C++ wrapper for the Index Store C API. ---------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+//
+// Header-only C++ wrapper for the Index Store C API.
+//
+//===----------------------------------------------------------------------===//
+
+#ifndef LLVM_CLANG_INDEXSTORE_INDEXSTORECXX_H
+#define LLVM_CLANG_INDEXSTORE_INDEXSTORECXX_H
+
+#include "indexstore/indexstore.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/TimeValue.h"
+
+namespace indexstore {
+  using llvm::ArrayRef;
+  using llvm::StringRef;
+
+static inline StringRef stringFromIndexStoreStringRef(indexstore_string_ref_t str) {
+  return StringRef(str.data, str.length);
+}
+
+class IndexRecordSymbol {
+  indexstore_symbol_t obj;
+  friend class IndexRecordReader;
+
+public:
+  IndexRecordSymbol(indexstore_symbol_t obj) : obj(obj) {}
+
+  unsigned getLanguage() { return indexstore_symbol_get_language(obj); }
+  unsigned getKind() { return indexstore_symbol_get_kind(obj); }
+  unsigned getSubKind() { return indexstore_symbol_get_sub_kind(obj); }
+  uint64_t getRoles() { return indexstore_symbol_get_roles(obj); }
+  uint64_t getRelatedRoles() { return indexstore_symbol_get_related_roles(obj); }
+  StringRef getName() { return stringFromIndexStoreStringRef(indexstore_symbol_get_name(obj)); }
+  StringRef getUSR() { return stringFromIndexStoreStringRef(indexstore_symbol_get_usr(obj)); }
+  StringRef getCodegenName() { return stringFromIndexStoreStringRef(indexstore_symbol_get_codegen_name(obj)); }
+};
+
+class IndexSymbolRelation {
+  indexstore_symbol_relation_t obj;
+
+public:
+  IndexSymbolRelation(indexstore_symbol_relation_t obj) : obj(obj) {}
+
+  uint64_t getRoles() { return indexstore_symbol_relation_get_roles(obj); }
+  IndexRecordSymbol getSymbol() { return indexstore_symbol_relation_get_symbol(obj); }
+};
+
+class IndexRecordOccurrence {
+  indexstore_occurrence_t obj;
+
+public:
+  IndexRecordOccurrence(indexstore_occurrence_t obj) : obj(obj) {}
+
+  IndexRecordSymbol getSymbol() { return indexstore_occurrence_get_symbol(obj); }
+  uint64_t getRoles() { return indexstore_occurrence_get_roles(obj); }
+  ArrayRef<indexstore_symbol_relation_t> getRelations() {
+    auto arr = indexstore_occurrence_get_relations(obj);
+    return { arr.data, arr.count };
+  }
+  std::pair<unsigned, unsigned> getLineCol() {
+    unsigned line, col;
+    indexstore_occurrence_get_line_col(obj, &line, &col);
+    return std::make_pair(line, col);
+  }
+};
+
+class IndexStore;
+typedef std::shared_ptr<IndexStore> IndexStoreRef;
+
+class IndexStore {
+  indexstore_t obj;
+  friend class IndexRecordReader;
+  friend class IndexUnitReader;
+
+public:
+  IndexStore(StringRef path, std::string &error) {
+    llvm::SmallString<64> buf = path;
+    indexstore_error_t c_err = nullptr;
+    obj = indexstore_store_create(buf.c_str(), &c_err);
+    if (c_err) {
+      error = indexstore_error_get_description(c_err);
+      indexstore_error_dispose(c_err);
+    }
+  }
+
+  IndexStore(IndexStore &&other) : obj(other.obj) {
+    other.obj = nullptr;
+  }
+
+  ~IndexStore() {
+    indexstore_store_dispose(obj);
+  }
+
+  static IndexStoreRef create(StringRef path, std::string &error) {
+    auto storeRef = std::make_shared<IndexStore>(path, error);
+    if (storeRef->isInvalid())
+      return nullptr;
+    return storeRef;
+  }
+
+  bool isValid() const { return obj; }
+  bool isInvalid() const { return !isValid(); }
+  explicit operator bool() const { return isValid(); }
+
+  bool foreachUnit(llvm::function_ref<bool(StringRef unitName)> receiver) {
+    return indexstore_store_units_apply(obj, ^bool(indexstore_string_ref_t unit_name) {
+      return receiver(stringFromIndexStoreStringRef(unit_name));
+    });
+  }
+
+  enum class UnitEventKind {
+    Added,
+    Removed,
+    Modified,
+  };
+  struct UnitEvent {
+    UnitEventKind Kind;
+    StringRef UnitName;
+  };
+  typedef std::function<void(ArrayRef<UnitEvent> Events)> UnitEventHandler;
+
+  void setUnitEventHandler(UnitEventHandler handler) {
+    if (!handler) {
+      indexstore_store_set_unit_event_handler(obj, nullptr);
+      return;
+    }
+
+    indexstore_store_set_unit_event_handler(obj, ^(indexstore_unit_event_t *events, size_t count) {
+      llvm::SmallVector<UnitEvent, 16> unitEvts;
+      unitEvts.reserve(count);
+      for (size_t i = 0; i != count; ++i) {
+        indexstore_unit_event_t c_evt = events[i];
+        UnitEventKind K;
+        switch (c_evt.kind) {
+        case INDEXSTORE_UNIT_EVENT_ADDED: K = UnitEventKind::Added; break;
+        case INDEXSTORE_UNIT_EVENT_REMOVED: K = UnitEventKind::Removed; break;
+        case INDEXSTORE_UNIT_EVENT_MODIFIED: K = UnitEventKind::Modified; break;
+        }
+        unitEvts.push_back(UnitEvent{K, stringFromIndexStoreStringRef(c_evt.unit_name)});
+      }
+      handler(unitEvts);
+    });
+  }
+
+  void discardUnit(StringRef UnitName) {
+    llvm::SmallString<64> buf = UnitName;
+    indexstore_store_discard_unit(obj, buf.c_str());
+  }
+
+  void purgeStaleRecords(ArrayRef<StringRef> activeRecords) {
+    llvm::SmallVector<indexstore_string_ref_t, 16> names;
+    names.reserve(activeRecords.size());
+    for (StringRef rec : activeRecords) {
+      names.push_back(indexstore_string_ref_t{rec.data(), rec.size()});
+    }
+    indexstore_store_purge_stale_records(obj, names.data(), names.size());
+  }
+};
+
+class IndexRecordReader {
+  indexstore_record_reader_t obj;
+
+public:
+  IndexRecordReader(IndexStore &store, StringRef recordName, std::string &error) {
+    llvm::SmallString<64> buf = recordName;
+    indexstore_error_t c_err = nullptr;
+    obj = indexstore_record_reader_create(store.obj, buf.c_str(), &c_err);
+    if (c_err) {
+      error = indexstore_error_get_description(c_err);
+      indexstore_error_dispose(c_err);
+    }
+  }
+
+  IndexRecordReader(IndexRecordReader &&other) : obj(other.obj) {
+    other.obj = nullptr;
+  }
+
+  ~IndexRecordReader() {
+    indexstore_record_reader_dispose(obj);
+  }
+
+  bool isValid() const { return obj; }
+  bool isInvalid() const { return !isValid(); }
+  explicit operator bool() const { return isValid(); }
+
+  /// Goes through and passes record decls, after filtering using a \c Checker
+  /// function.
+  ///
+  /// Resulting decls can be used as filter for \c foreachOccurrence. This
+  /// allows allocating memory only for the record decls that the caller is
+  /// interested in.
+  bool searchSymbols(llvm::function_ref<bool(IndexRecordSymbol, bool &stop)> filter,
+                     llvm::function_ref<void(IndexRecordSymbol)> receiver) {
+    return indexstore_record_reader_search_symbols(obj, ^bool(indexstore_symbol_t symbol, bool *stop) {
+      return filter(symbol, *stop);
+    }, ^(indexstore_symbol_t symbol) {
+      receiver(symbol);
+    });
+  }
+
+  bool foreachSymbol(bool noCache, llvm::function_ref<bool(IndexRecordSymbol)> receiver) {
+    return indexstore_record_reader_symbols_apply(obj, noCache, ^bool(indexstore_symbol_t sym) {
+      return receiver(sym);
+    });
+  }
+
+  /// \param DeclsFilter if non-empty indicates the list of decls that we want
+  /// to get occurrences for. An empty array indicates that we want occurrences
+  /// for all decls.
+  /// \param RelatedDeclsFilter Same as \c DeclsFilter but for related decls.
+  bool foreachOccurrence(ArrayRef<IndexRecordSymbol> symbolsFilter,
+                         ArrayRef<IndexRecordSymbol> relatedSymbolsFilter,
+              llvm::function_ref<bool(IndexRecordOccurrence)> receiver) {
+    llvm::SmallVector<indexstore_symbol_t, 16> c_symbolsFilter;
+    c_symbolsFilter.reserve(symbolsFilter.size());
+    for (IndexRecordSymbol sym : symbolsFilter) {
+      c_symbolsFilter.push_back(sym.obj);
+    }
+    llvm::SmallVector<indexstore_symbol_t, 16> c_relatedSymbolsFilter;
+    c_relatedSymbolsFilter.reserve(relatedSymbolsFilter.size());
+    for (IndexRecordSymbol sym : relatedSymbolsFilter) {
+      c_relatedSymbolsFilter.push_back(sym.obj);
+    }
+    return indexstore_record_reader_occurrences_of_symbols_apply(obj,
+                                c_symbolsFilter.data(), c_symbolsFilter.size(),
+                                c_relatedSymbolsFilter.data(),
+                                c_relatedSymbolsFilter.size(),
+                                ^bool(indexstore_occurrence_t occur) {
+                                  return receiver(occur);
+                                });
+  }
+
+  bool foreachOccurrence(
+              llvm::function_ref<bool(IndexRecordOccurrence)> receiver) {
+    return indexstore_record_reader_occurrences_apply(obj, ^bool(indexstore_occurrence_t occur) {
+      return receiver(occur);
+    });
+  }
+};
+
+class IndexUnitReader {
+  indexstore_unit_reader_t obj;
+
+public:
+  IndexUnitReader(IndexStore &store, StringRef unitName, std::string &error) {
+    llvm::SmallString<64> buf = unitName;
+    indexstore_error_t c_err = nullptr;
+    obj = indexstore_unit_reader_create(store.obj, buf.c_str(), &c_err);
+    if (c_err) {
+      error = indexstore_error_get_description(c_err);
+      indexstore_error_dispose(c_err);
+    }
+  }
+
+  IndexUnitReader(IndexUnitReader &&other) : obj(other.obj) {
+    other.obj = nullptr;
+  }
+
+  ~IndexUnitReader() {
+    indexstore_unit_reader_dispose(obj);
+  }
+
+  bool isValid() const { return obj; }
+  bool isInvalid() const { return !isValid(); }
+  explicit operator bool() const { return isValid(); }
+
+  llvm::sys::TimeValue getModificationTime() {
+    int64_t seconds, nanoseconds;
+    indexstore_unit_reader_get_modification_time(obj, &seconds, &nanoseconds);
+    return llvm::sys::TimeValue(seconds, nanoseconds);
+  }
+
+  StringRef getWorkingDirectory() {
+    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_working_dir(obj));
+  }
+  StringRef getOutputFile() {
+    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_output_file(obj));
+  }
+  StringRef getTarget() {
+    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_target(obj));
+  }
+
+  size_t getDependenciesCount() { return indexstore_unit_reader_dependencies_count(obj); }
+
+  StringRef getDependency(size_t index) {
+    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_dependency(obj, index));
+  }
+
+  bool foreachDependency(llvm::function_ref<bool(StringRef filename)> receiver) {
+    return indexstore_unit_reader_dependencies_apply(obj, ^bool(indexstore_string_ref_t path) {
+      return receiver(stringFromIndexStoreStringRef(path));
+    });
+  }
+
+  bool foreachRecord(llvm::function_ref<bool(StringRef recordName,
+                                             StringRef filename,
+                                             unsigned depIndex)> receiver) {
+    return indexstore_unit_reader_records_apply(obj, ^bool(indexstore_string_ref_t record_name,
+                                                           indexstore_string_ref_t filename,
+                                                           size_t dep_index) {
+      return receiver(stringFromIndexStoreStringRef(record_name),
+                      stringFromIndexStoreStringRef(filename),
+                      dep_index);
+    });
+  }
+};
+
+} // namespace indexstore
+
+#endif

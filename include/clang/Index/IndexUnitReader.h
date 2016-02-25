@@ -26,8 +26,11 @@ class IndexUnitReader {
 public:
   ~IndexUnitReader();
 
-  static std::unique_ptr<IndexUnitReader> create(StringRef Filename,
-                                                 std::string &Error);
+  static std::unique_ptr<IndexUnitReader>
+    createWithUnitFilename(StringRef UnitFilename, StringRef StorePath,
+                           std::string &Error);
+  static std::unique_ptr<IndexUnitReader>
+    createWithFilePath(StringRef FilePath, std::string &Error);
 
   llvm::sys::TimeValue getModificationTime() const;
   StringRef getWorkingDirectory() const;
