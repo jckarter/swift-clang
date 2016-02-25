@@ -8,6 +8,7 @@ add_clang_subdirectory(clang-fuzzer)
 
 add_clang_subdirectory(c-index-test)
 add_clang_subdirectory(libclang)
+add_clang_subdirectory(IndexStore)
 
 if(CLANG_ENABLE_ARCMT)
   add_clang_subdirectory(arcmt-test)

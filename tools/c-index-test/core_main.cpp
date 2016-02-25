@@ -194,7 +194,7 @@ static int printRecord(StringRef Filename, raw_ostream &OS) {
     return true;
   }
 
-  Reader->foreachDecl([&](const IndexRecordDecl *Rec)->bool {
+  Reader->foreachDecl(/*noCache=*/true, [&](const IndexRecordDecl *Rec)->bool {
     printSymbol(*Rec, OS);
     return true;
   });

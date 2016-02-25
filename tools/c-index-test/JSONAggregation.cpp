@@ -8,10 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "JSONAggregation.h"
-#include "clang/Index/IndexDataStore.h"
-#include "clang/Index/IndexRecordReader.h"
-#include "clang/Index/IndexUnitReader.h"
-#include "llvm/ADT/ArrayRef.h"
+#include "indexstore/IndexStoreCXX.h"
+#include "clang/Index/IndexSymbol.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Path.h"
@@ -19,6 +17,7 @@
 
 using namespace clang;
 using namespace clang::index;
+using namespace indexstore;
 using namespace llvm;
 
 namespace {
@@ -68,7 +67,7 @@ struct RecordInfo {
 };
 
 class Aggregator {
-  std::string StorePath;
+  IndexStore Store;
 
   BumpPtrAllocator Allocator;
 
@@ -85,13 +84,14 @@ class Aggregator {
   std::vector<SymbolInfo> Symbols;
 
 public:
-  explicit Aggregator(StringRef storePath)
-  : StorePath(storePath),
+  explicit Aggregator(IndexStore store)
+  : Store(std::move(store)),
     FilePathIndices(Allocator),
     Triples(Allocator),
     RecordIndices(Allocator),
     SymbolIndices(Allocator) {}
 
+  bool process();
   void processUnit(IndexUnitReader &UnitReader);
   void dumpJSON(raw_ostream &OS);
 
@@ -110,11 +110,31 @@ private:
 
   FilePathIndex getFilePathIndex(StringRef path, StringRef workingDir);
   RecordIndex getRecordIndex(StringRef recordFile);
-  SymbolIndex getSymbolIndex(const IndexRecordDecl *dcl);
+  SymbolIndex getSymbolIndex(IndexRecordSymbol sym);
   std::unique_ptr<RecordInfo> processRecord(StringRef recordFile);
 };
 
 } // anonymous namespace
+
+bool Aggregator::process() {
+  std::vector<std::string> unitFilenames;
+  Store.foreachUnit([&](StringRef name) -> bool {
+    unitFilenames.push_back(name);
+    return true;
+  });
+
+  for (auto &unitFname : unitFilenames) {
+    std::string error;
+    auto unitReader = IndexUnitReader(Store, unitFname, error);
+    if (!unitReader) {
+      errs() << "error opening unit file '" << unitFname << "': " << error << '\n';
+      return true;
+    }
+
+    processUnit(unitReader);
+  }
+  return false;
+}
 
 void Aggregator::processUnit(IndexUnitReader &UnitReader) {
   auto workDir = UnitReader.getWorkingDirectory();
@@ -122,13 +142,13 @@ void Aggregator::processUnit(IndexUnitReader &UnitReader) {
   unit->Triple = getTripleString(UnitReader.getTarget());
   unit->OutFile = getFilePathIndex(UnitReader.getOutputFile(), workDir);
 
-  auto depends = UnitReader.getDependencies();
-  unit->Sources.reserve(depends.size());
-  for (auto dependFilename : UnitReader.getDependencies()) {
+  unit->Sources.reserve(UnitReader.getDependenciesCount());
+  UnitReader.foreachDependency([&](StringRef dependFilename) -> bool {
     UnitSourceInfo source;
     source.FilePath = getFilePathIndex(dependFilename, workDir);
     unit->Sources.push_back(std::move(source));
-  }
+    return true;
+  });
   UnitReader.foreachRecord([&](StringRef recordFile, StringRef filename, unsigned depIndex) -> bool {
     RecordIndex recIndex = getRecordIndex(recordFile);
     unit->Sources[depIndex].AssociatedRecords.push_back(recIndex);
@@ -168,43 +188,42 @@ RecordIndex Aggregator::getRecordIndex(StringRef recordFile) {
 
 std::unique_ptr<RecordInfo> Aggregator::processRecord(StringRef recordFile) {
   std::string error;
-  auto recordReader = IndexRecordReader::createWithRecordFilename(recordFile, StorePath, error);
+  auto recordReader = IndexRecordReader(Store, recordFile, error);
   if (!recordReader) {
     errs() << "failed reading record file: " << recordFile << '\n';
     ::exit(1);
   }
   auto record = llvm::make_unique<RecordInfo>();
-  recordReader->foreachOccurrence([&](const IndexRecordOccurrence &idxOccur) -> bool {
-    SymbolIndex symIdx = getSymbolIndex(idxOccur.Dcl);
+  recordReader.foreachOccurrence([&](IndexRecordOccurrence idxOccur) -> bool {
+    SymbolIndex symIdx = getSymbolIndex(idxOccur.getSymbol());
     SymbolInfo &symInfo = Symbols[symIdx];
-    symInfo.Roles |= idxOccur.Roles;
+    symInfo.Roles |= idxOccur.getRoles();
     SymbolOccurrenceInfo occurInfo;
     occurInfo.Symbol = symIdx;
-    for (auto &rel : idxOccur.Relations) {
-      SymbolIndex relsymIdx = getSymbolIndex(rel.Dcl);
+    for (IndexSymbolRelation rel : idxOccur.getRelations()) {
+      SymbolIndex relsymIdx = getSymbolIndex(rel.getSymbol());
       SymbolInfo &relsymInfo = Symbols[relsymIdx];
-      relsymInfo.RelatedRoles |= rel.Roles;
-      occurInfo.Relations.emplace_back(relsymIdx, rel.Roles);
+      relsymInfo.RelatedRoles |= rel.getRoles();
+      occurInfo.Relations.emplace_back(relsymIdx, rel.getRoles());
     }
-    occurInfo.Roles = idxOccur.Roles;
-    occurInfo.Line = idxOccur.Line;
-    occurInfo.Column = idxOccur.Column;
+    occurInfo.Roles = idxOccur.getRoles();
+    std::tie(occurInfo.Line, occurInfo.Column) = idxOccur.getLineCol();
     record->Occurrences.push_back(std::move(occurInfo));
     return true;
   });
   return record;
 }
 
-SymbolIndex Aggregator::getSymbolIndex(const IndexRecordDecl *dcl) {
-  auto pair = SymbolIndices.insert(std::make_pair(dcl->USR, Symbols.size()));
+SymbolIndex Aggregator::getSymbolIndex(IndexRecordSymbol sym) {
+  auto pair = SymbolIndices.insert(std::make_pair(sym.getUSR(), Symbols.size()));
   bool wasInserted = pair.second;
   if (wasInserted) {
     SymbolInfo symInfo;
-    symInfo.Kind = dcl->Kind;
-    symInfo.Lang = dcl->Lang;
+    symInfo.Kind = SymbolKind(sym.getKind());
+    symInfo.Lang = SymbolLanguage(sym.getLanguage());
     symInfo.USR = pair.first->first();
-    symInfo.Name = copyStr(dcl->Name);
-    symInfo.CodegenName = copyStr(dcl->CodeGenName);
+    symInfo.Name = copyStr(sym.getName());
+    symInfo.CodegenName = copyStr(sym.getCodegenName());
     Symbols.push_back(std::move(symInfo));
   }
   return pair.first->second;
@@ -326,26 +345,18 @@ void Aggregator::dumpJSON(raw_ostream &OS) {
 
 bool index::aggregateDataAsJSON(StringRef StorePath, raw_ostream &OS) {
   std::string error;
-  auto dataStore = IndexDataStore::create(StorePath, error);
+  auto dataStore = IndexStore(StorePath, error);
   if (!dataStore) {
     errs() << "error opening store path '" << StorePath << "': " << error << '\n';
     return true;
   }
 
-  auto unitPaths = dataStore->getAllUnitPaths();
   // Explicitely avoid doing any memory cleanup for aggregator since the process
   // is going to exit when we are done.
-  Aggregator *aggregator = new Aggregator(StorePath);
-  for (auto &unitPath : unitPaths) {
-    auto unitReader = IndexUnitReader::create(unitPath, error);
-    if (!unitReader) {
-      errs() << "error opening unit file '" << unitPath << "': " << error << '\n';
-      return true;
-    }
-
-    aggregator->processUnit(*unitReader);
-  }
-
+  Aggregator *aggregator = new Aggregator(std::move(dataStore));
+  bool err = aggregator->process();
+  if (err)
+    return true;
   aggregator->dumpJSON(OS);
   return false;
 }

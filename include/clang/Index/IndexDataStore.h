@@ -11,6 +11,8 @@
 #define LLVM_CLANG_INDEX_INDEXDATASTORE_H
 
 #include "clang/Basic/LLVM.h"
+#include "llvm/ADT/StringRef.h"
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -24,7 +26,27 @@ public:
   static std::unique_ptr<IndexDataStore>
     create(StringRef IndexStorePath, std::string &Error);
 
-  std::vector<std::string> getAllUnitPaths() const;
+  StringRef getFilePath() const;
+  std::vector<std::string> getAllUnitFilenames() const;
+
+  static unsigned getFormatVersion();
+
+  enum class UnitEventKind {
+    Added,
+    Removed,
+    Modified,
+  };
+  struct UnitEvent {
+    UnitEventKind Kind;
+    StringRef UnitName;
+  };
+  typedef std::function<void(ArrayRef<UnitEvent> Events)> UnitEventHandler;
+
+  void setUnitEventHandler(UnitEventHandler Handler);
+
+  void discardUnit(StringRef UnitName);
+
+  void purgeStaleRecords(ArrayRef<StringRef> ActiveRecords);
 
 private:
   IndexDataStore(void *Impl) : Impl(Impl) {}

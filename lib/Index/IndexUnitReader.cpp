@@ -8,17 +8,21 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Index/IndexUnitReader.h"
+#include "IndexDataStoreUtils.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/TimeValue.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <unistd.h>
 
 using namespace clang;
 using namespace clang::index;
+using namespace clang::index::store;
 using namespace llvm;
 
 namespace {
@@ -129,14 +133,22 @@ bool IndexUnitReaderImpl::foreachRecord(llvm::function_ref<bool(StringRef Record
 //===----------------------------------------------------------------------===//
 
 std::unique_ptr<IndexUnitReader>
-IndexUnitReader::create(StringRef Filename, std::string &Error) {
+IndexUnitReader::createWithUnitFilename(StringRef UnitFilename,
+                                        StringRef StorePath,
+                                        std::string &Error) {
+  SmallString<128> PathBuf = StorePath;
+  makeUnitSubDir(PathBuf);
+  sys::path::append(PathBuf, UnitFilename);
+  return createWithFilePath(PathBuf.str(), Error);
+}
+
+std::unique_ptr<IndexUnitReader>
+IndexUnitReader::createWithFilePath(StringRef FilePath, std::string &Error) {
   int FD;
-  std::error_code EC = sys::fs::openFileForRead(Filename, FD);
+  std::error_code EC = sys::fs::openFileForRead(FilePath, FD);
   if (EC) {
-    Error = "Failed opening '";
-    Error += Filename;
-    Error += "': ";
-    Error += EC.message();
+    raw_string_ostream(Error) << "Failed opening '" << FilePath << "': "
+      << EC.message();
     return nullptr;
   }
 
@@ -156,13 +168,11 @@ IndexUnitReader::create(StringRef Filename, std::string &Error) {
     return nullptr;
   }
 
-  auto ErrOrBuf = MemoryBuffer::getOpenFile(FD, Filename, /*FileSize=*/-1,
+  auto ErrOrBuf = MemoryBuffer::getOpenFile(FD, FilePath, /*FileSize=*/-1,
                                             /*RequiresNullTerminator=*/false);
   if (!ErrOrBuf) {
-    Error = "Failed opening '";
-    Error += Filename;
-    Error += "': ";
-    Error += ErrOrBuf.getError().message();
+    raw_string_ostream(Error) << "Failed opening '" << FilePath << "': "
+      << ErrOrBuf.getError().message();
     return nullptr;
   }
 
