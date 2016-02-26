@@ -462,3 +462,6 @@
 // CHECK-WCHAR2: -fshort-wchar
 // CHECK-WCHAR2-NOT: -fno-short-wchar
 // DELIMITERS: {{^ *"}}
+
+// RUN: %clang -### -fobjc-gc-only %s 2>&1 | FileCheck -check-prefix=CHECK-OBJC-GC-ONLY %s
+// CHECK-OBJC-GC-ONLY: error: unsupported option '-fobjc-gc-only'

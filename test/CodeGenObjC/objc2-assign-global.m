@@ -1,5 +1,6 @@
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fobjc-runtime=macosx-fragile-10.5 -fobjc-gc -emit-llvm -o %t %s
 // RUN: grep -F '@objc_assign_global' %t  | count 26
+// XFAIL: *
 
 @class NSObject;
 typedef const struct __CFDictionary * CFDictionaryRef;

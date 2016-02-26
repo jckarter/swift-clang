@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -analyze -analyzer-checker=core,osx.cocoa.RetainCount -analyzer-store=region -analyzer-constraints=range -verify -fobjc-gc %s  -Wno-implicit-function-declaration
+// XFAIL: *
 
 //===----------------------------------------------------------------------===//
 // The following code is reduced using delta-debugging from

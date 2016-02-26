@@ -2,6 +2,7 @@
 // RUN: %clang_cc1 -x objective-c++ -triple x86_64-apple-darwin10  -fobjc-gc -emit-llvm -o - %s | FileCheck -check-prefix CHECK-LP64 %s
 // rdar: // 7849824
 // <rdar://problem/12547611>
+// XFAIL: *
 
 struct s {
   double a, b, c, d;  

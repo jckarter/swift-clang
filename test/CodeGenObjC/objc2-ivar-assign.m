@@ -3,6 +3,7 @@
 
 // PR13820
 // REQUIRES: LP64
+// XFAIL: *
 
 @interface I @end
 

@@ -1577,11 +1577,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
         Diags.Report(diag::err_drv_unknown_objc_runtime) << value;
     }
 
-    if (Args.hasArg(OPT_fobjc_gc_only))
-      Opts.setGC(LangOptions::GCOnly);
-    else if (Args.hasArg(OPT_fobjc_gc))
-      Opts.setGC(LangOptions::HybridGC);
-    else if (Args.hasArg(OPT_fobjc_arc)) {
+    if (Args.hasArg(OPT_fobjc_arc)) {
       Opts.ObjCAutoRefCount = 1;
       if (!Opts.ObjCRuntime.allowsARC())
         Diags.Report(diag::err_arc_unsupported_on_runtime);

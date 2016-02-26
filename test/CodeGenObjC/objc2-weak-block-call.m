@@ -1,5 +1,6 @@
 // RUN: %clang_cc1 -fblocks -fobjc-gc -triple x86_64-apple-darwin -fobjc-runtime=macosx-fragile-10.5 -emit-llvm %s -o - | FileCheck -check-prefix CHECK-LP64 %s
 // RUN: %clang_cc1 -fblocks -fobjc-gc -triple i386-apple-darwin -fobjc-runtime=macosx-fragile-10.5 -emit-llvm %s -o - | FileCheck -check-prefix CHECK-LP32 %s
+// XFAIL: *
 
 @interface MyView
 - (void)MyView_sharedInit;

@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fobjc-gc -fsyntax-only -verify %s
+// XFAIL: *
 
 @interface A
 @end

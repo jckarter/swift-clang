@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -fblocks -emit-llvm %s -fobjc-gc -o - | FileCheck %s
+// XFAIL: *
 
 // CHECK: objc_assign_strongCast
 // rdar://5541393

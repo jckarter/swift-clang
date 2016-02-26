@@ -1,9 +1,9 @@
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fobjc-runtime=macosx-fragile-10.5 -fobjc-gc -emit-llvm -o %t %s
-// RUN: grep objc_assign_global %t | count 3
-// RUN: grep objc_assign_strongCast %t | count 2
+// RUN: not grep objc_assign_global %t
+// RUN: not grep objc_assign_strongCast %t
 // RUN: %clang_cc1 -x objective-c++ -triple x86_64-apple-darwin10 -fobjc-runtime=macosx-fragile-10.5 -fobjc-gc -emit-llvm -o %t %s
-// RUN: grep objc_assign_global %t | count 3
-// RUN: grep objc_assign_strongCast %t | count 2
+// RUN: not grep objc_assign_global %t
+// RUN: not grep objc_assign_strongCast %t
 
 @interface A
 @end

@@ -1,9 +1,9 @@
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fobjc-runtime=macosx-fragile-10.5 -fobjc-gc -emit-llvm -o %t %s
 // RUN: not grep objc_assign_ivar %t
-// RUN: grep objc_assign_strongCast %t | count 8
+// RUN: not grep objc_assign_strongCast %t
 // RUN: %clang_cc1 -x objective-c++ -triple x86_64-apple-darwin10 -fobjc-runtime=macosx-fragile-10.5 -fobjc-gc -emit-llvm -o %t %s
 // RUN: not grep objc_assign_ivar %t
-// RUN: grep objc_assign_strongCast %t | count 8
+// RUN: not grep objc_assign_strongCast %t
 
 @interface TestUnarchiver 
 {

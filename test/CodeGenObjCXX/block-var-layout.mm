@@ -2,6 +2,7 @@
 // RUN: FileCheck --input-file=%t-64.layout %s
 // rdar://12184410
 // rdar://12752901
+// XFAIL: *
 
 // See commentary in test/CodeGenObjC/block-var-layout.m, from which
 // this is largely cloned.

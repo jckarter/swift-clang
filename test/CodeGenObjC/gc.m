@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fobjc-gc -emit-llvm -o - %s | FileCheck %s
+// XFAIL: *
 
 void test0(void) {
   extern id test0_helper(void);

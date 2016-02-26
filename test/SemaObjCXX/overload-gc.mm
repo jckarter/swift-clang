@@ -1,5 +1,6 @@
 // RUN: %clang_cc1 -fsyntax-only -triple i386-apple-darwin9 -fobjc-gc -verify %s
 // expected-no-diagnostics
+// XFAIL: *
 
 void f0(__weak id *);
 

@@ -18,6 +18,7 @@
 // RUN: grep "_Block_object_assign" %t | count 4
 // RUN: grep "objc_read_weak" %t | count 2
 // RUN: grep "objc_assign_weak" %t | count 3
+// XFAIL: *
 
 @interface NSDictionary @end
 

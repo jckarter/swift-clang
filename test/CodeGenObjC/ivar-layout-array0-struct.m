@@ -1,6 +1,7 @@
 // REQUIRES: x86-registered-target
 // RUN: %clang_cc1 -fobjc-gc -triple x86_64-apple-darwin -fobjc-runtime=macosx-fragile-10.5 -S %s -o %t-64.s
 // RUN: FileCheck -check-prefix CHECK-LP64 --input-file=%t-64.s %s
+// XFAIL: *
 
 // rdar://8800513
 @interface NSObject {

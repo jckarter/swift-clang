@@ -1,6 +1,7 @@
 // We run this twice, once as Objective-C and once as Objective-C++.
 // RUN: %clang_cc1 %s -emit-llvm -o - -fobjc-gc -fblocks -fexceptions -triple i386-apple-darwin10 -fobjc-runtime=macosx-fragile-10.5 | FileCheck %s
 // RUN: %clang_cc1 %s -emit-llvm -o - -fobjc-gc -fblocks -fexceptions -triple i386-apple-darwin10 -fobjc-runtime=macosx-fragile-10.5 -x objective-c++ | FileCheck %s
+// XFAIL: *
 
 
 // CHECK: define i8* @{{.*}}test0

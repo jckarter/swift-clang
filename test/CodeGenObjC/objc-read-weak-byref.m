@@ -2,6 +2,7 @@
 // RUN: FileCheck %s
 // RUN: %clang_cc1 -fblocks -fobjc-gc -triple i386-apple-darwin -fobjc-runtime=macosx-fragile-10.5 -emit-llvm %s -o - | \
 // RUN: FileCheck %s
+// XFAIL: *
 
 @interface NSObject 
 - copy;
