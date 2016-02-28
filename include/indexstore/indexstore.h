@@ -166,18 +166,14 @@ indexstore_symbol_relation_get_roles(indexstore_symbol_relation_t);
 INDEXSTORE_PUBLIC indexstore_symbol_t
 indexstore_symbol_relation_get_symbol(indexstore_symbol_relation_t);
 
-typedef struct {
-  indexstore_symbol_relation_t *data;
-  size_t count;
-} indexstore_symbol_relation_array_ref_t;
-
 typedef void *indexstore_occurrence_t;
 
 INDEXSTORE_PUBLIC indexstore_symbol_t
 indexstore_occurrence_get_symbol(indexstore_occurrence_t);
 
-INDEXSTORE_PUBLIC indexstore_symbol_relation_array_ref_t
-indexstore_occurrence_get_relations(indexstore_occurrence_t);
+INDEXSTORE_PUBLIC bool
+indexstore_occurrence_relations_apply(indexstore_occurrence_t,
+                      bool(^applier)(indexstore_symbol_relation_t symbol_rel));
 
 INDEXSTORE_PUBLIC uint64_t
 indexstore_occurrence_get_roles(indexstore_occurrence_t);

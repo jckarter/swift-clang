@@ -4,7 +4,9 @@
     "/Inputs/test1.c",
     "/Inputs/head.h",
     "/test2.o",
-    "/Inputs/test2.c"
+    "/Inputs/test2.c",
+    "/test3.o",
+    "/Inputs/test3.cpp"
   ],
   "symbols": [
     {
@@ -22,6 +24,21 @@
       "name": "test2_func",
       "codegen": "_test2_func",
       "roles": "Decl,Def"
+    },
+    {
+      "kind": "c++-class",
+      "lang": "C++",
+      "usr": "c:@S@Base",
+      "name": "Base",
+      "roles": "Def,Ref,RelBase"
+    },
+    {
+      "kind": "c++-class",
+      "lang": "C++",
+      "usr": "c:@S@Sub",
+      "name": "Sub",
+      "roles": "Def",
+      "rel-roles": "RelBase"
     }
   ],
   "records": [
@@ -60,6 +77,35 @@
           "roles": "Def"
         }
       ]
+    },
+    {
+      "occurrences": [
+        {
+          "symbol": 2,
+          "line": 1,
+          "col": 7,
+          "roles": "Def"
+        },
+        {
+          "symbol": 3,
+          "line": 2,
+          "col": 7,
+          "roles": "Def"
+        },
+        {
+          "symbol": 2,
+          "line": 2,
+          "col": 20,
+          "roles": "Ref,RelBase",
+          "relations": [
+            {
+              "symbol": 3,
+              "rel-roles": "RelBase"
+            }
+          ]
+
+        }
+      ]
     }
   ],
   "units": [
@@ -88,6 +134,16 @@
         {
           "file": 2,
           "records": [1]
+        }
+      ]
+    },
+    {
+      "triple": "x86_64-apple-macosx10.7.0",
+      "out-file": "5",
+      "sources": [
+        {
+          "file": 6,
+          "records": [3]
         }
       ]
     }

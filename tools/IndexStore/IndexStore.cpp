@@ -207,12 +207,15 @@ indexstore_occurrence_get_symbol(indexstore_occurrence_t occur) {
   return (indexstore_symbol_t)static_cast<IndexRecordOccurrence*>(occur)->Dcl;
 }
 
-indexstore_symbol_relation_array_ref_t
-indexstore_occurrence_get_relations(indexstore_occurrence_t occur) {
+bool
+indexstore_occurrence_relations_apply(indexstore_occurrence_t occur,
+                      bool(^applier)(indexstore_symbol_relation_t symbol_rel)) {
   auto *recOccur = static_cast<IndexRecordOccurrence*>(occur);
-  return indexstore_symbol_relation_array_ref_t{
-    (indexstore_symbol_relation_t*)recOccur->Relations.data(),
-    recOccur->Relations.size() };
+  for (auto &rel : recOccur->Relations) {
+    if (!applier(&rel))
+      return false;
+  }
+  return true;
 }
 
 uint64_t

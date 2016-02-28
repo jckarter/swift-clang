@@ -63,10 +63,13 @@ public:
 
   IndexRecordSymbol getSymbol() { return indexstore_occurrence_get_symbol(obj); }
   uint64_t getRoles() { return indexstore_occurrence_get_roles(obj); }
-  ArrayRef<indexstore_symbol_relation_t> getRelations() {
-    auto arr = indexstore_occurrence_get_relations(obj);
-    return { arr.data, arr.count };
+
+  bool foreachRelation(llvm::function_ref<bool(IndexSymbolRelation)> receiver) {
+    return indexstore_occurrence_relations_apply(obj, ^bool(indexstore_symbol_relation_t sym_rel) {
+      return receiver(sym_rel);
+    });
   }
+
   std::pair<unsigned, unsigned> getLineCol() {
     unsigned line, col;
     indexstore_occurrence_get_line_col(obj, &line, &col);
