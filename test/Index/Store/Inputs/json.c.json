@@ -13,7 +13,7 @@
       "usr": "c:@F@test1_func",
       "name": "test1_func",
       "codegen": "_test1_func",
-      "roles": "Decl/Def"
+      "roles": "Decl,Def"
     },
     {
       "kind": "function",
@@ -21,7 +21,7 @@
       "usr": "c:@F@test2_func",
       "name": "test2_func",
       "codegen": "_test2_func",
-      "roles": "Decl/Def"
+      "roles": "Decl,Def"
     }
   ],
   "records": [
