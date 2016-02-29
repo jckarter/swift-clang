@@ -14,6 +14,7 @@
 FOO(in,t) value;
 
 // RUN: c-index-test -code-completion-at=%s:4:2 %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test service -code-completion-at=%s:4:2 %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: NotImplemented:{TypedText define}{HorizontalSpace  }{Placeholder macro} (40)
 // CHECK-CC1-NEXT: NotImplemented:{TypedText define}{HorizontalSpace  }{Placeholder macro}{LeftParen (}{Placeholder args}{RightParen )} (40)
 // CHECK-CC1-NEXT: NotImplemented:{TypedText error}{HorizontalSpace  }{Placeholder message} (40)
@@ -32,6 +33,7 @@ FOO(in,t) value;
 // CHECK-CC1-NEXT: NotImplemented:{TypedText undef}{HorizontalSpace  }{Placeholder macro} (40)
 // CHECK-CC1-NEXT: NotImplemented:{TypedText warning}{HorizontalSpace  }{Placeholder message} (40)
 // RUN: c-index-test -code-completion-at=%s:5:2 %s | FileCheck -check-prefix=CHECK-CC2 %s
+// RUN: c-index-test service -code-completion-at=%s:5:2 %s | FileCheck -check-prefix=CHECK-CC2 %s
 // CHECK-CC2: NotImplemented:{TypedText define}{HorizontalSpace  }{Placeholder macro} (40)
 // CHECK-CC2-NEXT: NotImplemented:{TypedText define}{HorizontalSpace  }{Placeholder macro}{LeftParen (}{Placeholder args}{RightParen )} (40)
 // CHECK-CC2-NEXT: NotImplemented:{TypedText elif}{HorizontalSpace  }{Placeholder condition} (40)
@@ -53,14 +55,19 @@ FOO(in,t) value;
 // CHECK-CC2-NEXT: NotImplemented:{TypedText undef}{HorizontalSpace  }{Placeholder macro} (40)
 // CHECK-CC2-NEXT: NotImplemented:{TypedText warning}{HorizontalSpace  }{Placeholder message} (40)
 // RUN: c-index-test -code-completion-at=%s:9:8 %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: c-index-test service -code-completion-at=%s:9:8 %s | FileCheck -check-prefix=CHECK-CC3 %s
 // CHECK-CC3: macro definition:{TypedText BAR} (40)
 // CHECK-CC3: macro definition:{TypedText FOO} (40)
 // RUN: c-index-test -code-completion-at=%s:11:12 %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: c-index-test service -code-completion-at=%s:11:12 %s | FileCheck -check-prefix=CHECK-CC3 %s
 // RUN: c-index-test -code-completion-at=%s:11:13 %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: c-index-test service -code-completion-at=%s:11:13 %s | FileCheck -check-prefix=CHECK-CC3 %s
 // RUN: c-index-test -code-completion-at=%s:11:5 %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test service -code-completion-at=%s:11:5 %s | FileCheck -check-prefix=CHECK-CC4 %s
 // CHECK-CC4: macro definition:{TypedText BAR} (70)
 // CHECK-CC4: macro definition:{TypedText FOO}{LeftParen (}{Placeholder a}{Comma , }{Placeholder b}{RightParen )} (70)
 // RUN: c-index-test -code-completion-at=%s:14:5 %s | FileCheck -check-prefix=CHECK-CC5 %s
+// RUN: c-index-test service -code-completion-at=%s:14:5 %s | FileCheck -check-prefix=CHECK-CC5 %s
 // CHECK-CC5: NotImplemented:{TypedText const} (50)
 // CHECK-CC5: NotImplemented:{TypedText double} (50)
 // CHECK-CC5: NotImplemented:{TypedText enum} (50)
@@ -74,7 +81,12 @@ FOO(in,t) value;
 
 // Same tests as above, but with completion caching.
 // RUN: env CINDEXTEST_EDITING=1 CINDEXTEST_COMPLETION_CACHING=1 c-index-test -code-completion-at=%s:4:2 %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: env CINDEXTEST_EDITING=1 CINDEXTEST_COMPLETION_CACHING=1 c-index-test service -code-completion-at=%s:4:2 %s | FileCheck -check-prefix=CHECK-CC1 %s
 // RUN: env CINDEXTEST_EDITING=1 CINDEXTEST_COMPLETION_CACHING=1 c-index-test -code-completion-at=%s:5:2 %s | FileCheck -check-prefix=CHECK-CC2 %s
+// RUN: env CINDEXTEST_EDITING=1 CINDEXTEST_COMPLETION_CACHING=1 c-index-test service -code-completion-at=%s:5:2 %s | FileCheck -check-prefix=CHECK-CC2 %s
 // RUN: env CINDEXTEST_EDITING=1 CINDEXTEST_COMPLETION_CACHING=1 c-index-test -code-completion-at=%s:9:8 %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: env CINDEXTEST_EDITING=1 CINDEXTEST_COMPLETION_CACHING=1 c-index-test service -code-completion-at=%s:9:8 %s | FileCheck -check-prefix=CHECK-CC3 %s
 // RUN: env CINDEXTEST_EDITING=1 CINDEXTEST_COMPLETION_CACHING=1 c-index-test -code-completion-at=%s:11:5 %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: env CINDEXTEST_EDITING=1 CINDEXTEST_COMPLETION_CACHING=1 c-index-test service -code-completion-at=%s:11:5 %s | FileCheck -check-prefix=CHECK-CC4 %s
 // RUN: env CINDEXTEST_EDITING=1 CINDEXTEST_COMPLETION_CACHING=1 c-index-test -code-completion-at=%s:14:5 %s | FileCheck -check-prefix=CHECK-CC5 %s
+// RUN: env CINDEXTEST_EDITING=1 CINDEXTEST_COMPLETION_CACHING=1 c-index-test service -code-completion-at=%s:14:5 %s | FileCheck -check-prefix=CHECK-CC5 %s

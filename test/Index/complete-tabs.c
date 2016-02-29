@@ -5,5 +5,6 @@ void f(struct Point *p) {
 	p->
 
 // RUN: c-index-test -code-completion-at=%s:5:5 %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test service -code-completion-at=%s:5:5 %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: {TypedText x}
 // CHECK-CC1: {TypedText y}

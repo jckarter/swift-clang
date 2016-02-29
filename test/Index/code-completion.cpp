@@ -19,7 +19,8 @@ struct W { };
 struct Z get_Z();
 namespace N { }
 void test_Z() {
-  // RUN: c-index-test -code-completion-at=%s:23:11 %s | FileCheck -check-prefix=CHECK-MEMBER %s
+  // RUN: c-index-test -code-completion-at=%s:24:11 %s | FileCheck -check-prefix=CHECK-MEMBER %s
+  // RUN: c-index-test service -code-completion-at=%s:24:11 %s | FileCheck -check-prefix=CHECK-MEMBER %s
   get_Z().member = 17;
 }
 
@@ -29,7 +30,8 @@ double& overloaded(float f, int second);
 int& overloaded(Z z, int second);
                 
 void test_overloaded() {
-  // RUN: c-index-test -code-completion-at=%s:33:18 %s | FileCheck -check-prefix=CHECK-OVERLOAD %s
+  // RUN: c-index-test -code-completion-at=%s:35:18 %s | FileCheck -check-prefix=CHECK-OVERLOAD %s
+  // RUN: c-index-test service -code-completion-at=%s:35:18 %s | FileCheck -check-prefix=CHECK-OVERLOAD %s
   overloaded(Z(), 0);
 }
 
@@ -71,7 +73,8 @@ Z::operator int() const {
 // CHECK-OVERLOAD-NEXT: Nested name specifier
 // CHECK-OVERLOAD-NEXT: Objective-C interface
 
-// RUN: c-index-test -code-completion-at=%s:37:10 %s | FileCheck -check-prefix=CHECK-EXPR %s
+// RUN: c-index-test -code-completion-at=%s:39:10 %s | FileCheck -check-prefix=CHECK-EXPR %s
+// RUN: c-index-test service -code-completion-at=%s:39:10 %s | FileCheck -check-prefix=CHECK-EXPR %s
 // CHECK-EXPR: NotImplemented:{TypedText int} (50)
 // CHECK-EXPR: NotImplemented:{TypedText long} (50)
 // CHECK-EXPR: FieldDecl:{ResultType double}{TypedText member} (17)

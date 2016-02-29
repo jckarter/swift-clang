@@ -1,0 +1,3 @@
+add_clang_subdirectory(Core)
+add_clang_subdirectory(Support)
+add_clang_subdirectory(XPC)

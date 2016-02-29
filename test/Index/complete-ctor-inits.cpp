@@ -30,6 +30,7 @@ struct PR23948 {
 };
 
 // RUN: c-index-test -code-completion-at=%s:18:10 %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test service -code-completion-at=%s:18:10 %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: MemberRef:{TypedText a}{LeftParen (}{Placeholder args}{RightParen )} (35)
 // CHECK-CC1: MemberRef:{TypedText b}{LeftParen (}{Placeholder args}{RightParen )} (35)
 // CHECK-CC1: MemberRef:{TypedText c}{LeftParen (}{Placeholder args}{RightParen )} (35)
@@ -38,6 +39,7 @@ struct PR23948 {
 // CHECK-CC1: NotImplemented:{TypedText Y}{LeftParen (}{Placeholder args}{RightParen )} (35)
 
 // RUN: c-index-test -code-completion-at=%s:18:23 %s | FileCheck -check-prefix=CHECK-CC2 %s
+// RUN: c-index-test service -code-completion-at=%s:18:23 %s | FileCheck -check-prefix=CHECK-CC2 %s
 // CHECK-CC2: MemberRef:{TypedText a}{LeftParen (}{Placeholder args}{RightParen )} (35)
 // CHECK-CC2: MemberRef:{TypedText b}{LeftParen (}{Placeholder args}{RightParen )} (35)
 // CHECK-CC2: MemberRef:{TypedText c}{LeftParen (}{Placeholder args}{RightParen )} (35)
@@ -45,6 +47,7 @@ struct PR23948 {
 // CHECK-CC2: NotImplemented:{TypedText Y}{LeftParen (}{Placeholder args}{RightParen )} (7)
 
 // RUN: c-index-test -code-completion-at=%s:18:36 %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: c-index-test service -code-completion-at=%s:18:36 %s | FileCheck -check-prefix=CHECK-CC3 %s
 // CHECK-CC3: MemberRef:{TypedText a}{LeftParen (}{Placeholder args}{RightParen )} (35)
 // CHECK-CC3-NOT: MemberRef:{TypedText b}{LeftParen (}{Placeholder args}{RightParen )}
 // CHECK-CC3: MemberRef:{TypedText c}{LeftParen (}{Placeholder args}{RightParen )} (7)
@@ -52,5 +55,7 @@ struct PR23948 {
 // CHECK-CC3: NotImplemented:{TypedText Y}{LeftParen (}{Placeholder args}{RightParen )} (35)
 
 // RUN: c-index-test -code-completion-at=%s:22:10 -target i386-apple-darwin %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test service -code-completion-at=%s:22:10 -target i386-apple-darwin %s | FileCheck -check-prefix=CHECK-CC4 %s
 // CHECK-CC4: MemberRef:{TypedText a}{LeftParen (}{Placeholder args}{RightParen )} (7)
 // RUN: c-index-test -code-completion-at=%s:26:10 %s
+// RUN: c-index-test service -code-completion-at=%s:26:10 %s

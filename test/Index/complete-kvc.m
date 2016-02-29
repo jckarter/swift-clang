@@ -53,6 +53,7 @@ typedef signed char BOOL;
 @end
 
 // RUN: c-index-test -code-completion-at=%s:39:3 %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test service -code-completion-at=%s:39:3 %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: ObjCInstanceMethodDecl:{LeftParen (}{Text void}{RightParen )}{TypedText addMutableArrayPropertyObject:}{LeftParen (}{Placeholder object-type}{Text  *}{RightParen )}{Text object} (55)
 // CHECK-CC1: ObjCInstanceMethodDecl:{LeftParen (}{Text void}{RightParen )}{TypedText addMutableSetProperty:}{LeftParen (}{Text NSSet *}{RightParen )}{Text objects} (40)
 // CHECK-CC1: ObjCInstanceMethodDecl:{LeftParen (}{Text NSArray *}{RightParen )}{TypedText arrayProperty} (40)
@@ -95,11 +96,13 @@ typedef signed char BOOL;
 // CHECK-CC1: ObjCInstanceMethodDecl:{LeftParen (}{Text void}{RightParen )}{TypedText replaceObjectInMySetPropertyAtIndex:}{LeftParen (}{Placeholder NSUInteger}{RightParen )}{Text index}{HorizontalSpace  }{TypedText withObject:}{LeftParen (}{Text id}{RightParen )}{Text object} (55)
 
 // RUN: c-index-test -code-completion-at=%s:41:3 %s | FileCheck -check-prefix=CHECK-CC2 %s
+// RUN: c-index-test service -code-completion-at=%s:41:3 %s | FileCheck -check-prefix=CHECK-CC2 %s
 // CHECK-CC2: ObjCClassMethodDecl:{LeftParen (}{Text BOOL}{RightParen )}{TypedText automaticallyNotifiesObserversOfArrayProperty} (40)
 // CHECK-CC2: ObjCClassMethodDecl:{LeftParen (}{Text BOOL}{RightParen )}{TypedText automaticallyNotifiesObserversOfMutableArrayProperty} (40)
 // CHECK-CC2: ObjCClassMethodDecl:{LeftParen (}{Text NSSet *}{RightParen )}{TypedText keyPathsForValuesAffectingMutableArrayProperty} (40)
 
 // RUN: c-index-test -code-completion-at=%s:52:8 %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: c-index-test service -code-completion-at=%s:52:8 %s | FileCheck -check-prefix=CHECK-CC3 %s
 // CHECK-CC3: ObjCInstanceMethodDecl:{TypedText countOfIntProperty} (55)
 // CHECK-CC3-NEXT: ObjCInstanceMethodDecl:{TypedText intProperty} (42)
 // CHECK-CC3-NEXT: ObjCInstanceMethodDecl:{TypedText isIntProperty} (40)

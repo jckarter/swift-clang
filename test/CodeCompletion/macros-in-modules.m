@@ -2,6 +2,7 @@
 // RUN: echo 'module Foo { header "foo.h" }' > %t/module.modulemap
 // RUN: echo '#define FOO_MACRO 42' > %t/foo.h
 // RUN: c-index-test -code-completion-at=%s:8:1 -I %t -fmodules-cache-path=%t -fmodules %s | FileCheck %s
+// RUN: c-index-test service -code-completion-at=%s:8:1 -I %t -fmodules-cache-path=%t -fmodules %s | FileCheck %s
 
 @import Foo;
 int x =

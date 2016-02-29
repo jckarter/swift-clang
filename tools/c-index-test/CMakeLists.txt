@@ -6,6 +6,7 @@ add_clang_executable(c-index-test
   c-index-test.c
   core_main.cpp
   JSONAggregation.cpp
+  service.cpp
   )
 
 if(NOT MSVC)
@@ -28,6 +29,7 @@ else()
     clangBasic
     clangFrontend
     clangIndex
+    ClangService
   )
 endif()
 

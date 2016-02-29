@@ -39,10 +39,15 @@ void test3(struct Point *p) {
 #endif
 
 // RUN: c-index-test -code-completion-at=%s:11:12 %s | FileCheck %s
+// RUN: c-index-test service -code-completion-at=%s:11:12 %s | FileCheck %s
 // RUN: c-index-test -code-completion-at=%s:12:12 %s | FileCheck %s
+// RUN: c-index-test service -code-completion-at=%s:12:12 %s | FileCheck %s
 // RUN: c-index-test -code-completion-at=%s:18:13 %s | FileCheck %s
+// RUN: c-index-test service -code-completion-at=%s:18:13 %s | FileCheck %s
 // RUN: c-index-test -code-completion-at=%s:19:13 %s | FileCheck %s
+// RUN: c-index-test service -code-completion-at=%s:19:13 %s | FileCheck %s
 // RUN: c-index-test -code-completion-at=%s:24:9 %s | FileCheck %s
+// RUN: c-index-test service -code-completion-at=%s:24:9 %s | FileCheck %s
 // CHECK:      FieldDecl:{ResultType float}{TypedText x} (35)
 // CHECK-NEXT: FieldDecl:{ResultType float}{TypedText y} (35)
 // CHECK-NEXT: FieldDecl:{ResultType float}{TypedText z} (35)
@@ -53,6 +58,8 @@ void test3(struct Point *p) {
 // With these, code-completion is unknown because the macro argument (and the
 // completion point) is not expanded by the macro definition.
 // RUN: c-index-test -code-completion-at=%s:33:15 %s -DEOF_TEST1 | FileCheck %s -check-prefix=CHECK-EOF
+// RUN: c-index-test service -code-completion-at=%s:33:15 %s -DEOF_TEST1 | FileCheck %s -check-prefix=CHECK-EOF
 // RUN: c-index-test -code-completion-at=%s:37:20 %s -DEOF_TEST2 | FileCheck %s -check-prefix=CHECK-EOF
+// RUN: c-index-test service -code-completion-at=%s:37:20 %s -DEOF_TEST2 | FileCheck %s -check-prefix=CHECK-EOF
 // CHECK-EOF: Completion contexts:
 // CHECK-EOF: Unknown

@@ -57,26 +57,31 @@ id test(I3 *i3) {
 @synthesize Prop5;
 @end
 // RUN: c-index-test -code-completion-at=%s:20:13 %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test service -code-completion-at=%s:20:13 %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: ObjCPropertyDecl:{ResultType int}{TypedText Prop0}
 // CHECK-CC1: ObjCPropertyDecl:{ResultType int}{TypedText Prop1}
 // CHECK-CC1: ObjCPropertyDecl:{ResultType float}{TypedText Prop2}
 // CHECK-CC1: ObjCPropertyDecl:{ResultType id}{TypedText Prop3}
 // CHECK-CC1: ObjCPropertyDecl:{ResultType id}{TypedText Prop4}
 // RUN: c-index-test -code-completion-at=%s:20:20 %s | FileCheck -check-prefix=CHECK-CC2 %s
+// RUN: c-index-test service -code-completion-at=%s:20:20 %s | FileCheck -check-prefix=CHECK-CC2 %s
 // CHECK-CC2: ObjCPropertyDecl:{ResultType int}{TypedText Prop0}
 // CHECK-CC2: ObjCPropertyDecl:{ResultType int}{TypedText Prop1}
 // CHECK-CC2-NEXT: ObjCPropertyDecl:{ResultType id}{TypedText Prop3}
 // CHECK-CC2: ObjCPropertyDecl:{ResultType id}{TypedText Prop4}
 // RUN: c-index-test -code-completion-at=%s:20:35 %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: c-index-test service -code-completion-at=%s:20:35 %s | FileCheck -check-prefix=CHECK-CC3 %s
 // CHECK-CC3: ObjCIvarDecl:{ResultType id}{TypedText _Prop3} (36)
 // CHECK-CC3: ObjCIvarDecl:{ResultType int}{TypedText RandomIVar} (35)
 // CHECK-CC3: ObjCIvarDecl:{ResultType id}{TypedText StoredProp3} (8)
 
 // RUN: c-index-test -code-completion-at=%s:21:10 %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test service -code-completion-at=%s:21:10 %s | FileCheck -check-prefix=CHECK-CC4 %s
 // CHECK-CC4: ObjCPropertyDecl:{ResultType int}{TypedText Prop0}
 // CHECK-CC4-NEXT: ObjCPropertyDecl:{ResultType id}{TypedText Prop4}
 
 // RUN: c-index-test -code-completion-at=%s:29:13 %s | FileCheck -check-prefix=CHECK-CC5 %s
+// RUN: c-index-test service -code-completion-at=%s:29:13 %s | FileCheck -check-prefix=CHECK-CC5 %s
 // CHECK-CC5: ObjCPropertyDecl:{ResultType int}{TypedText Prop0} (35)
 // CHECK-CC5-NEXT: ObjCPropertyDecl:{ResultType int}{TypedText Prop1} (35)
 // CHECK-CC5-NEXT: ObjCPropertyDecl:{ResultType float}{TypedText Prop2} (35)
@@ -84,13 +89,16 @@ id test(I3 *i3) {
 // CHECK-CC5-NEXT: ObjCPropertyDecl:{ResultType id}{TypedText Prop4} (35)
 
 // RUN: c-index-test -code-completion-at=%s:9:11 %s | FileCheck -check-prefix=CHECK-CC6 %s
+// RUN: c-index-test service -code-completion-at=%s:9:11 %s | FileCheck -check-prefix=CHECK-CC6 %s
 // CHECK-CC6: ObjCInterfaceDecl:{TypedText MyClass} (50)
 
 
 // RUN: c-index-test -code-completion-at=%s:45:21 -fobjc-nonfragile-abi %s | FileCheck -check-prefix=CHECK-CC7 %s
+// RUN: c-index-test service -code-completion-at=%s:45:21 -fobjc-nonfragile-abi %s | FileCheck -check-prefix=CHECK-CC7 %s
 // CHECK-CC7-NOT: ObjCIvarDecl:{ResultType id}{TypedText _Prop2}
 // CHECK-CC7: ObjCIvarDecl:{ResultType I4 *}{TypedText Prop1} (17)
 // CHECK-CC7: ObjCIvarDecl:{ResultType id}{TypedText Prop2_} (7)
 
 // RUN: c-index-test -code-completion-at=%s:57:13 -fobjc-nonfragile-abi %s | FileCheck -check-prefix=CHECK-CC8 %s
+// RUN: c-index-test service -code-completion-at=%s:57:13 -fobjc-nonfragile-abi %s | FileCheck -check-prefix=CHECK-CC8 %s
 // CHECK-CC8: ObjCPropertyDecl:{ResultType int}{TypedText Prop5} (35)

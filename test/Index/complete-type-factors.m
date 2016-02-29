@@ -33,6 +33,7 @@ void test2(A *a) {
 }
 
 // RUN: c-index-test -code-completion-at=%s:16:11 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test service -code-completion-at=%s:16:11 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: EnumConstantDecl:{ResultType enum Color}{TypedText Blue} (32)
 // CHECK-CC1: ParmDecl:{ResultType enum Color}{TypedText color} (17)
 // CHECK-CC1: FunctionDecl:{ResultType int}{TypedText func1}{LeftParen (}{Placeholder enum Color}{RightParen )} (12)
@@ -47,6 +48,7 @@ void test2(A *a) {
 // CHECK-CC1: NotImplemented:{ResultType size_t}{TypedText sizeof}{LeftParen (}{Placeholder expression-or-type}{RightParen )} (40)
 // CHECK-CC1: FunctionDecl:{ResultType enum Priority}{TypedText test1}{LeftParen (}{Placeholder enum Priority priority}{Comma , }{Placeholder enum Color color}{Comma , }{Placeholder int integer}{RightParen )} (25)
 // RUN: c-index-test -code-completion-at=%s:17:18 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC2 %s
+// RUN: c-index-test service -code-completion-at=%s:17:18 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC2 %s
 // CHECK-CC2: EnumConstantDecl:{ResultType enum Color}{TypedText Blue} (16)
 // CHECK-CC2: VarDecl:{ResultType enum Color}{TypedText c} (8)
 // CHECK-CC2: ParmDecl:{ResultType enum Color}{TypedText color} (8)
@@ -62,6 +64,7 @@ void test2(A *a) {
 // CHECK-CC2: NotImplemented:{ResultType size_t}{TypedText sizeof}{LeftParen (}{Placeholder expression-or-type}{RightParen )} (40)
 // CHECK-CC2: FunctionDecl:{ResultType enum Priority}{TypedText test1}{LeftParen (}{Placeholder enum Priority priority}{Comma , }{Placeholder enum Color color}{Comma , }{Placeholder int integer}{RightParen )} (50)
 // RUN: c-index-test -code-completion-at=%s:18:10 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: c-index-test service -code-completion-at=%s:18:10 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC3 %s
 // CHECK-CC3: EnumConstantDecl:{ResultType enum Color}{TypedText Blue} (65)
 // CHECK-CC3: VarDecl:{ResultType enum Color}{TypedText c} (34)
 // CHECK-CC3: ParmDecl:{ResultType enum Color}{TypedText color} (34)
@@ -78,6 +81,7 @@ void test2(A *a) {
 // CHECK-CC3: NotImplemented:{ResultType size_t}{TypedText sizeof}{LeftParen (}{Placeholder expression-or-type}{RightParen )} (40)
 // CHECK-CC3: FunctionDecl:{ResultType enum Priority}{TypedText test1}{LeftParen (}{Placeholder enum Priority priority}{Comma , }{Placeholder enum Color color}{Comma , }{Placeholder int integer}{RightParen )} (12)
 // RUN: c-index-test -code-completion-at=%s:19:9 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test service -code-completion-at=%s:19:9 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC4 %s
 // CHECK-CC4: EnumConstantDecl:{ResultType enum Color}{TypedText Blue} (65)
 // CHECK-CC4: VarDecl:{ResultType enum Color}{TypedText c} (34)
 // CHECK-CC4: ParmDecl:{ResultType enum Color}{TypedText color} (34)
@@ -94,7 +98,9 @@ void test2(A *a) {
 // CHECK-CC4: NotImplemented:{ResultType size_t}{TypedText sizeof}{LeftParen (}{Placeholder expression-or-type}{RightParen )} (40)
 // CHECK-CC4: FunctionDecl:{ResultType enum Priority}{TypedText test1}{LeftParen (}{Placeholder enum Priority priority}{Comma , }{Placeholder enum Color color}{Comma , }{Placeholder int integer}{RightParen )} (50)
 // RUN: c-index-test -code-completion-at=%s:21:9 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test service -code-completion-at=%s:21:9 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC4 %s
 // RUN: c-index-test -code-completion-at=%s:22:7 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC6 %s
+// RUN: c-index-test service -code-completion-at=%s:22:7 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC6 %s
 // CHECK-CC6: VarDecl:{ResultType void (^)(enum Color, int)}{TypedText block} (34)
 // CHECK-CC6: EnumConstantDecl:{ResultType enum Color}{TypedText Blue} (16)
 // CHECK-CC6: VarDecl:{ResultType enum Color}{TypedText c} (8)
@@ -112,7 +118,9 @@ void test2(A *a) {
 // CHECK-CC6: NotImplemented:{ResultType size_t}{TypedText sizeof}{LeftParen (}{Placeholder expression-or-type}{RightParen )} (40)
 // CHECK-CC6: FunctionDecl:{ResultType enum Priority}{TypedText test1}{LeftParen (}{Placeholder enum Priority priority}{Comma , }{Placeholder enum Color color}{Comma , }{Placeholder int integer}{RightParen )} (50)
 // RUN: c-index-test -code-completion-at=%s:31:13 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC7 %s
+// RUN: c-index-test service -code-completion-at=%s:31:13 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC7 %s
 // RUN: c-index-test -code-completion-at=%s:32:13 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC7 %s
+// RUN: c-index-test service -code-completion-at=%s:32:13 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC7 %s
 // CHECK-CC7: ParmDecl:{ResultType A *}{TypedText a} (34)
 // CHECK-CC7: EnumConstantDecl:{ResultType enum Color}{TypedText Blue} (16)
 // CHECK-CC7: FunctionDecl:{ResultType int}{TypedText func1}{LeftParen (}{Placeholder enum Color}{RightParen )} (25)
@@ -124,7 +132,9 @@ void test2(A *a) {
 // CHECK-CC7: EnumConstantDecl:{ResultType enum Color}{TypedText Red} (16)
 // CHECK-CC7: FunctionDecl:{ResultType enum Priority}{TypedText test1}{LeftParen (}{Placeholder enum Priority priority}{Comma , }{Placeholder enum Color color}{Comma , }{Placeholder int integer}{RightParen )} (50)
 // RUN: c-index-test -code-completion-at=%s:31:26 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC8 %s
+// RUN: c-index-test service -code-completion-at=%s:31:26 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC8 %s
 // RUN: c-index-test -code-completion-at=%s:32:26 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC8 %s
+// RUN: c-index-test service -code-completion-at=%s:32:26 -Xclang -code-completion-patterns %s | FileCheck -check-prefix=CHECK-CC8 %s
 // CHECK-CC8: ParmDecl:{ResultType A *}{TypedText a} (34)
 // CHECK-CC8: EnumConstantDecl:{ResultType enum Color}{TypedText Blue} (65)
 // CHECK-CC8: FunctionDecl:{ResultType int}{TypedText func1}{LeftParen (}{Placeholder enum Color}{RightParen )} (25)

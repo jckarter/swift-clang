@@ -43,6 +43,7 @@ int test_two_levels(Other *other) {
 }
 
 // RUN: c-index-test -code-completion-at=%s:21:7 %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test service -code-completion-at=%s:21:7 %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: ObjCPropertyDecl:{ResultType int}{TypedText prop1}
 // CHECK-CC1: ObjCPropertyDecl:{ResultType float}{TypedText ProtoProp}
 // CHECK-CC1: Completion contexts:
@@ -51,6 +52,7 @@ int test_two_levels(Other *other) {
 // CHECK-CC1-NEXT: Container is complete
 // CHECK-CC1-NEXT: Container USR: c:objc(cs)Int
 // RUN: c-index-test -code-completion-at=%s:22:8 %s | FileCheck -check-prefix=CHECK-CC2 %s
+// RUN: c-index-test service -code-completion-at=%s:22:8 %s | FileCheck -check-prefix=CHECK-CC2 %s
 // CHECK-CC2: ObjCIvarDecl:{ResultType int}{TypedText IVar} (35)
 // CHECK-CC2: ObjCIvarDecl:{ResultType int}{TypedText SuperIVar} (37)
 // CHECK-CC2: Completion contexts:
@@ -59,6 +61,7 @@ int test_two_levels(Other *other) {
 // CHECK-CC2-NEXT: Container is complete
 // CHECK-CC2-NEXT: Container USR: c:objc(cs)Int
 // RUN: c-index-test -code-completion-at=%s:34:12 %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: c-index-test service -code-completion-at=%s:34:12 %s | FileCheck -check-prefix=CHECK-CC3 %s
 // CHECK-CC3: ObjCInstanceMethodDecl:{ResultType int}{TypedText myOtherPropLikeThing} (37)
 // CHECK-CC3: ObjCPropertyDecl:{ResultType int}{TypedText myProp} (35)
 // CHECK-CC3: ObjCPropertyDecl:{ResultType int}{TypedText prop1} (35)
@@ -70,6 +73,7 @@ int test_two_levels(Other *other) {
 // CHECK-CC3-NEXT: Container USR: c:objc(cs)Sub
 
 // RUN: c-index-test -code-completion-at=%s:42:20 %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test service -code-completion-at=%s:42:20 %s | FileCheck -check-prefix=CHECK-CC4 %s
 // CHECK-CC4: ObjCInstanceMethodDecl:{ResultType int}{TypedText myOtherPropLikeThing} (37)
 // CHECK-CC4-NEXT: ObjCPropertyDecl:{ResultType int}{TypedText myProp} (35)
 // CHECK-CC4-NEXT: ObjCPropertyDecl:{ResultType int}{TypedText prop1} (35)

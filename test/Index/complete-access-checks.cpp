@@ -26,11 +26,13 @@ private:
 };
 
 void Y::doSomething() {
-  // RUN: c-index-test -code-completion-at=%s:30:9 %s | FileCheck -check-prefix=CHECK-SUPER-ACCESS %s
+  // RUN: c-index-test -code-completion-at=%s:31:9 %s | FileCheck -check-prefix=CHECK-SUPER-ACCESS %s
+  // RUN: c-index-test service -code-completion-at=%s:31:9 %s | FileCheck -check-prefix=CHECK-SUPER-ACCESS %s
   this->;
 
   Z that;
-  // RUN: c-index-test -code-completion-at=%s:34:8 %s | FileCheck -check-prefix=CHECK-ACCESS %s
+  // RUN: c-index-test -code-completion-at=%s:36:8 %s | FileCheck -check-prefix=CHECK-ACCESS %s
+  // RUN: c-index-test service -code-completion-at=%s:36:8 %s | FileCheck -check-prefix=CHECK-ACCESS %s
   that.
 }
 
@@ -69,9 +71,11 @@ public:
 };
 
 void f(P x, Q y) {
-  // RUN: c-index-test -code-completion-at=%s:73:5 %s | FileCheck -check-prefix=CHECK-USING-INACCESSIBLE %s
+  // RUN: c-index-test -code-completion-at=%s:76:5 %s | FileCheck -check-prefix=CHECK-USING-INACCESSIBLE %s
+  // RUN: c-index-test service -code-completion-at=%s:76:5 %s | FileCheck -check-prefix=CHECK-USING-INACCESSIBLE %s
   x.; // member is inaccessible
-  // RUN: c-index-test -code-completion-at=%s:75:5 %s | FileCheck -check-prefix=CHECK-USING-ACCESSIBLE %s
+  // RUN: c-index-test -code-completion-at=%s:79:5 %s | FileCheck -check-prefix=CHECK-USING-ACCESSIBLE %s
+  // RUN: c-index-test service -code-completion-at=%s:79:5 %s | FileCheck -check-prefix=CHECK-USING-ACCESSIBLE %s
   y.; // member is accessible
 }
 

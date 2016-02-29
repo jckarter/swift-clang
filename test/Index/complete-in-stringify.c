@@ -13,5 +13,7 @@ int test() {
 }
 
 // RUN: c-index-test -code-completion-at=%s:11:11 %s | FileCheck %s
+// RUN: c-index-test service -code-completion-at=%s:11:11 %s | FileCheck %s
 // RUN: c-index-test -code-completion-at=%s:12:11 %s | FileCheck %s
+// RUN: c-index-test service -code-completion-at=%s:12:11 %s | FileCheck %s
 // CHECK: Natural language

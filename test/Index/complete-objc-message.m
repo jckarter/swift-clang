@@ -198,6 +198,7 @@ void test_Nullability(Nullability *n, A* a) {
 }
 
 // RUN: c-index-test -code-completion-at=%s:23:19 %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test service -code-completion-at=%s:23:19 %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: {TypedText categoryClassMethod} (35)
 // CHECK-CC1: {TypedText classMethod1:}{Placeholder (id)}{HorizontalSpace  }{TypedText withKeyword:}{Placeholder (int)} (35)
 // CHECK-CC1: {TypedText classMethod2} (35)
@@ -210,6 +211,7 @@ void test_Nullability(Nullability *n, A* a) {
 // CHECK-CC1-NEXT: Container is complete
 // CHECK-CC1-NEXT: Container USR: c:objc(cs)Foo
 // RUN: c-index-test -code-completion-at=%s:24:8 %s | FileCheck -check-prefix=CHECK-CC2 %s
+// RUN: c-index-test service -code-completion-at=%s:24:8 %s | FileCheck -check-prefix=CHECK-CC2 %s
 // CHECK-CC2: {TypedText categoryInstanceMethod}
 // CHECK-CC2: {TypedText instanceMethod1}
 // CHECK-CC2: {TypedText protocolInstanceMethod:}{Placeholder (int)}
@@ -219,18 +221,23 @@ void test_Nullability(Nullability *n, A* a) {
 // CHECK-CC2-NEXT: Container is complete
 // CHECK-CC2-NEXT: Container USR: c:objc(cs)Foo
 // RUN: c-index-test -code-completion-at=%s:61:16 %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: c-index-test service -code-completion-at=%s:61:16 %s | FileCheck -check-prefix=CHECK-CC3 %s
 // CHECK-CC3: ObjCClassMethodDecl:{ResultType int}{TypedText MyClassMethod:}{Placeholder (id)}
 // CHECK-CC3: ObjCClassMethodDecl:{ResultType int}{TypedText MyPrivateMethod}
 // RUN: c-index-test -code-completion-at=%s:65:16 %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test service -code-completion-at=%s:65:16 %s | FileCheck -check-prefix=CHECK-CC4 %s
 // CHECK-CC4: ObjCInstanceMethodDecl:{ResultType int}{TypedText MyInstMethod:}{Placeholder (id)}{HorizontalSpace  }{TypedText second:}{Placeholder (id)}
 // CHECK-CC4: ObjCInstanceMethodDecl:{ResultType int}{TypedText MyPrivateInstMethod}
 // RUN: c-index-test -code-completion-at=%s:74:9 %s | FileCheck -check-prefix=CHECK-CC5 %s
+// RUN: c-index-test service -code-completion-at=%s:74:9 %s | FileCheck -check-prefix=CHECK-CC5 %s
 // CHECK-CC5: ObjCInstanceMethodDecl:{ResultType int}{TypedText MyInstMethod:}{Placeholder (id)}{HorizontalSpace  }{TypedText second:}{Placeholder (id)}
 // CHECK-CC5: ObjCInstanceMethodDecl:{ResultType int}{TypedText MySubInstMethod}
 // RUN: c-index-test -code-completion-at=%s:82:8 %s | FileCheck -check-prefix=CHECK-CC6 %s
+// RUN: c-index-test service -code-completion-at=%s:82:8 %s | FileCheck -check-prefix=CHECK-CC6 %s
 // CHECK-CC6: ObjCInstanceMethodDecl:{ResultType id}{TypedText protocolInstanceMethod:}{Placeholder (int)}
 // CHECK-CC6: ObjCInstanceMethodDecl:{ResultType int}{TypedText secondProtocolInstanceMethod}
 // RUN: c-index-test -code-completion-at=%s:95:8 %s | FileCheck -check-prefix=CHECK-CC7 %s
+// RUN: c-index-test service -code-completion-at=%s:95:8 %s | FileCheck -check-prefix=CHECK-CC7 %s
 // CHECK-CC7: ObjCInstanceMethodDecl:{ResultType int}{TypedText Method}
 // CHECK-CC7: ObjCInstanceMethodDecl:{ResultType int}{TypedText Method:}{Placeholder (int)}
 // CHECK-CC7: ObjCInstanceMethodDecl:{ResultType int}{TypedText Method:}{Placeholder (float)}{HorizontalSpace  }{TypedText Arg1:}{Placeholder (int)}{HorizontalSpace  }{TypedText Arg2:}{Placeholder (int)}
@@ -238,15 +245,18 @@ void test_Nullability(Nullability *n, A* a) {
 // CHECK-CC7: ObjCInstanceMethodDecl:{ResultType int}{TypedText Method:}{Placeholder (float)}{HorizontalSpace  }{TypedText SomeArg:}{Placeholder (int)}{HorizontalSpace  }{TypedText OtherArg:}{Placeholder (id)}
 // CHECK-CC7: ObjCInstanceMethodDecl:{ResultType int}{TypedText OtherMethod:}{Placeholder (float)}{HorizontalSpace  }{TypedText Arg1:}{Placeholder (int)}{HorizontalSpace  }{TypedText Arg2:}{Placeholder (int)}
 // RUN: c-index-test -code-completion-at=%s:95:17 %s | FileCheck -check-prefix=CHECK-CC8 %s
+// RUN: c-index-test service -code-completion-at=%s:95:17 %s | FileCheck -check-prefix=CHECK-CC8 %s
 // CHECK-CC8: ObjCInstanceMethodDecl:{ResultType int}{Informative Method:}{TypedText Arg1:}{Placeholder (int)}{HorizontalSpace  }{TypedText Arg2:}{Placeholder (int)}
 // CHECK-CC8: ObjCInstanceMethodDecl:{ResultType int}{Informative Method:}{TypedText Arg1:}{Placeholder (int)}{HorizontalSpace  }{TypedText OtherArg:}{Placeholder (id)}
 // CHECK-CC8: ObjCInstanceMethodDecl:{ResultType int}{Informative Method:}{TypedText SomeArg:}{Placeholder (int)}{HorizontalSpace  }{TypedText OtherArg:}{Placeholder (id)}
 // CHECK-CC8-NOT: ObjCInstanceMethodDecl:{ResultType int}{Informative Method:}{TypedText }
 // RUN: c-index-test -code-completion-at=%s:95:24 %s | FileCheck -check-prefix=CHECK-CC9 %s
+// RUN: c-index-test service -code-completion-at=%s:95:24 %s | FileCheck -check-prefix=CHECK-CC9 %s
 // CHECK-CC9: ObjCInstanceMethodDecl:{ResultType int}{Informative Method:}{Informative Arg1:}{TypedText Arg2:}{Placeholder (int)}
 // CHECK-CC9: ObjCInstanceMethodDecl:{ResultType int}{Informative Method:}{Informative Arg1:}{TypedText OtherArg:}{Placeholder (id)}
 // CHECK-CC9: Objective-C selector: Method:Arg1:
 // RUN: c-index-test -code-completion-at=%s:61:11 %s | FileCheck -check-prefix=CHECK-CCA %s
+// RUN: c-index-test service -code-completion-at=%s:61:11 %s | FileCheck -check-prefix=CHECK-CCA %s
 // CHECK-CCA: TypedefDecl:{TypedText Class} (50)
 // CHECK-CCA-NEXT: ObjCInterfaceDecl:{TypedText Foo} (50)
 // CHECK-CCA-NOT: FunctionDecl:{ResultType void}{TypedText func}{LeftParen (}{RightParen )} (50)
@@ -257,9 +267,11 @@ void test_Nullability(Nullability *n, A* a) {
 // CHECK-CCA: {ResultType Class}{TypedText self} (34)
 // CHECK-CCA: {TypedText super} (40)
 // RUN: c-index-test -code-completion-at=%s:103:6 %s | FileCheck -check-prefix=CHECK-CCB %s
+// RUN: c-index-test service -code-completion-at=%s:103:6 %s | FileCheck -check-prefix=CHECK-CCB %s
 // CHECK-CCB: ObjCInstanceMethodDecl:{ResultType int}{TypedText Method:}{Placeholder (int), ...}
 // CHECK-CCB: ObjCInstanceMethodDecl:{ResultType int}{TypedText SentinelMethod:}{Placeholder (int), ...}{Text , nil}
 // RUN: c-index-test -code-completion-at=%s:116:14 %s | FileCheck -check-prefix=CHECK-CCC %s
+// RUN: c-index-test service -code-completion-at=%s:116:14 %s | FileCheck -check-prefix=CHECK-CCC %s
 // CHECK-CCC: ObjCClassMethodDecl:{ResultType int}{TypedText Method}
 // CHECK-CCC: ObjCClassMethodDecl:{ResultType int}{TypedText Method:}{Placeholder (int)}
 // CHECK-CCC: ObjCClassMethodDecl:{ResultType int}{TypedText Method:}{Placeholder (float)}{HorizontalSpace  }{TypedText Arg1:}{Placeholder (int)}{HorizontalSpace  }{TypedText Arg2:}{Placeholder (int)}
@@ -267,15 +279,18 @@ void test_Nullability(Nullability *n, A* a) {
 // CHECK-CCC: ObjCClassMethodDecl:{ResultType int}{TypedText Method:}{Placeholder (float)}{HorizontalSpace  }{TypedText SomeArg:}{Placeholder (int)}{HorizontalSpace  }{TypedText OtherArg:}{Placeholder (id)}
 // CHECK-CCC: ObjCClassMethodDecl:{ResultType int}{TypedText OtherMethod:}{Placeholder (float)}{HorizontalSpace  }{TypedText Arg1:}{Placeholder (int)}{HorizontalSpace  }{TypedText Arg2:}{Placeholder (int)}
 // RUN: c-index-test -code-completion-at=%s:116:23 %s | FileCheck -check-prefix=CHECK-CCD %s
+// RUN: c-index-test service -code-completion-at=%s:116:23 %s | FileCheck -check-prefix=CHECK-CCD %s
 // CHECK-CCD: ObjCClassMethodDecl:{ResultType int}{Informative Method:}{TypedText Arg1:}{Placeholder (int)}{HorizontalSpace  }{TypedText Arg2:}{Placeholder (int)}
 // CHECK-CCD: ObjCClassMethodDecl:{ResultType int}{Informative Method:}{TypedText Arg1:}{Placeholder (int)}{HorizontalSpace  }{TypedText OtherArg:}{Placeholder (id)}
 // CHECK-CCD: ObjCClassMethodDecl:{ResultType int}{Informative Method:}{TypedText SomeArg:}{Placeholder (int)}{HorizontalSpace  }{TypedText OtherArg:}{Placeholder (id)}
 // CHECK-CCD-NOT: ObjCClassMethodDecl:{ResultType int}{Informative Method:}{TypedText }
 // CHECK-CCD: Objective-C selector: Method:
 // RUN: c-index-test -code-completion-at=%s:116:30 %s | FileCheck -check-prefix=CHECK-CCE %s
+// RUN: c-index-test service -code-completion-at=%s:116:30 %s | FileCheck -check-prefix=CHECK-CCE %s
 // CHECK-CCE: ObjCClassMethodDecl:{ResultType int}{Informative Method:}{Informative Arg1:}{TypedText Arg2:}{Placeholder (int)}
 // CHECK-CCE: ObjCClassMethodDecl:{ResultType int}{Informative Method:}{Informative Arg1:}{TypedText OtherArg:}{Placeholder (id)}
 // RUN: c-index-test -code-completion-at=%s:61:11 %s | FileCheck -check-prefix=CHECK-CCF %s
+// RUN: c-index-test service -code-completion-at=%s:61:11 %s | FileCheck -check-prefix=CHECK-CCF %s
 // CHECK-CCF: TypedefDecl:{TypedText Class}
 // CHECK-CCF: ObjCInterfaceDecl:{TypedText Foo}
 // CHECK-CCF-NOT: FunctionDecl:{ResultType void}{TypedText func}{LeftParen (}{RightParen )}
@@ -285,6 +300,7 @@ void test_Nullability(Nullability *n, A* a) {
 // CHECK-CCF: {ResultType Class}{TypedText self}
 // CHECK-CCF: {TypedText super}
 // RUN: c-index-test -code-completion-at=%s:120:6 %s | FileCheck -check-prefix=CHECK-CCG %s
+// RUN: c-index-test service -code-completion-at=%s:120:6 %s | FileCheck -check-prefix=CHECK-CCG %s
 // CHECK-CCG: ObjCInstanceMethodDecl:{ResultType id}{TypedText categoryInstanceMethod}
 // CHECK-CCG: ObjCInstanceMethodDecl:{ResultType id}{TypedText instanceMethod1}
 // CHECK-CCG: ObjCInstanceMethodDecl:{ResultType int}{TypedText Method}
@@ -294,7 +310,9 @@ void test_Nullability(Nullability *n, A* a) {
 // CHECK-CCG: ObjCInstanceMethodDecl:{ResultType id}{TypedText protocolInstanceMethod:}{Placeholder (int)}
 // CHECK-CCG: ObjCInstanceMethodDecl:{ResultType int}{TypedText secondProtocolInstanceMethod}
 // RUN: c-index-test -code-completion-at=%s:121:14 %s | FileCheck -check-prefix=CHECK-CCG %s
+// RUN: c-index-test service -code-completion-at=%s:121:14 %s | FileCheck -check-prefix=CHECK-CCG %s
 // RUN: c-index-test -code-completion-at=%s:122:7 %s | FileCheck -check-prefix=CHECK-CCH %s
+// RUN: c-index-test service -code-completion-at=%s:122:7 %s | FileCheck -check-prefix=CHECK-CCH %s
 // CHECK-CCH: ObjCClassMethodDecl:{ResultType id}{TypedText categoryClassMethod}
 // CHECK-CCH: ObjCClassMethodDecl:{ResultType int}{TypedText classMethod1:}{Placeholder (id)}{HorizontalSpace  }{TypedText withKeyword:}{Placeholder (int)}
 // CHECK-CCH: ObjCClassMethodDecl:{ResultType void}{TypedText classMethod2}
@@ -308,19 +326,23 @@ void test_Nullability(Nullability *n, A* a) {
 // CHECK-CCH: ObjCClassMethodDecl:{ResultType int}{TypedText OtherMethod:}{Placeholder (float)}{HorizontalSpace  }{TypedText Arg1:}{Placeholder (int)}{HorizontalSpace  }{TypedText Arg2:}{Placeholder (int)}
 // CHECK-CCH: ObjCClassMethodDecl:{ResultType id}{TypedText protocolClassMethod}
 // RUN: c-index-test -code-completion-at=%s:134:6 %s | FileCheck -check-prefix=CHECK-CCI %s
+// RUN: c-index-test service -code-completion-at=%s:134:6 %s | FileCheck -check-prefix=CHECK-CCI %s
 // CHECK-CCI: ObjCInstanceMethodDecl:{ResultType void}{TypedText method1} (37)
 // CHECK-CCI: ObjCInstanceMethodDecl:{ResultType void}{TypedText method2} (35)
 
 // RUN: c-index-test -code-completion-at=%s:150:5 %s | FileCheck -check-prefix=CHECK-REDUNDANT %s
+// RUN: c-index-test service -code-completion-at=%s:150:5 %s | FileCheck -check-prefix=CHECK-REDUNDANT %s
 // CHECK-REDUNDANT: ObjCInstanceMethodDecl:{ResultType void}{TypedText method2} (35)
 // CHECK-REDUNDANT-NOT: ObjCInstanceMethodDecl:{ResultType void}{TypedText method2}
 // CHECK-REDUNDANT: ObjCInstanceMethodDecl:{ResultType void}{TypedText method3} (35)
 
 // RUN: c-index-test -code-completion-at=%s:170:16 %s | FileCheck -check-prefix=CHECK-CLASS-RESULT %s
+// RUN: c-index-test service -code-completion-at=%s:170:16 %s | FileCheck -check-prefix=CHECK-CLASS-RESULT %s
 // CHECK-CLASS-RESULT: ObjCClassMethodDecl:{ResultType void}{TypedText class_method3} (35)
 // CHECK-CLASS-RESULT: ObjCClassMethodDecl:{ResultType void}{TypedText class_method4} (35)
 
 // RUN: c-index-test -code-completion-at=%s:181:4 %s | FileCheck -check-prefix=CHECK-BLOCK-RECEIVER %s
+// RUN: c-index-test service -code-completion-at=%s:181:4 %s | FileCheck -check-prefix=CHECK-BLOCK-RECEIVER %s
 // CHECK-BLOCK-RECEIVER: ObjCInterfaceDecl:{TypedText A} (50)
 // CHECK-BLOCK-RECEIVER: ObjCInterfaceDecl:{TypedText B} (50)
 // CHECK-BLOCK-RECEIVER: ParmDecl:{ResultType A *(^)(int)}{TypedText block1} (34)
@@ -328,21 +350,34 @@ void test_Nullability(Nullability *n, A* a) {
 
 // Test code completion with a missing opening bracket:
 // RUN: c-index-test -code-completion-at=%s:135:5 %s | FileCheck -check-prefix=CHECK-CCI %s
+// RUN: c-index-test service -code-completion-at=%s:135:5 %s | FileCheck -check-prefix=CHECK-CCI %s
 // RUN: c-index-test -code-completion-at=%s:139:7 %s | FileCheck -check-prefix=CHECK-CC7 %s
+// RUN: c-index-test service -code-completion-at=%s:139:7 %s | FileCheck -check-prefix=CHECK-CC7 %s
 // RUN: c-index-test -code-completion-at=%s:139:16 %s | FileCheck -check-prefix=CHECK-CC8 %s
+// RUN: c-index-test service -code-completion-at=%s:139:16 %s | FileCheck -check-prefix=CHECK-CC8 %s
 // RUN: c-index-test -code-completion-at=%s:139:23 %s | FileCheck -check-prefix=CHECK-CC9 %s
+// RUN: c-index-test service -code-completion-at=%s:139:23 %s | FileCheck -check-prefix=CHECK-CC9 %s
 
 // RUN: c-index-test -code-completion-at=%s:140:14 %s | FileCheck -check-prefix=CHECK-CCC %s
+// RUN: c-index-test service -code-completion-at=%s:140:14 %s | FileCheck -check-prefix=CHECK-CCC %s
 // RUN: c-index-test -code-completion-at=%s:140:23 %s | FileCheck -check-prefix=CHECK-CCD %s
+// RUN: c-index-test service -code-completion-at=%s:140:23 %s | FileCheck -check-prefix=CHECK-CCD %s
 // RUN: c-index-test -code-completion-at=%s:140:30 %s | FileCheck -check-prefix=CHECK-CCE %s
+// RUN: c-index-test service -code-completion-at=%s:140:30 %s | FileCheck -check-prefix=CHECK-CCE %s
 // RUN: c-index-test -code-completion-at=%s:141:14 %s | FileCheck -check-prefix=CHECK-CCC %s
+// RUN: c-index-test service -code-completion-at=%s:141:14 %s | FileCheck -check-prefix=CHECK-CCC %s
 // RUN: c-index-test -code-completion-at=%s:141:23 %s | FileCheck -check-prefix=CHECK-CCD %s
+// RUN: c-index-test service -code-completion-at=%s:141:23 %s | FileCheck -check-prefix=CHECK-CCD %s
 // RUN: c-index-test -code-completion-at=%s:141:30 %s | FileCheck -check-prefix=CHECK-CCE %s
+// RUN: c-index-test service -code-completion-at=%s:141:30 %s | FileCheck -check-prefix=CHECK-CCE %s
 
 // RUN: c-index-test -code-completion-at=%s:175:12 %s | FileCheck -check-prefix=CHECK-CLASS-RESULT %s
+// RUN: c-index-test service -code-completion-at=%s:175:12 %s | FileCheck -check-prefix=CHECK-CLASS-RESULT %s
 
 // RUN: c-index-test -code-completion-at=%s:189:6 %s | FileCheck -check-prefix=CHECK-DISTRIB-OBJECTS %s
+// RUN: c-index-test service -code-completion-at=%s:189:6 %s | FileCheck -check-prefix=CHECK-DISTRIB-OBJECTS %s
 // CHECK-DISTRIB-OBJECTS: ObjCInstanceMethodDecl:{ResultType void}{TypedText method:}{Placeholder (in bycopy A *)}{HorizontalSpace  }{TypedText result:}{Placeholder (out byref A **)} (35)
 
 // RUN: c-index-test -code-completion-at=%s:197:6 %s | FileCheck -check-prefix=CHECK-NULLABLE %s
+// RUN: c-index-test service -code-completion-at=%s:197:6 %s | FileCheck -check-prefix=CHECK-NULLABLE %s
 // CHECK-NULLABLE: ObjCInstanceMethodDecl:{ResultType A * _Nonnull}{TypedText method:}{Placeholder (nullable A *)}

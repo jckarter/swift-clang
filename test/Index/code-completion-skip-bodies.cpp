@@ -11,8 +11,10 @@ void func(S *s) {
   s->x = 0;
 }
 
-// RUN: c-index-test -code-completion-at=%s:11:6 %s 2> %t.stderr | FileCheck %s --check-prefix=STDOUT
-// RUN: FileCheck --input-file=%t.stderr --check-prefix=STDERR %s
+// RUN: c-index-test -code-completion-at=%s:11:6 %s 2> %t.stderr.1 | FileCheck %s --check-prefix=STDOUT
+// RUN: c-index-test service -code-completion-at=%s:11:6 %s 2> %t.stderr.2 | FileCheck %s --check-prefix=STDOUT
+// RUN: FileCheck --input-file=%t.stderr.1 --check-prefix=STDERR %s
+// RUN: FileCheck --input-file=%t.stderr.2 --check-prefix=STDERR %s
 
 // STDOUT: FieldDecl:{ResultType int}{TypedText x}
 

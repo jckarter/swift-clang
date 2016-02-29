@@ -15,5 +15,6 @@ struct S {
 @end
 
 // RUN: c-index-test -code-completion-at=%s:13:7 -fobjc-nonfragile-abi %s | FileCheck %s
+// RUN: c-index-test service -code-completion-at=%s:13:7 -fobjc-nonfragile-abi %s | FileCheck %s
 // CHECK: FieldDecl:{ResultType int}{TypedText x}
 // CHECK: FieldDecl:{ResultType int}{TypedText y}

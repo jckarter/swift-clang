@@ -15,5 +15,6 @@ void test() {
 }
 
 // RUN: c-index-test -code-completion-at=%s:14:2 %s | FileCheck %s
+// RUN: c-index-test service -code-completion-at=%s:14:2 %s | FileCheck %s
 // CHECK: FunctionTemplate:{ResultType void}{TypedText f}{LeftParen (}{Placeholder T}{RightParen )} (50)
 // CHECK: ClassTemplate:{TypedText X}{LeftAngle <}{Placeholder typename T}{RightAngle >} (50)

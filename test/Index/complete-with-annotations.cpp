@@ -9,7 +9,8 @@ public __attribute__((annotate("some annotation"))):
 };
 
 void X::doSomething() {
-  // RUN: c-index-test -code-completion-at=%s:13:9 %s | FileCheck %s
+  // RUN: c-index-test -code-completion-at=%s:14:9 %s | FileCheck %s
+  // RUN: c-index-test service -code-completion-at=%s:14:9 %s | FileCheck %s
   this->;
 }
 

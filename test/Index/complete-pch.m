@@ -18,11 +18,13 @@ void msg_id(id x) {
 
 // Run the actual tests
 // RUN: c-index-test -code-completion-at=%s:10:7 -include %t.h %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test service -code-completion-at=%s:10:7 -include %t.h %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: ObjCClassMethodDecl:{ResultType int}{TypedText classMethod1:}{Placeholder (double)}
 // CHECK-CC1: ObjCClassMethodDecl:{ResultType int}{TypedText classMethod2:}{Placeholder (float)}
 // CHECK-CC1: ObjCClassMethodDecl:{ResultType int}{TypedText classMethod3:}{Placeholder (float)}
 
 // RUN: c-index-test -code-completion-at=%s:11:6 -include %t.h %s | FileCheck -check-prefix=CHECK-CC2 %s
+// RUN: c-index-test service -code-completion-at=%s:11:6 -include %t.h %s | FileCheck -check-prefix=CHECK-CC2 %s
 // CHECK-CC2: ObjCInstanceMethodDecl:{ResultType int}{TypedText instanceMethod1:}{Placeholder (int)}
 // CHECK-CC2: ObjCInstanceMethodDecl:{ResultType int}{TypedText instanceMethod2:}{Placeholder (int)}
 // CHECK-CC2: ObjCInstanceMethodDecl:{ResultType int}{TypedText instanceMethod3:}{Placeholder (int)}

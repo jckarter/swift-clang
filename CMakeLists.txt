@@ -473,6 +473,12 @@ include_directories(BEFORE
   )
 
 if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
+  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/clang-service
+    DESTINATION include
+    FILES_MATCHING
+    PATTERN "*.h"
+    )
+
   install(DIRECTORY include/clang include/clang-c
     DESTINATION include
     FILES_MATCHING

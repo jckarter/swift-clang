@@ -26,8 +26,10 @@ void bar() {
 }
 
 // RUN: c-index-test -code-completion-at=%s:14:6 %s | FileCheck -check-prefix=CHECK-ACCESS-1 %s
+// RUN: c-index-test service -code-completion-at=%s:14:6 %s | FileCheck -check-prefix=CHECK-ACCESS-1 %s
 // CHECK-ACCESS-1: ClassTemplate:{TypedText A}{LeftAngle <}{Placeholder typename T}{RightAngle >} (50)
 // CHECK-ACCESS-1: ClassTemplate:{TypedText B}{LeftAngle <}{Placeholder typename T}{RightAngle >} (50)
 
 // RUN: c-index-test -code-completion-at=%s:25:6 %s | FileCheck -check-prefix=CHECK-ACCESS-2 %s
+// RUN: c-index-test service -code-completion-at=%s:25:6 %s | FileCheck -check-prefix=CHECK-ACCESS-2 %s
 // CHECK-ACCESS-2: ClassTemplate:{TypedText C}{LeftAngle <}{Placeholder typename T}{RightAngle >} (50)

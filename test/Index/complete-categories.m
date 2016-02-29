@@ -20,20 +20,25 @@
 @implementation I3(Cat2) @end
 
 // RUN: c-index-test -code-completion-at=%s:12:16 %s | FileCheck -check-prefix=CHECK-CC1 %s
+// RUN: c-index-test service -code-completion-at=%s:12:16 %s | FileCheck -check-prefix=CHECK-CC1 %s
 // CHECK-CC1: ObjCCategoryDecl:{TypedText Cat1}
 // CHECK-CC1: ObjCCategoryDecl:{TypedText Cat2}
 // CHECK-CC1: ObjCCategoryDecl:{TypedText Cat3}
 // RUN: c-index-test -code-completion-at=%s:13:16 %s | FileCheck -check-prefix=CHECK-CC2 %s
+// RUN: c-index-test service -code-completion-at=%s:13:16 %s | FileCheck -check-prefix=CHECK-CC2 %s
 // CHECK-CC2: ObjCCategoryDecl:{TypedText Cat1}
 // CHECK-CC2-NEXT: ObjCCategoryDecl:{TypedText Cat3}
 // RUN: c-index-test -code-completion-at=%s:18:20 %s | FileCheck -check-prefix=CHECK-CC3 %s
+// RUN: c-index-test service -code-completion-at=%s:18:20 %s | FileCheck -check-prefix=CHECK-CC3 %s
 // CHECK-CC3: ObjCCategoryDecl:{TypedText Cat1}
 // CHECK-CC3: ObjCCategoryDecl:{TypedText Cat2}
 // CHECK-CC3: ObjCCategoryDecl:{TypedText Cat3}
 // RUN: c-index-test -code-completion-at=%s:19:20 %s | FileCheck -check-prefix=CHECK-CC4 %s
+// RUN: c-index-test service -code-completion-at=%s:19:20 %s | FileCheck -check-prefix=CHECK-CC4 %s
 // CHECK-CC4: ObjCCategoryDecl:{TypedText Cat1}
 // CHECK-CC4-NEXT: ObjCCategoryDecl:{TypedText Cat3}
 // RUN: c-index-test -code-completion-at=%s:20:20 %s | FileCheck -check-prefix=CHECK-CC5 %s
+// RUN: c-index-test service -code-completion-at=%s:20:20 %s | FileCheck -check-prefix=CHECK-CC5 %s
 // CHECK-CC5: ObjCCategoryDecl:{TypedText Cat1}
 // CHECK-CC5-NEXT: ObjCCategoryDecl:{TypedText Cat2}
 // CHECK-CC5-NEXT: ObjCCategoryDecl:{TypedText Cat3}

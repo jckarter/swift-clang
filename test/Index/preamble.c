@@ -26,6 +26,7 @@ void f(int x) {
 //     preamble.c:5:9: warning: macro is not used
 // CHECK-DIAG-NOT: preamble.c:6:9: warning: macro is not used
 // RUN: env CINDEXTEST_EDITING=1 c-index-test -code-completion-at=%s:11:1 -I %S/Inputs -include %t %s 2> %t.stderr.txt | FileCheck -check-prefix CHECK-CC %s
+// RUN: env CINDEXTEST_EDITING=1 c-index-test service -code-completion-at=%s:11:1 -I %S/Inputs -include %t %s 2> %t.stderr.txt | FileCheck -check-prefix CHECK-CC %s
 // CHECK-CC: FunctionDecl:{ResultType int}{TypedText bar}{LeftParen (}{Placeholder int i}{RightParen )} (50)
 // CHECK-CC: FunctionDecl:{ResultType void}{TypedText f}{LeftParen (}{Placeholder int x}{RightParen )} (50)
 // CHECK-CC: FunctionDecl:{ResultType int}{TypedText foo}{LeftParen (}{Placeholder int}{RightParen )} (50)
