@@ -47,4 +47,9 @@ id CreateSomething();
 - (void) testCFTypeRef:(CFTypeRef)arg;
 @end
 
-// expected-no-diagnostics
+// Not called out explicitly by PR26085, but related.
+void testTakesCFTypeRef(id x) {
+  // Overload resolution should occur silently, select the CFTypeRef overload,
+  // and produce a single complaint. (with notes)
+  [x testCFTypeRef:CreateSomething()]; // expected-error{{implicit conversion of Objective-C pointer type 'id' to C pointer type 'CFTypeRef'}} expected-note{{use __bridge}} expected-note{{use __bridge_retained}}
+}

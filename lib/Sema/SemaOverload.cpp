@@ -1742,10 +1742,6 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
   if (CanonFrom == CanonTo)
     return true;
 
-#if 1
-  // temporary workaround for rdar://24111333
-  return false;
-#else
   // If we have not converted the argument type to the parameter type,
   // this is a bad conversion sequence, unless we're resolving an overload in C.
   if (S.getLangOpts().CPlusPlus || !InOverloadResolution)
@@ -1766,7 +1762,6 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
   SCS.Second = ICK_C_Only_Conversion;
   SCS.Third = ICK_C_Only_Conversion;
   return true;
-#endif
 }
   
 static bool
