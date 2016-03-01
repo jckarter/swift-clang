@@ -37,12 +37,14 @@ public:
   StringRef getOutputFile() const;
   StringRef getTarget() const;
 
-  ArrayRef<StringRef> getDependencies() const;
+  ArrayRef<StringRef> getDependencyFiles() const;
 
-  /// \c DepIndex is the index in the \c getDependencies array.
-  bool foreachRecord(llvm::function_ref<bool(StringRef RecordFile,
-                                             StringRef Filename,
-                                             unsigned DepIndex)> Receiver);
+  /// \c DepIndex is the index in the \c getDependencyFiles array.
+  /// Unit dependencies are provided ahead of record ones.
+  bool foreachDependency(llvm::function_ref<bool(bool IsUnit,
+                                            StringRef UnitOrRecordName,
+                                            StringRef Filename,
+                                            unsigned DepIndex)> Receiver);
 
 private:
   IndexUnitReader(void *Impl) : Impl(Impl) {}

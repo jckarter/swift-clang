@@ -30,16 +30,21 @@ class IndexUnitWriter {
   std::vector<const FileEntry *> Files;
   llvm::DenseMap<const FileEntry *, unsigned> IndexByFile;
   std::vector<std::pair<std::string, unsigned>> Records;
+  std::vector<std::pair<std::string, unsigned>> ASTFileUnits;
 
 public:
   IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
                   StringRef TargetTriple);
   ~IndexUnitWriter();
 
-  unsigned addDependency(const FileEntry *File);
+  unsigned addFileDependency(const FileEntry *File);
   void addRecordFile(StringRef RecordFile, const FileEntry *File);
+  void addASTFileDependency(const FileEntry *File);
 
   bool write(std::string &Error);
+
+  static void getUnitNameForOutputFile(StringRef FilePath,
+                                       SmallVectorImpl<char> &Str);
 };
 
 } // end namespace index
