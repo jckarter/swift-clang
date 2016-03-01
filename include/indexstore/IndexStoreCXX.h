@@ -251,6 +251,28 @@ public:
   }
 };
 
+class IndexUnitDependency {
+  indexstore_unit_dependency_t obj;
+  friend class IndexUnitReader;
+
+public:
+  IndexUnitDependency(indexstore_unit_dependency_t obj) : obj(obj) {}
+
+  enum class DependencyKind {
+    Unit,
+    Record,
+  };
+  DependencyKind getKind() {
+    switch (indexstore_unit_dependency_get_kind(obj)) {
+    case INDEXSTORE_UNIT_DEPENDENCY_UNIT: return DependencyKind::Unit;
+    case INDEXSTORE_UNIT_DEPENDENCY_RECORD: return DependencyKind::Record;
+    }
+  }
+  StringRef getName() { return stringFromIndexStoreStringRef(indexstore_unit_dependency_get_name(obj)); }
+  StringRef getFilePath() { return stringFromIndexStoreStringRef(indexstore_unit_dependency_get_filepath(obj)); }
+  size_t getIndex() { return indexstore_unit_dependency_get_index(obj); }
+};
+
 class IndexUnitReader {
   indexstore_unit_reader_t obj;
 
@@ -295,25 +317,19 @@ public:
 
   size_t getDependenciesCount() { return indexstore_unit_reader_dependencies_count(obj); }
 
-  StringRef getDependency(size_t index) {
-    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_dependency(obj, index));
+  StringRef getDependencyFilePath(size_t index) {
+    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_dependency_filepath(obj, index));
   }
 
-  bool foreachDependency(llvm::function_ref<bool(StringRef filename)> receiver) {
-    return indexstore_unit_reader_dependencies_apply(obj, ^bool(indexstore_string_ref_t path) {
+  bool foreachDependencyFilePath(llvm::function_ref<bool(StringRef filename)> receiver) {
+    return indexstore_unit_reader_dependencies_filepaths_apply(obj, ^bool(indexstore_string_ref_t path) {
       return receiver(stringFromIndexStoreStringRef(path));
     });
   }
 
-  bool foreachRecord(llvm::function_ref<bool(StringRef recordName,
-                                             StringRef filename,
-                                             unsigned depIndex)> receiver) {
-    return indexstore_unit_reader_records_apply(obj, ^bool(indexstore_string_ref_t record_name,
-                                                           indexstore_string_ref_t filename,
-                                                           size_t dep_index) {
-      return receiver(stringFromIndexStoreStringRef(record_name),
-                      stringFromIndexStoreStringRef(filename),
-                      dep_index);
+  bool foreachDependency(llvm::function_ref<bool(IndexUnitDependency)> receiver) {
+    return indexstore_unit_reader_dependencies_apply(obj, ^bool(indexstore_unit_dependency_t dep) {
+      return receiver(dep);
     });
   }
 };

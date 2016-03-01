@@ -30,7 +30,7 @@ IndexUnitWriter::IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
 
 IndexUnitWriter::~IndexUnitWriter() {}
 
-unsigned IndexUnitWriter::addDependency(const FileEntry *File) {
+unsigned IndexUnitWriter::addFileDependency(const FileEntry *File) {
   assert(File);
   auto Pair = IndexByFile.insert(std::make_pair(File, Files.size()));
   bool WasInserted = Pair.second;
@@ -42,20 +42,31 @@ unsigned IndexUnitWriter::addDependency(const FileEntry *File) {
 
 void IndexUnitWriter::addRecordFile(StringRef RecordFile, const FileEntry *File) {
   assert(File);
-  Records.emplace_back(RecordFile, addDependency(File));
+  Records.emplace_back(RecordFile, addFileDependency(File));
+}
+
+void IndexUnitWriter::addASTFileDependency(const FileEntry *File) {
+  assert(File);
+  SmallString<64> UnitName;
+  getUnitNameForOutputFile(File->getName(), UnitName);
+  ASTFileUnits.emplace_back(UnitName.str(), addFileDependency(File));
+}
+
+void IndexUnitWriter::getUnitNameForOutputFile(StringRef FilePath,
+                                               SmallVectorImpl<char> &Str) {
+  StringRef Fname = sys::path::filename(FilePath);
+  Str.append(Fname.begin(), Fname.end());
+  Str.push_back('-');
+  llvm::hash_code PathHashVal = llvm::hash_value(FilePath);
+  llvm::APInt(64, PathHashVal).toString(Str, 36, /*Signed=*/false);
 }
 
 bool IndexUnitWriter::write(std::string &Error) {
   using namespace llvm::sys;
 
-  llvm::hash_code PathHashVal = llvm::hash_value(OutputFile);
-  std::string PathHashString = llvm::APInt(64, PathHashVal).toString(36, /*Signed=*/false);
-
   SmallString<256> UnitPath = StringRef(UnitsPath);
   UnitPath += '/';
-  UnitPath += path::filename(OutputFile);
-  UnitPath += '-';
-  UnitPath += PathHashString;
+  getUnitNameForOutputFile(OutputFile, UnitPath);
 
   SmallString<128> TempPath;
   TempPath = path::parent_path(UnitsPath);
@@ -93,6 +104,14 @@ bool IndexUnitWriter::write(std::string &Error) {
 
   for (auto *FE : Files) {
     OS << FE->getName() << '\n';
+  }
+  OS << "===\n";
+
+  // Write pairs of AST unit name and index in the dependencies list.
+
+  for (const auto &Pair : ASTFileUnits) {
+    OS << Pair.first << '\n';
+    OS << Pair.second << '\n';
   }
   OS << "===\n";
 

@@ -32,7 +32,9 @@ struct UnitSourceInfo {
 };
 
 struct UnitInfo {
+  std::string Name;
   SmallVector<UnitSourceInfo, 8> Sources;
+  SmallVector<std::string, 3> UnitDepends;
   FilePathIndex OutFile;
   StringRef Triple;
 };
@@ -92,7 +94,7 @@ public:
     SymbolIndices(Allocator) {}
 
   bool process();
-  void processUnit(IndexUnitReader &UnitReader);
+  void processUnit(StringRef name, IndexUnitReader &UnitReader);
   void dumpJSON(raw_ostream &OS);
 
 private:
@@ -131,29 +133,52 @@ bool Aggregator::process() {
       return true;
     }
 
-    processUnit(unitReader);
+    processUnit(unitFname, unitReader);
   }
   return false;
 }
 
-void Aggregator::processUnit(IndexUnitReader &UnitReader) {
+void Aggregator::processUnit(StringRef name, IndexUnitReader &UnitReader) {
   auto workDir = UnitReader.getWorkingDirectory();
   auto unit = llvm::make_unique<UnitInfo>();
+  unit->Name = name;
   unit->Triple = getTripleString(UnitReader.getTarget());
   unit->OutFile = getFilePathIndex(UnitReader.getOutputFile(), workDir);
 
-  unit->Sources.reserve(UnitReader.getDependenciesCount());
-  UnitReader.foreachDependency([&](StringRef dependFilename) -> bool {
+  struct DepInfo {
     UnitSourceInfo source;
+    std::string unitName;
+  };
+  SmallVector<DepInfo, 32> Deps;
+  Deps.reserve(UnitReader.getDependenciesCount());
+  UnitReader.foreachDependencyFilePath([&](StringRef dependFilename) -> bool {
+    Deps.resize(Deps.size()+1);
+    UnitSourceInfo &source = Deps.back().source;
     source.FilePath = getFilePathIndex(dependFilename, workDir);
-    unit->Sources.push_back(std::move(source));
     return true;
   });
-  UnitReader.foreachRecord([&](StringRef recordFile, StringRef filename, unsigned depIndex) -> bool {
-    RecordIndex recIndex = getRecordIndex(recordFile);
-    unit->Sources[depIndex].AssociatedRecords.push_back(recIndex);
+  UnitReader.foreachDependency([&](IndexUnitDependency dep) -> bool {
+    switch (dep.getKind()) {
+      case IndexUnitDependency::DependencyKind::Unit:
+        Deps[dep.getIndex()].unitName = dep.getName();
+        break;
+      case IndexUnitDependency::DependencyKind::Record:
+        UnitSourceInfo &source = Deps[dep.getIndex()].source;
+        RecordIndex recIndex = getRecordIndex(dep.getName());
+        source.AssociatedRecords.push_back(recIndex);
+        break;
+    }
     return true;
   });
+
+  unit->Sources.reserve(Deps.size());
+  for (auto &dep : Deps) {
+    if (!dep.unitName.empty()) {
+      unit->UnitDepends.emplace_back(std::move(dep.unitName));
+    } else {
+      unit->Sources.push_back(std::move(dep.source));
+    }
+  }
 
   Units.push_back(std::move(unit));
 }
@@ -309,12 +334,26 @@ void Aggregator::dumpJSON(raw_ostream &OS) {
   }
   OS.indent(2) << "],\n";
 
+  StringMap<size_t> UnitIndicesByName;
+  for (unsigned i = 0, e = Units.size(); i != e; ++i) {
+    UnitInfo &unit = *Units[i];
+    UnitIndicesByName[unit.Name] = i;
+  }
+
   OS.indent(2) << "\"units\": [\n";
   for (unsigned i = 0, e = Units.size(); i != e; ++i) {
     OS.indent(4) << "{\n";
     UnitInfo &unit = *Units[i];
     OS.indent(6) << "\"triple\": \"" << unit.Triple << "\",\n";
     OS.indent(6) << "\"out-file\": \"" << unit.OutFile << "\",\n";
+    if (!unit.UnitDepends.empty()) {
+      OS.indent(6) << "\"unit-dependencies\": [";
+      for (unsigned ui = 0, ue = unit.UnitDepends.size(); ui != ue; ++ui) {
+        OS << UnitIndicesByName[unit.UnitDepends[ui]];
+        if (ui < ue-1) OS << ", ";
+      }
+      OS << "],\n";
+    }
     OS.indent(6) << "\"sources\": [\n";
     for (unsigned si = 0, se = unit.Sources.size(); si != se; ++si) {
       OS.indent(8) << "{\n";

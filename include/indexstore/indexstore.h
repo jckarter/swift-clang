@@ -251,18 +251,34 @@ INDEXSTORE_PUBLIC size_t
 indexstore_unit_reader_dependencies_count(indexstore_unit_reader_t);
 
 INDEXSTORE_PUBLIC indexstore_string_ref_t
-indexstore_unit_reader_get_dependency(indexstore_unit_reader_t, size_t index);
+indexstore_unit_reader_get_dependency_filepath(indexstore_unit_reader_t, size_t index);
+
+INDEXSTORE_PUBLIC bool
+indexstore_unit_reader_dependencies_filepaths_apply(indexstore_unit_reader_t,
+                                  bool(^applier)(indexstore_string_ref_t path));
+
+typedef void *indexstore_unit_dependency_t;
+
+typedef enum {
+  INDEXSTORE_UNIT_DEPENDENCY_UNIT = 1,
+  INDEXSTORE_UNIT_DEPENDENCY_RECORD = 2,
+} indexstore_unit_dependency_kind_t;
+
+INDEXSTORE_PUBLIC indexstore_unit_dependency_kind_t
+indexstore_unit_dependency_get_kind(indexstore_unit_dependency_t);
+
+INDEXSTORE_PUBLIC indexstore_string_ref_t
+indexstore_unit_dependency_get_filepath(indexstore_unit_dependency_t);
+
+INDEXSTORE_PUBLIC indexstore_string_ref_t
+indexstore_unit_dependency_get_name(indexstore_unit_dependency_t);
+
+INDEXSTORE_PUBLIC size_t
+indexstore_unit_dependency_get_index(indexstore_unit_dependency_t);
 
 INDEXSTORE_PUBLIC bool
 indexstore_unit_reader_dependencies_apply(indexstore_unit_reader_t,
-                                  bool(^applier)(indexstore_string_ref_t path));
-
-/// \c DepIndex is the index in the \c getDependencies array.
-INDEXSTORE_PUBLIC bool
-indexstore_unit_reader_records_apply(indexstore_unit_reader_t,
-                             bool(^applier)(indexstore_string_ref_t record_name,
-                                            indexstore_string_ref_t filename,
-                                            size_t dep_index));
+                             bool(^applier)(indexstore_unit_dependency_t));
 
 INDEXSTORE_END_DECLS
 

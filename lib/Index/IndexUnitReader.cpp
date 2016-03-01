@@ -34,6 +34,7 @@ class IndexUnitReaderImpl {
   StringRef OutputFile;
   StringRef Target;
   SmallVector<StringRef, 16> Dependencies;
+  SmallVector<std::pair<StringRef, unsigned>, 6> ASTFileUnits;
   SmallVector<std::pair<StringRef, unsigned>, 16> Records;
 
 public:
@@ -45,12 +46,14 @@ public:
   StringRef getOutputFile() const;
   StringRef getTarget() const;
 
-  ArrayRef<StringRef> getDependencies() const;
+  ArrayRef<StringRef> getDependencyFiles() const;
 
   /// \c Index is the index in the \c getDependencies array.
-  bool foreachRecord(llvm::function_ref<bool(StringRef RecordFile,
-                                             StringRef Filename,
-                                             unsigned DepIndex)> Receiver);
+  /// Unit dependencies are provided ahead of record ones.
+  bool foreachDependency(llvm::function_ref<bool(bool IsUnit,
+                                            StringRef UnitOrRecordName,
+                                            StringRef Filename,
+                                            unsigned DepIndex)> Receiver);
 };
 
 } // anonymous namespace
@@ -71,23 +74,31 @@ bool IndexUnitReaderImpl::init(std::unique_ptr<MemoryBuffer> Buf,
     Dependencies.push_back(Dep);
   }
 
+  bool InUnitSection = true;
   while (!Buffer.empty()) {
-    StringRef RecordFile, IndexStr;
-    std::tie(RecordFile, Buffer) = Buffer.split('\n');
+    StringRef UnitOrRecordName, IndexStr;
+    std::tie(UnitOrRecordName, Buffer) = Buffer.split('\n');
+    if (UnitOrRecordName == "===") {
+      InUnitSection = false;
+      continue;
+    }
     std::tie(IndexStr, Buffer) = Buffer.split('\n');
     unsigned Index;
     bool Err = IndexStr.getAsInteger(10, Index);
     if (Err) {
-      Error = "Error getting index for record: ";
-      Error += RecordFile;
+      Error = "Error getting index for dependency: ";
+      Error += UnitOrRecordName;
       return true;
     }
     if (Index >= Dependencies.size()) {
-      Error = "Out of range index for record: ";
-      Error += RecordFile;
+      Error = "Out of range index for dependency: ";
+      Error += UnitOrRecordName;
       return true;
     }
-    Records.push_back(std::make_pair(RecordFile, Index));
+    if (InUnitSection)
+      ASTFileUnits.push_back(std::make_pair(UnitOrRecordName, Index));
+    else
+      Records.push_back(std::make_pair(UnitOrRecordName, Index));
   }
 
   MemBuf = std::move(Buf);
@@ -111,17 +122,27 @@ StringRef IndexUnitReaderImpl::getTarget() const {
   return Target;
 }
 
-ArrayRef<StringRef> IndexUnitReaderImpl::getDependencies() const {
+ArrayRef<StringRef> IndexUnitReaderImpl::getDependencyFiles() const {
   return Dependencies;
 }
 
 /// \c Index is the index in the \c getDependencies array.
-bool IndexUnitReaderImpl::foreachRecord(llvm::function_ref<bool(StringRef RecordFile,
-                                                                StringRef Filename,
-                                                                unsigned DepIndex)> Receiver) {
+/// Unit dependencies are provided ahead of record ones.
+bool IndexUnitReaderImpl::foreachDependency(llvm::function_ref<bool(bool IsUnit,
+                                            StringRef UnitOrRecordName,
+                                            StringRef Filename,
+                                            unsigned DepIndex)> Receiver) {
+  for (auto &Pair : ASTFileUnits) {
+    unsigned Index = Pair.second;
+    bool Continue = Receiver(/*IsUnit=*/true, Pair.first,  Dependencies[Index],
+                             Index);
+    if (!Continue)
+      return false;
+  }
   for (auto &Pair : Records) {
     unsigned Index = Pair.second;
-    bool Continue = Receiver(Pair.first,  Dependencies[Index], Index);
+    bool Continue = Receiver(/*IsUnit=*/false, Pair.first,  Dependencies[Index],
+                             Index);
     if (!Continue)
       return false;
   }
@@ -209,13 +230,15 @@ StringRef IndexUnitReader::getTarget() const {
   return IMPL->getTarget();
 }
 
-ArrayRef<StringRef> IndexUnitReader::getDependencies() const {
-  return IMPL->getDependencies();
+ArrayRef<StringRef> IndexUnitReader::getDependencyFiles() const {
+  return IMPL->getDependencyFiles();
 }
 
 /// \c Index is the index in the \c getDependencies array.
-bool IndexUnitReader::foreachRecord(llvm::function_ref<bool(StringRef RecordFile,
-                                                            StringRef Filename,
-                                                            unsigned DepIndex)> Receiver) {
-  return IMPL->foreachRecord(std::move(Receiver));
+/// Unit dependencies are provided ahead of record ones.
+bool IndexUnitReader::foreachDependency(llvm::function_ref<bool(bool IsUnit,
+                                            StringRef UnitOrRecordName,
+                                            StringRef Filename,
+                                            unsigned DepIndex)> Receiver) {
+  return IMPL->foreachDependency(std::move(Receiver));
 }

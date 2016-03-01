@@ -376,20 +376,21 @@ indexstore_unit_reader_get_target(indexstore_unit_reader_t rdr) {
 size_t
 indexstore_unit_reader_dependencies_count(indexstore_unit_reader_t rdr) {
   auto reader = static_cast<IndexUnitReader*>(rdr);
-  return reader->getDependencies().size();
+  return reader->getDependencyFiles().size();
 }
 
 indexstore_string_ref_t
-indexstore_unit_reader_get_dependency(indexstore_unit_reader_t rdr, size_t index) {
+indexstore_unit_reader_get_dependency_filepath(indexstore_unit_reader_t rdr,
+                                               size_t index) {
   auto reader = static_cast<IndexUnitReader*>(rdr);
-  return toIndexStoreString(reader->getDependencies()[index]);
+  return toIndexStoreString(reader->getDependencyFiles()[index]);
 }
 
 bool
-indexstore_unit_reader_dependencies_apply(indexstore_unit_reader_t rdr,
+indexstore_unit_reader_dependencies_filepaths_apply(indexstore_unit_reader_t rdr,
                                   bool(^applier)(indexstore_string_ref_t path)) {
   auto reader = static_cast<IndexUnitReader*>(rdr);
-  for (StringRef depend : reader->getDependencies()) {
+  for (StringRef depend : reader->getDependencyFiles()) {
     bool shouldContinue = applier(toIndexStoreString(depend));
     if (!shouldContinue)
       return false;
@@ -397,13 +398,48 @@ indexstore_unit_reader_dependencies_apply(indexstore_unit_reader_t rdr,
   return true;
 }
 
+namespace {
+struct DependencyInfo {
+  bool IsUnit;
+  StringRef FilePath;
+  StringRef Name;
+  size_t Index;
+};
+}
+
+indexstore_unit_dependency_kind_t
+indexstore_unit_dependency_get_kind(indexstore_unit_dependency_t c_dep) {
+  auto dep = static_cast<DependencyInfo*>(c_dep);
+  return dep->IsUnit ? INDEXSTORE_UNIT_DEPENDENCY_UNIT : INDEXSTORE_UNIT_DEPENDENCY_RECORD;
+}
+
+indexstore_string_ref_t
+indexstore_unit_dependency_get_filepath(indexstore_unit_dependency_t c_dep) {
+  auto dep = static_cast<DependencyInfo*>(c_dep);
+  return toIndexStoreString(dep->FilePath);
+}
+
+indexstore_string_ref_t
+indexstore_unit_dependency_get_name(indexstore_unit_dependency_t c_dep) {
+  auto dep = static_cast<DependencyInfo*>(c_dep);
+  return toIndexStoreString(dep->Name);
+}
+
+size_t
+indexstore_unit_dependency_get_index(indexstore_unit_dependency_t c_dep) {
+  auto dep = static_cast<DependencyInfo*>(c_dep);
+  return dep->Index;
+}
+
 bool
-indexstore_unit_reader_records_apply(indexstore_unit_reader_t rdr,
-                             bool(^applier)(indexstore_string_ref_t record_name,
-                                            indexstore_string_ref_t filename,
-                                            size_t dep_index)) {
+indexstore_unit_reader_dependencies_apply(indexstore_unit_reader_t rdr,
+                             bool(^applier)(indexstore_unit_dependency_t)) {
   auto reader = static_cast<IndexUnitReader*>(rdr);
-  return reader->foreachRecord([&](StringRef recordFile, StringRef filename, unsigned depIndex) -> bool {
-    return applier(toIndexStoreString(recordFile), toIndexStoreString(filename), depIndex);
+  return reader->foreachDependency([&](bool isUnit,
+                                       StringRef unitOrRecordName,
+                                       StringRef Filename,
+                                       unsigned depIndex) -> bool {
+    DependencyInfo depInfo{isUnit, Filename, unitOrRecordName, depIndex};
+    return applier(&depInfo);
   });
 }

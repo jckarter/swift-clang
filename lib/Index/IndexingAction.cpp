@@ -19,6 +19,7 @@
 #include "clang/Frontend/MultiplexConsumer.h"
 #include "clang/Frontend/Utils.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Serialization/ASTReader.h"
 
 using namespace clang;
 using namespace clang::index;
@@ -337,7 +338,14 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
   FileManager &FileMgr = SM.getFileManager();
   for (auto &Dep : DepCollector.getDependencies()) {
     if (const FileEntry *FE = FileMgr.getFile(Dep))
-      UnitWriter.addDependency(FE);
+      UnitWriter.addFileDependency(FE);
+  }
+  if (auto Reader = CI.getModuleManager()) {
+    Reader->getModuleManager().visit([&](serialization::ModuleFile &Mod) -> bool {
+      if (const FileEntry *FE = FileMgr.getFile(Mod.FileName))
+        UnitWriter.addASTFileDependency(FE);
+      return true; // skip module dependencies.
+    });
   }
 
   IndexRecordWriter RecordWriter(CI.getASTContext(), RecordOpts);
