@@ -281,10 +281,10 @@ static void printSymbol(const IndexRecordOccurrence &Rec, raw_ostream &OS) {
     OS << '\t';
     printSymbolRoles(Rel.Roles, OS);
     OS << " | ";
-    if (Rec.Dcl->USR.empty())
+    if (Rel.Dcl->USR.empty())
       OS << "<no-usr>";
     else
-      OS << Rec.Dcl->USR;
+      OS << Rel.Dcl->USR;
     OS << '\n';
   }
 }
