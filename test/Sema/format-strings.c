@@ -635,4 +635,12 @@ void test_os_log_format(char c, const char *pc, int i, int *pi, void *p, void *b
   // <rdar://problem/23835805>
   __builtin_os_log_format_buffer_size("no-args");
   __builtin_os_log_format(buf, "%s", "hi");
+
+  // <rdar://problem/24828090>
+  wchar_t wc = 'a';
+  __builtin_os_log_format(buf, "%C", wc);
+  printf("%C", wc);
+  wchar_t wcs[] = {'a', 0};
+  __builtin_os_log_format(buf, "%S", wcs);
+  printf("%S", wcs);
 }

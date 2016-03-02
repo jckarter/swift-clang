@@ -965,8 +965,3 @@ bool PrintfSpecifier::hasValidFieldWidth() const {
     return true;
   }
 }
-
-
-// current approach for os_log work: write a handler for os_log data elements;
-// yield the objects that should be added to the buffer, along with a size and
-// Value */APInt for each as necessary

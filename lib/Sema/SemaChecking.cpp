@@ -3824,6 +3824,11 @@ public:
   {}
 
   bool isObjCContext() const {
+    return FSType == Sema::FST_NSString;
+  }
+
+  /// Returns true if '%@' specifiers are allowed in the format string.
+  bool allowsObjCArg() const {
     return FSType == Sema::FST_NSString || FSType == Sema::FST_OSLog ||
            FSType == Sema::FST_OSTrace;
   }
@@ -4182,7 +4187,7 @@ CheckPrintfHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier
 
   // Check for using an Objective-C specific conversion specifier
   // in a non-ObjC literal.
-  if (!isObjCContext() && CS.isObjCArg()) {
+  if (!allowsObjCArg() && CS.isObjCArg()) {
     return HandleInvalidPrintfConversionSpecifier(FS, startSpecifier,
                                                   specifierLen);
   }
