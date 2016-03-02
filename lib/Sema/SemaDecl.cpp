@@ -11826,28 +11826,6 @@ static bool isAcceptableTagRedeclContext(Sema &S, DeclContext *OldDC,
   return false;
 }
 
-/// Find the DeclContext in which a tag is implicitly declared if we see an
-/// elaborated type specifier in the specified context, and lookup finds
-/// nothing.
-static DeclContext *getTagInjectionContext(DeclContext *DC) {
-  while (!DC->isFileContext() && !DC->isFunctionOrMethod())
-    DC = DC->getParent();
-  return DC;
-}
-
-/// Find the Scope in which a tag is implicitly declared if we see an
-/// elaborated type specifier in the specified context, and lookup finds
-/// nothing.
-static Scope *getTagInjectionScope(Scope *S, const LangOptions &LangOpts) {
-  while (S->isClassScope() ||
-         (LangOpts.CPlusPlus &&
-          S->isFunctionPrototypeScope()) ||
-         ((S->getFlags() & Scope::DeclScope) == 0) ||
-         (S->getEntity() && S->getEntity()->isTransparentContext()))
-    S = S->getParent();
-  return S;
-}
-
 /// \brief This is invoked when we see 'struct foo' or 'struct {'.  In the
 /// former case, Name will be non-null.  In the later case, Name will be null.
 /// TagSpec indicates what kind of tag this is. TUK indicates whether this is a
@@ -12164,10 +12142,16 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
       // Find the context where we'll be declaring the tag.
       // FIXME: We would like to maintain the current DeclContext as the
       // lexical context,
-      SearchDC = getTagInjectionContext(SearchDC);
+      while (!SearchDC->isFileContext() && !SearchDC->isFunctionOrMethod())
+        SearchDC = SearchDC->getParent();
 
       // Find the scope where we'll be declaring the tag.
-      S = getTagInjectionScope(S, getLangOpts());
+      while (S->isClassScope() ||
+             (getLangOpts().CPlusPlus &&
+              S->isFunctionPrototypeScope()) ||
+             ((S->getFlags() & Scope::DeclScope) == 0) ||
+             (S->getEntity() && S->getEntity()->isTransparentContext()))
+        S = S->getParent();
     } else {
       assert(TUK == TUK_Friend);
       // C++ [namespace.memdef]p3:
@@ -12320,34 +12304,16 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
         if (!Invalid) {
           // If this is a use, just return the declaration we found, unless
           // we have attributes.
-          if (TUK == TUK_Reference || TUK == TUK_Friend) {
-            if (Attr) {
-              // FIXME: Diagnose these attributes. For now, we create a new
-              // declaration to hold them.
-            } else if (TUK == TUK_Reference &&
-                       (PrevTagDecl->getFriendObjectKind() ==
-                            Decl::FOK_Undeclared ||
-                        PP.getModuleContainingLocation(
-                            PrevDecl->getLocation()) !=
-                            PP.getModuleContainingLocation(KWLoc)) &&
-                       SS.isEmpty()) {
-              // This declaration is a reference to an existing entity, but
-              // has different visibility from that entity: it either makes
-              // a friend visible or it makes a type visible in a new module.
-              // In either case, create a new declaration. We only do this if
-              // the declaration would have meant the same thing if no prior
-              // declaration were found, that is, if it was found in the same
-              // scope where we would have injected a declaration.
-              if (!getTagInjectionContext(CurContext)->getRedeclContext()
-                       ->Equals(PrevDecl->getDeclContext()->getRedeclContext()))
-                return PrevTagDecl;
-              // This is in the injected scope, create a new declaration in
-              // that scope.
-              S = getTagInjectionScope(S, getLangOpts());
-            } else {
-              return PrevTagDecl;
-            }
-          }
+
+          // FIXME: In the future, return a variant or some other clue
+          // for the consumer of this Decl to know it doesn't own it.
+          // For our current ASTs this shouldn't be a problem, but will
+          // need to be changed with DeclGroups.
+          if (!Attr &&
+              ((TUK == TUK_Reference &&
+                (!PrevTagDecl->getFriendObjectKind() || getLangOpts().MicrosoftExt))
+               || TUK == TUK_Friend))
+            return PrevTagDecl;
 
           // Diagnose attempts to redefine a tag.
           if (TUK == TUK_Definition) {
@@ -12645,7 +12611,7 @@ CreateNewDecl:
             << Name;
         Invalid = true;
       }
-    } else if (!PrevDecl) {
+    } else {
       Diag(Loc, diag::warn_decl_in_param_list) << Context.getTagDeclType(New);
     }
     DeclsInPrototypeScope.push_back(New);
