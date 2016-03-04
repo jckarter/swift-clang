@@ -205,7 +205,7 @@ hash_code IndexRecordHasher::hash(CanQualType CT) {
       return COMBINE_HASH('$', hash(TT->getDecl()->getCanonicalDecl()));
     }
     if (const ObjCInterfaceType *OIT = dyn_cast<ObjCInterfaceType>(T)) {
-      return COMBINE_HASH('$', hash(OIT->getDecl()));
+      return COMBINE_HASH('$', hash(OIT->getDecl()->getCanonicalDecl()));
     }
     if (const ObjCObjectType *OIT = dyn_cast<ObjCObjectType>(T)) {
       for (auto *Prot : OIT->getProtocols())
