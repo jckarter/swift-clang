@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "JSONAggregation.h"
+#include "indexstore/IndexStoreCXX.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/CompilerInvocation.h"
@@ -16,7 +18,6 @@
 #include "clang/Index/IndexRecordReader.h"
 #include "clang/Index/USRGeneration.h"
 #include "clang/Index/CodegenNameGenerator.h"
-#include "JSONAggregation.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Signals.h"
@@ -207,6 +208,65 @@ static int printRecord(StringRef Filename, raw_ostream &OS) {
 };
 
 //===----------------------------------------------------------------------===//
+// Print Store Records
+//===----------------------------------------------------------------------===//
+
+static void printSymbol(indexstore::IndexRecordSymbol Sym, raw_ostream &OS);
+static void printSymbol(indexstore::IndexRecordOccurrence Occur, raw_ostream &OS);
+
+static bool printStoreRecord(indexstore::IndexStore &Store, StringRef RecName,
+                             StringRef FilePath, raw_ostream &OS) {
+  std::string Error;
+  indexstore::IndexRecordReader Reader(Store, RecName, Error);
+  if (!Reader) {
+    errs() << "error loading record: " << Error << "\n";
+    return true;
+  }
+
+  StringRef Filename = sys::path::filename(FilePath);
+  OS << Filename << '\n';
+  OS << "------------\n";
+  Reader.foreachSymbol(/*noCache=*/true, [&](indexstore::IndexRecordSymbol Sym) -> bool {
+    printSymbol(Sym, OS);
+    return true;
+  });
+  OS << "------------\n";
+  Reader.foreachOccurrence([&](indexstore::IndexRecordOccurrence Occur)->bool {
+    printSymbol(Occur, OS);
+    return true;
+  });
+
+  return false;
+}
+
+static int printStoreRecords(StringRef StorePath, raw_ostream &OS) {
+  std::string Error;
+  indexstore::IndexStore Store(StorePath, Error);
+  if (!Store) {
+    errs() << "error loading store: " << Error << "\n";
+    return 1;
+  }
+
+  bool Success = Store.foreachUnit([&](StringRef UnitName) -> bool {
+    indexstore::IndexUnitReader Reader(Store, UnitName, Error);
+    if (!Reader) {
+      errs() << "error loading unit: " << Error << "\n";
+      return false;
+    }
+    return Reader.foreachDependency([&](indexstore::IndexUnitDependency Dep) -> bool {
+      if (Dep.getKind() == indexstore::IndexUnitDependency::DependencyKind::Record) {
+        bool Err = printStoreRecord(Store, Dep.getName(), Dep.getFilePath(), OS);
+        OS << '\n';
+        return !Err;
+      }
+      return true;
+    });
+  });
+
+  return !Success;
+}
+
+//===----------------------------------------------------------------------===//
 // Helper Utils
 //===----------------------------------------------------------------------===//
 
@@ -289,6 +349,77 @@ static void printSymbol(const IndexRecordOccurrence &Rec, raw_ostream &OS) {
   }
 }
 
+static void printSymbol(indexstore::IndexRecordSymbol Sym, raw_ostream &OS) {
+  SymbolInfo SymInfo{ (SymbolKind)Sym.getKind(),
+    (SymbolCXXTemplateKind)Sym.getSubKind(),
+    (SymbolLanguage)Sym.getLanguage() };
+
+  printSymbolInfo(SymInfo, OS);
+  OS << " | ";
+
+  if (Sym.getName().empty())
+    OS << "<no-name>";
+  else
+    OS << Sym.getName();
+  OS << " | ";
+
+  if (Sym.getUSR().empty())
+    OS << "<no-usr>";
+  else
+    OS << Sym.getUSR();
+  OS << " | ";
+
+  if (Sym.getCodegenName().empty())
+    OS << "<no-cgname>";
+  else
+    OS << Sym.getCodegenName();
+  OS << " | ";
+
+  printSymbolRoles(Sym.getRoles(), OS);
+  OS << " - ";
+  printSymbolRoles(Sym.getRelatedRoles(), OS);
+  OS << '\n';
+}
+
+static void printSymbol(indexstore::IndexRecordOccurrence Occur, raw_ostream &OS) {
+  OS << Occur.getLineCol().first << ':' << Occur.getLineCol().second << " | ";
+  auto Sym = Occur.getSymbol();
+  SymbolInfo SymInfo{ (SymbolKind)Sym.getKind(),
+    (SymbolCXXTemplateKind)Sym.getSubKind(),
+    (SymbolLanguage)Sym.getLanguage() };
+
+  printSymbolInfo(SymInfo, OS);
+  OS << " | ";
+
+  if (Sym.getUSR().empty())
+    OS << "<no-usr>";
+  else
+    OS << Sym.getUSR();
+  OS << " | ";
+
+  unsigned NumRelations = 0;
+  Occur.foreachRelation([&](indexstore::IndexSymbolRelation) {
+    ++NumRelations;
+    return true;
+  });
+
+  printSymbolRoles(Occur.getRoles(), OS);
+  OS << " | ";
+  OS << "rel: " << NumRelations << '\n';
+  Occur.foreachRelation([&](indexstore::IndexSymbolRelation Rel) {
+    OS << '\t';
+    printSymbolRoles(Rel.getRoles(), OS);
+    OS << " | ";
+    auto Sym = Rel.getSymbol();
+    if (Sym.getUSR().empty())
+      OS << "<no-usr>";
+    else
+      OS << Sym.getUSR();
+    OS << '\n';
+    return true;
+  });
+}
+
 //===----------------------------------------------------------------------===//
 // Command line processing.
 //===----------------------------------------------------------------------===//
@@ -326,15 +457,8 @@ int indextest_core_main(int argc, const char **argv) {
       return 1;
     }
 
-    if (sys::fs::is_directory(options::InputFiles[0])) {
-      std::error_code EC;
-      for (auto It = sys::fs::directory_iterator(options::InputFiles[0], EC),
-                  End = sys::fs::directory_iterator();
-                 !EC && It != End; It.increment(EC)) {
-        if (printRecord(It->path(), outs()))
-          return 1;
-      }
-    }
+    if (sys::fs::is_directory(options::InputFiles[0]))
+      return printStoreRecords(options::InputFiles[0], outs());
     else
       return printRecord(options::InputFiles[0], outs());
   }
