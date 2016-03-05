@@ -2032,7 +2032,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     // a release cleanup on the object, it will already be active; since
     // cleanups are emitted in reverse order, the use will occur before the
     // object is released.
-    if (!RetainableOperands.empty())
+    if (!RetainableOperands.empty() && getLangOpts().ObjCAutoRefCount)
       for (llvm::Value *object : RetainableOperands)
          pushFullExprCleanup<CallObjCArcUse>(getARCCleanupKind(), object);
 
