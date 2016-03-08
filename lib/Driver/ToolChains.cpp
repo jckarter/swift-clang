@@ -746,6 +746,21 @@ void DarwinClang::AddCXXStdlibLibArgs(const ArgList &Args,
     break;
 
   case ToolChain::CST_Libstdcxx:
+    // APPLE INTERNAL:
+    // Warn that libstdc++ is deprecated, and if the deployment target
+    // specifies an OS version where the libc++ dylib has compatibility
+    // issues, suggest moving to a more recent OS version.  This check is
+    // Apple-internal only; open source users may have installed private
+    // copies of libstdc++.
+    StringRef MinLibcxxOSVersion;
+    if (isTargetIOSBased() && isIPhoneOSVersionLT(7, 0))
+      MinLibcxxOSVersion = "iOS 7";
+    else if (isTargetMacOS() && isMacosxVersionLT(10, 9))
+      MinLibcxxOSVersion = "OS X 10.9";
+    getDriver().Diag(diag::warn_drv_deprecated_libstdcxx)
+      << !!(MinLibcxxOSVersion == StringRef())
+      << MinLibcxxOSVersion;
+
     // Unfortunately, -lstdc++ doesn't always exist in the standard search path;
     // it was previously found in the gcc lib dir. However, for all the Darwin
     // platforms we care about it was -lstdc++.6, so we search for that
@@ -1098,7 +1113,7 @@ DerivedArgList *Darwin::TranslateArgs(const DerivedArgList &Args,
     }
 
     if (where != StringRef()) {
-      getDriver().Diag(clang::diag::err_drv_invalid_libcxx_deployment) << where;
+      getDriver().Diag(diag::err_drv_invalid_libcxx_deployment) << where;
     }
   }
 
