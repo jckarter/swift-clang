@@ -38,6 +38,9 @@ set(CLANG_BOOTSTRAP_TARGETS
   check-llvm
   check-clang
   test-suite
+  test-depends
+  llvm-test-depends
+  clang-test-depends
   clang CACHE STRING "")
 
 #bootstrap
