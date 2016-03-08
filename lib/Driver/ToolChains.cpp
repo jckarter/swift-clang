@@ -329,24 +329,24 @@ void Darwin::addProfileRTLibs(const ArgList &Args,
   const char *Library = "libclang_rt.profile_osx.a";
 
   // Select the appropriate runtime library for the target.
-  if (isTargetWatchOS()) {
-    Library = "libclang_rt.profile_watchos.a";
-  } else if (isTargetWatchOSSimulator()) {
+  if (isTargetWatchOSSimulator()) {
     llvm::sys::path::append(P, "libclang_rt.profile_watchossim.a");
     Library = getVFS().exists(P) ? "libclang_rt.profile_watchossim.a"
                                  : "libclang_rt.profile_watchos.a";
-  } else if (isTargetTvOS()) {
-    Library = "libclang_rt.profile_tvos.a";
+  } else if (isTargetWatchOS()) {
+    Library = "libclang_rt.profile_watchos.a";
   } else if (isTargetTvOSSimulator()) {
     llvm::sys::path::append(P, "libclang_rt.profile_tvossim.a");
     Library = getVFS().exists(P) ? "libclang_rt.profile_tvossim.a"
                                  : "libclang_rt.profile_tvos.a";
-  } else if (isTargetIPhoneOS()) {
-    Library = "libclang_rt.profile_ios.a";
+  } else if (isTargetTvOS()) {
+    Library = "libclang_rt.profile_tvos.a";
   } else if (isTargetIOSSimulator()) {
     llvm::sys::path::append(P, "libclang_rt.profile_iossim.a");
     Library = getVFS().exists(P) ? "libclang_rt.profile_iossim.a"
                                  : "libclang_rt.profile_ios.a";
+  } else if (isTargetIPhoneOS()) {
+    Library = "libclang_rt.profile_ios.a";
   } else {
     assert(isTargetMacOS() && "unexpected non MacOS platform");
   }
