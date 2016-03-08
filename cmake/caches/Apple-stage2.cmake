@@ -48,6 +48,13 @@ set(LLVM_TOOLCHAIN_TOOLS
   llvm-size
   CACHE STRING "")
 
+set(LLVM_DISTRIBUTION_COMPONENTS
+  clang
+  LTO
+  clang-format
+  ${LLVM_TOOLCHAIN_TOOLS}
+  CACHE STRING "")
+
 # test args
 
 set(LLVM_LIT_ARGS "--xunit-xml-output=testresults.xunit.xml -v" CACHE STRING "")

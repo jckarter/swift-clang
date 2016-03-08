@@ -41,6 +41,8 @@ set(CLANG_BOOTSTRAP_TARGETS
   test-depends
   llvm-test-depends
   clang-test-depends
+  distribution
+  install-distribution
   clang CACHE STRING "")
 
 #bootstrap
