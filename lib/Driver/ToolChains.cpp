@@ -323,28 +323,19 @@ void Darwin::addProfileRTLibs(const ArgList &Args,
                               ArgStringList &CmdArgs) const {
   if (!needsProfileRT(Args)) return;
 
-  // TODO: Clean this up once autoconf is gone
-  SmallString<128> P(getDriver().ResourceDir);
-  llvm::sys::path::append(P, "lib", "darwin");
   const char *Library = "libclang_rt.profile_osx.a";
 
   // Select the appropriate runtime library for the target.
   if (isTargetWatchOSSimulator()) {
-    llvm::sys::path::append(P, "libclang_rt.profile_watchossim.a");
-    Library = getVFS().exists(P) ? "libclang_rt.profile_watchossim.a"
-                                 : "libclang_rt.profile_watchos.a";
+    Library = "libclang_rt.profile_watchossim.a";
   } else if (isTargetWatchOS()) {
     Library = "libclang_rt.profile_watchos.a";
   } else if (isTargetTvOSSimulator()) {
-    llvm::sys::path::append(P, "libclang_rt.profile_tvossim.a");
-    Library = getVFS().exists(P) ? "libclang_rt.profile_tvossim.a"
-                                 : "libclang_rt.profile_tvos.a";
+    Library = "libclang_rt.profile_tvossim.a";
   } else if (isTargetTvOS()) {
     Library = "libclang_rt.profile_tvos.a";
   } else if (isTargetIOSSimulator()) {
-    llvm::sys::path::append(P, "libclang_rt.profile_iossim.a");
-    Library = getVFS().exists(P) ? "libclang_rt.profile_iossim.a"
-                                 : "libclang_rt.profile_ios.a";
+    Library = "libclang_rt.profile_iossim.a";
   } else if (isTargetIPhoneOS()) {
     Library = "libclang_rt.profile_ios.a";
   } else {
