@@ -411,25 +411,6 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
     return;
   }
 
-  // If we are building profile support, link that library in.
-  if (Args.hasFlag(options::OPT_fprofile_arcs, options::OPT_fno_profile_arcs,
-                   false) ||
-      Args.hasArg(options::OPT_fprofile_generate) ||
-      Args.hasArg(options::OPT_fprofile_instr_generate) ||
-      Args.hasArg(options::OPT_fprofile_instr_generate_EQ) ||
-      Args.hasArg(options::OPT_fcreate_profile) ||
-      Args.hasArg(options::OPT_coverage)) {
-    // Select the appropriate runtime library for the target.
-    if (isTargetWatchOSBased())
-      AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_watchos.a");
-    else if (isTargetTvOSBased())
-      AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_tvos.a");
-    else if (isTargetIOSBased())
-      AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_ios.a");
-    else
-      AddLinkRuntimeLib(Args, CmdArgs, "libclang_rt.profile_osx.a");
-  }
-
   const SanitizerArgs &Sanitize = getSanitizerArgs();
   if (Sanitize.needsAsanRt())
     AddLinkSanitizerLibArgs(Args, CmdArgs, "asan");
