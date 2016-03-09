@@ -152,6 +152,7 @@
 // RUN: FileCheck -check-prefix=LINK_NO_IOS_ARM64_CRT1 %s < %t.log
 // LINK_NO_IOS_ARM64_CRT1-NOT: crt
 
+// RUN: env IPHONEOS_DEPLOYMENT_TARGET=6.0 \
 // RUN: %clang -target x86_64-apple-ios6.0 -miphoneos-version-min=6.0 -fprofile-instr-generate -### %t.o 2> %t.log
 // RUN: FileCheck -check-prefix=LINK_IOSSIM_PROFILE %s < %t.log
 // LINK_IOSSIM_PROFILE: {{ld(.exe)?"}}
