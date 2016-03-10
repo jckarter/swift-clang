@@ -2281,7 +2281,7 @@ std::string Driver::GetTemporaryPath(StringRef Prefix,
       llvm::sys::Process::GetEnv("LLVM_DIAGNOSTIC_DIR");
   if (CCGenDiagnostics && DiagnosticDir.hasValue()) {
     Path.assign(DiagnosticDir.getValue());
-    EC = llvm::sys::fs::access(Path, llvm::sys::fs::AccessMode::Exist);
+    EC = llvm::sys::fs::create_directories(Path);
     llvm::sys::path::append(Path, Prefix + StringRef(".") + Suffix);
   } else {
     EC = llvm::sys::fs::createTemporaryFile(Prefix, Suffix, Path);
