@@ -2405,6 +2405,11 @@ bool Sema::CheckObjCString(Expr *Arg) {
 ExprResult Sema::CheckOSLogFormatStringArg(Expr *Arg) {
   Arg = Arg->IgnoreParenCasts();
   StringLiteral *Literal = dyn_cast<StringLiteral>(Arg);
+  if (!Literal) {
+    if (auto *ObjcLiteral = dyn_cast<ObjCStringLiteral>(Arg)) {
+      Literal = ObjcLiteral->getString();
+    }
+  }
 
   if (!Literal || (!Literal->isAscii() && !Literal->isUTF8())) {
     return ExprError(
@@ -2412,7 +2417,7 @@ ExprResult Sema::CheckOSLogFormatStringArg(Expr *Arg) {
         << Arg->getSourceRange());
   }
 
-  ExprResult Result(Arg);
+  ExprResult Result(Literal);
   QualType ResultTy = Context.getPointerType(Context.CharTy.withConst());
   InitializedEntity Entity = InitializedEntity::InitializeParameter(Context,
     ResultTy, false);
