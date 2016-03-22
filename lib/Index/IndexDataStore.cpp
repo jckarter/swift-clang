@@ -93,6 +93,7 @@ std::vector<std::string> IndexDataStoreImpl::getAllUnitFilenames() const {
     filenames.push_back(sys::path::filename(It->path()));
   }
 
+  llvm::array_pod_sort(filenames.begin(), filenames.end());
   return filenames;
 }
 

@@ -1,12 +1,12 @@
 {
   "files": [
-    "/json-with-module.m.tmp.o",
-    "/json-with-module.m",
-    "/Inputs/module/module.modulemap",
     "/json-with-module.m.tmp.mcp/ModDep.pcm",
     "/Inputs/module/ModDep.h",
     "/json-with-module.m.tmp.mcp/ModTop.pcm",
-    "/Inputs/module/ModTop.h"
+    "/Inputs/module/ModTop.h",
+    "/json-with-module.m.tmp.o",
+    "/json-with-module.m",
+    "/Inputs/module/module.modulemap"
   ],
   "symbols": [
     {
@@ -85,31 +85,31 @@
       "unit-dependencies": [1],
       "sources": [
         {
-          "file": 1
-        },
-        {
-          "file": 2
-        }
-      ]
-    },
-    {
-      "triple": "x86_64-apple-macosx10.7.0",
-      "out-file": 3,
-      "unit-dependencies": [2],
-      "sources": [
-        {
-          "file": 4,
+          "file": 1,
           "records": [0]
         }
       ]
     },
     {
       "triple": "x86_64-apple-macosx10.7.0",
-      "out-file": 5,
+      "out-file": 2,
       "sources": [
         {
-          "file": 6,
+          "file": 3,
           "records": [1]
+        }
+      ]
+    },
+    {
+      "triple": "x86_64-apple-macosx10.7.0",
+      "out-file": 4,
+      "unit-dependencies": [0],
+      "sources": [
+        {
+          "file": 5
+        },
+        {
+          "file": 6
         }
       ]
     }
