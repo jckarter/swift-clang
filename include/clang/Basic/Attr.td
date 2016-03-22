@@ -454,7 +454,7 @@ def Availability : InheritableAttr {
   let Args = [IdentifierArgument<"platform">, VersionArgument<"introduced">,
               VersionArgument<"deprecated">, VersionArgument<"obsoleted">,
               BoolArgument<"unavailable">, StringArgument<"message">,
-              BoolArgument<"strict">];
+              BoolArgument<"strict">, StringArgument<"replacement">];
   let AdditionalMembers =
 [{static llvm::StringRef getPrettyPlatformName(llvm::StringRef Platform) {
     return llvm::StringSwitch<llvm::StringRef>(Platform)
@@ -704,8 +704,11 @@ def OpenCLGenericAddressSpace : TypeAttr {
 def Deprecated : InheritableAttr {
   let Spellings = [GCC<"deprecated">, Declspec<"deprecated">,
                    CXX11<"","deprecated", 201309>];
-  let Args = [StringArgument<"Message", 1>];
-  let Documentation = [Undocumented];
+  let Args = [StringArgument<"Message", 1>,
+              // An optional string argument that enables us to provide a
+              // Fix-It.
+              StringArgument<"Replacement", 1>];
+  let Documentation = [DeprecatedDocs];
 }
 
 def Destructor : InheritableAttr {

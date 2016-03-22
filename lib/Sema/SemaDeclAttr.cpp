@@ -1936,6 +1936,7 @@ AvailabilityAttr *Sema::mergeAvailabilityAttr(NamedDecl *D, SourceRange Range,
                                               bool IsUnavailable,
                                               StringRef Message,
                                               bool IsStrict,
+                                              StringRef Replacement,
                                               AvailabilityMergeKind AMK,
                                               unsigned AttrSpellingListIndex) {
   VersionTuple MergedIntroduced = Introduced;
@@ -2082,7 +2083,8 @@ AvailabilityAttr *Sema::mergeAvailabilityAttr(NamedDecl *D, SourceRange Range,
     return ::new (Context) AvailabilityAttr(Range, Context, Platform,
                                             Introduced, Deprecated,
                                             Obsoleted, IsUnavailable, Message,
-                                            IsStrict, AttrSpellingListIndex);
+                                            IsStrict, Replacement,
+                                            AttrSpellingListIndex);
   }
   return nullptr;
 }
@@ -2114,6 +2116,10 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
   if (const StringLiteral *SE =
           dyn_cast_or_null<StringLiteral>(Attr.getMessageExpr()))
     Str = SE->getString();
+  StringRef Replacement;
+  if (const StringLiteral *SE =
+          dyn_cast_or_null<StringLiteral>(Attr.getReplacementExpr()))
+    Replacement = SE->getString();
 
   if (II->getName() == "swift") {
     if (Introduced.isValid() || Deprecated.isValid() || Obsoleted.isValid() ||
@@ -2128,7 +2134,7 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
                                                       Deprecated.Version,
                                                       Obsoleted.Version,
                                                       IsUnavailable, Str,
-                                                      IsStrict,
+                                                      IsStrict, Replacement,
                                                       Sema::AMK_None,
                                                       Index);
   if (NewAttr)
@@ -2174,6 +2180,7 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
                                                             NewObsoleted,
                                                             IsUnavailable, Str,
                                                             IsStrict,
+                                                            Replacement,
                                                             Sema::AMK_None,
                                                             Index);
         if (NewAttr)
@@ -2197,6 +2204,7 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
                                                             Obsoleted.Version,
                                                             IsUnavailable, Str,
                                                             IsStrict,
+                                                            Replacement,
                                                             Sema::AMK_None,
                                                             Index);
         if (NewAttr)
@@ -5275,12 +5283,27 @@ static void handleDeprecatedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
     }
   }
 
+  // Handle the cases where the attribute has a text message.
+  StringRef Str, Replacement;
+  if (Attr.isArgExpr(0) && Attr.getArgAsExpr(0) &&
+      !S.checkStringLiteralArgumentAttr(Attr, 0, Str))
+    return;
+
+  // Only support a single optional message for Declspec and CXX11.
+  if (Attr.isDeclspecAttribute() || Attr.isCXX11Attribute())
+    checkAttributeAtMostNumArgs(S, Attr, 1);
+  else if (Attr.isArgExpr(1) && Attr.getArgAsExpr(1) &&
+           !S.checkStringLiteralArgumentAttr(Attr, 1, Replacement))
+    return;
+
   if (!S.getLangOpts().CPlusPlus14)
     if (Attr.isCXX11Attribute() &&
         !(Attr.hasScope() && Attr.getScopeName()->isStr("gnu")))
       S.Diag(Attr.getLoc(), diag::ext_deprecated_attr_is_a_cxx14_extension);
 
-  handleAttrWithMessage<DeprecatedAttr>(S, D, Attr);
+  D->addAttr(::new (S.Context) DeprecatedAttr(Attr.getRange(), S.Context, Str,
+                                   Replacement,
+                                   Attr.getAttributeSpellingListIndex()));
 }
 
 static void handleNoSanitizeAttr(Sema &S, Decl *D, const AttributeList &Attr) {
@@ -6358,18 +6381,37 @@ static void DoEmitAvailabilityWarning(Sema &S, Sema::AvailabilityDiagnostic K,
     break;
   }
 
+  CharSourceRange UseRange;
+  StringRef Replacement;
+  if (K == Sema::AD_Deprecation) {
+    if (auto attr = D->getAttr<DeprecatedAttr>())
+      Replacement = attr->getReplacement();
+    if (auto attr = D->getAttr<AvailabilityAttr>())
+      Replacement = attr->getReplacement();
+
+    if (!Replacement.empty())
+      UseRange =
+          CharSourceRange::getCharRange(Loc, S.getLocForEndOfToken(Loc));
+  }
+
   if (!Message.empty()) {
-    S.Diag(Loc, diag_message) << D << Message;
+    S.Diag(Loc, diag_message) << D << Message
+      << (UseRange.isValid() ?
+          FixItHint::CreateReplacement(UseRange, Replacement) : FixItHint());
     if (ObjCProperty)
       S.Diag(ObjCProperty->getLocation(), diag::note_property_attribute)
           << ObjCProperty->getDeclName() << property_note_select;
   } else if (!UnknownObjCClass) {
-    S.Diag(Loc, diag) << D;
+    S.Diag(Loc, diag) << D
+      << (UseRange.isValid() ?
+          FixItHint::CreateReplacement(UseRange, Replacement) : FixItHint());
     if (ObjCProperty)
       S.Diag(ObjCProperty->getLocation(), diag::note_property_attribute)
           << ObjCProperty->getDeclName() << property_note_select;
   } else {
-    S.Diag(Loc, diag_fwdclass_message) << D;
+    S.Diag(Loc, diag_fwdclass_message) << D
+      << (UseRange.isValid() ?
+          FixItHint::CreateReplacement(UseRange, Replacement) : FixItHint());
     S.Diag(UnknownObjCClass->getLocation(), diag::note_forward_class);
   }
 
