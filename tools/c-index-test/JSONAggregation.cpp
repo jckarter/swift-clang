@@ -345,7 +345,7 @@ void Aggregator::dumpJSON(raw_ostream &OS) {
     OS.indent(4) << "{\n";
     UnitInfo &unit = *Units[i];
     OS.indent(6) << "\"triple\": \"" << unit.Triple << "\",\n";
-    OS.indent(6) << "\"out-file\": \"" << unit.OutFile << "\",\n";
+    OS.indent(6) << "\"out-file\": " << unit.OutFile << ",\n";
     if (!unit.UnitDepends.empty()) {
       OS.indent(6) << "\"unit-dependencies\": [";
       for (unsigned ui = 0, ue = unit.UnitDepends.size(); ui != ue; ++ui) {
