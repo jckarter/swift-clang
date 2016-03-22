@@ -137,18 +137,30 @@ bool IndexRecordWriter::writeRecord(StringRef Filename,
   if (OutRecordFile)
     *OutRecordFile = path::filename(RecordPath);
 
-  std::error_code EC;
-  raw_fd_ostream OS(RecordPath.str(), EC, sys::fs::F_Excl);
-  if (EC) {
-    if (EC == errc::file_exists) {
-      // Same header contents were written out by another compiler invocation.
-      return false;
+  // Look for the record file.
+  if (std::error_code EC = fs::access(RecordPath, fs::AccessMode::Exist)) {
+    if (EC != errc::no_such_file_or_directory) {
+      Error = EC.message();
+      return true;
     }
-    Error = EC.message();
+  } else {
+    // Same header contents were written out by another compiler invocation.
+    return false;
+  }
+
+  // Create a unique file to write to so that we can move the result into place
+  // atomically. If this process crashes we don't want to interfere with any
+  // other concurrent processes.
+  SmallString<128> TempPath(RecordPath);
+  TempPath += "-temp-%%%%%%%%";
+  int TempFD;
+  if (llvm::sys::fs::createUniqueFile(TempPath.str(), TempFD, TempPath)) {
+    Error = "failed creating temporary file: ";
+    Error += TempPath.str();
     return true;
   }
 
-  sys::RemoveFileOnSignal(RecordPath.str());
+  raw_fd_ostream OS(TempFD, /*shouldClose=*/true);
 
   SmallString<512> Buffer;
   BitstreamWriter Stream(Buffer);
@@ -167,7 +179,11 @@ bool IndexRecordWriter::writeRecord(StringRef Filename,
   OS.write(Buffer.data(), Buffer.size());
   OS.close();
 
-  sys::DontRemoveFileOnSignal(RecordPath.str());
+  // Atomically move the unique file into place.
+  if (std::error_code EC = fs::rename(TempPath.c_str(), RecordPath.c_str())) {
+    Error = EC.message();
+    return true;
+  }
 
   return false;
 }
