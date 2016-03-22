@@ -73,7 +73,7 @@
   "units": [
     {
       "triple": "x86_64-apple-macosx10.7.0",
-      "out-file": "0",
+      "out-file": 0,
       "sources": [
         {
           "file": 1,
@@ -83,7 +83,7 @@
     },
     {
       "triple": "x86_64-apple-macosx10.7.0",
-      "out-file": "2",
+      "out-file": 2,
       "unit-dependencies": [0],
       "sources": [
         {
