@@ -1,4 +1,4 @@
-//===--- IndexRecordWriter.h - Index record serialization -----------------===//
+//===--- ClangIndexRecordWriter.h - Index record serialization ------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_LIB_INDEX_INDEXRECORDWRITER_H
-#define LLVM_CLANG_LIB_INDEX_INDEXRECORDWRITER_H
+#ifndef LLVM_CLANG_LIB_INDEX_CLANGINDEXRECORDWRITER_H
+#define LLVM_CLANG_LIB_INDEX_CLANGINDEXRECORDWRITER_H
 
 #include "IndexRecordHasher.h"
 #include "clang/Index/IndexingAction.h"
@@ -22,7 +22,7 @@ namespace clang {
 namespace index {
   class FileIndexRecord;
 
-class IndexRecordWriter {
+class ClangIndexRecordWriter {
   ASTContext &Ctx;
   RecordingOptions RecordOpts;
 
@@ -33,8 +33,8 @@ class IndexRecordWriter {
   IndexRecordHasher Hasher;
 
 public:
-  IndexRecordWriter(ASTContext &Ctx, RecordingOptions Opts);
-  ~IndexRecordWriter();
+  ClangIndexRecordWriter(ASTContext &Ctx, RecordingOptions Opts);
+  ~ClangIndexRecordWriter();
 
   ASTContext &getASTContext() { return Ctx; }
   CodegenNameGenerator *getCGNameGen() { return CGNameGen.get(); }
