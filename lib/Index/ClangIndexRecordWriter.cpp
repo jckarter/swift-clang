@@ -1,4 +1,4 @@
-//===--- IndexRecordWriter.cpp - Index record serialization ---------------===//
+//===--- ClangIndexRecordWriter.cpp - Index record serialization ----------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "IndexRecordWriter.h"
+#include "ClangIndexRecordWriter.h"
 #include "FileIndexRecord.h"
 #include "IndexDataStoreUtils.h"
 #include "clang/Index/IndexSymbol.h"
@@ -33,7 +33,7 @@ using namespace clang::index;
 using namespace clang::index::store;
 using namespace llvm;
 
-StringRef IndexRecordWriter::getUSR(const Decl *D) {
+StringRef ClangIndexRecordWriter::getUSR(const Decl *D) {
   assert(D->isCanonicalDecl());
   auto Insert = USRByDecl.insert(std::make_pair(D, StringRef()));
   if (Insert.second) {
@@ -42,7 +42,7 @@ StringRef IndexRecordWriter::getUSR(const Decl *D) {
   return Insert.first->second;
 }
 
-StringRef IndexRecordWriter::getUSRNonCached(const Decl *D) {
+StringRef ClangIndexRecordWriter::getUSRNonCached(const Decl *D) {
   SmallString<256> Buf;
   bool Ignore = generateUSRForDecl(D, Buf);
   if (Ignore)
@@ -53,22 +53,21 @@ StringRef IndexRecordWriter::getUSRNonCached(const Decl *D) {
   return StringRef(Ptr, USR.size());
 }
 
-IndexRecordWriter::IndexRecordWriter(ASTContext &Ctx, RecordingOptions Opts)
-  : Ctx(Ctx),
-    RecordOpts(std::move(Opts)),
-    Hasher(Ctx) {
+ClangIndexRecordWriter::ClangIndexRecordWriter(ASTContext &Ctx,
+                                               RecordingOptions Opts)
+    : Ctx(Ctx), RecordOpts(std::move(Opts)), Hasher(Ctx) {
   RecordsPath = RecordOpts.DataDirPath;
   store::makeRecordSubDir(RecordsPath);
   if (Opts.RecordSymbolCodeGenName)
     CGNameGen.reset(new CodegenNameGenerator(Ctx));
 }
 
-IndexRecordWriter::~IndexRecordWriter() {}
+ClangIndexRecordWriter::~ClangIndexRecordWriter() {}
 
 static void writeBlockInfo(BitstreamWriter &Stream);
 static void writeVersionInfo(BitstreamWriter &Stream);
 static void writeDecls(BitstreamWriter &Stream, const FileIndexRecord &IdxRecord,
-                       IndexRecordWriter &Writer);
+                       ClangIndexRecordWriter &Writer);
 
 namespace {
 struct DeclInfo {
@@ -122,10 +121,10 @@ static void extractInfoFromRecord(const FileIndexRecord &IdxRecord,
   }
 }
 
-bool IndexRecordWriter::writeRecord(StringRef Filename,
-                                    const FileIndexRecord &IdxRecord,
-                                    std::string &Error,
-                                    std::string *OutRecordFile) {
+bool ClangIndexRecordWriter::writeRecord(StringRef Filename,
+                                         const FileIndexRecord &IdxRecord,
+                                         std::string &Error,
+                                         std::string *OutRecordFile) {
   using namespace llvm::sys;
   std::string HashString = APInt(64, Hasher.hashRecord(IdxRecord)).toString(36, /*Signed=*/false);
 
@@ -270,7 +269,7 @@ static StringRef data(const SmallVectorImpl<T> &v) {
 }
 
 static void writeDecls(BitstreamWriter &Stream, const FileIndexRecord &IdxRecord,
-                       IndexRecordWriter &Writer) {
+                       ClangIndexRecordWriter &Writer) {
   SmallVector<DeclInfo, 32> Decls;
   SmallVector<OccurDeclID, 64> OccurDeclIDs;
   extractInfoFromRecord(IdxRecord, Decls, OccurDeclIDs);

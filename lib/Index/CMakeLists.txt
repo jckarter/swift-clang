@@ -13,7 +13,7 @@ add_clang_library(clangIndex
   IndexingContext.cpp
   IndexRecordHasher.cpp
   IndexRecordReader.cpp
-  IndexRecordWriter.cpp
+  ClangIndexRecordWriter.cpp
   IndexSymbol.cpp
   IndexTypeSourceInfo.cpp
   IndexUnitReader.cpp

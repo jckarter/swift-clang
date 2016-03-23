@@ -11,7 +11,7 @@
 #include "clang/Index/IndexDataConsumer.h"
 #include "FileIndexRecord.h"
 #include "IndexingContext.h"
-#include "IndexRecordWriter.h"
+#include "ClangIndexRecordWriter.h"
 #include "IndexUnitWriter.h"
 #include "IndexDataStoreUtils.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -348,7 +348,7 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
     });
   }
 
-  IndexRecordWriter RecordWriter(CI.getASTContext(), RecordOpts);
+  ClangIndexRecordWriter RecordWriter(CI.getASTContext(), RecordOpts);
   for (auto I = Recorder.record_begin(), E = Recorder.record_end(); I != E; ++I) {
     FileID FID = I->first;
     const FileIndexRecord &Rec = *I->second;
