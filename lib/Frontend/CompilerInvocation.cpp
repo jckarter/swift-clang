@@ -2152,6 +2152,14 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
       Success = false;
     }
   }
+
+  // FIXME: Override value name discarding when asan or msan is used because the
+  // backend passes depend on the name of the alloca in order to print out
+  // names.
+  Res.getCodeGenOpts().DiscardValueNames &=
+      !Res.getLangOpts()->Sanitize.has(SanitizerKind::Address) &&
+      !Res.getLangOpts()->Sanitize.has(SanitizerKind::Memory);
+
   // FIXME: ParsePreprocessorArgs uses the FileManager to read the contents of
   // PCH file and find the original header name. Remove the need to do that in
   // ParsePreprocessorArgs and remove the FileManager
