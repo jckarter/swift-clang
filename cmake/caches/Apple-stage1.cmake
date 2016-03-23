@@ -38,6 +38,7 @@ set(CLANG_BOOTSTRAP_TARGETS
   check-all
   check-llvm
   check-clang
+  llvm-config
   test-suite
   test-depends
   llvm-test-depends
