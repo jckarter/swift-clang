@@ -183,7 +183,7 @@ cd $OBJROOT/obj-llvm || exit 1
 if [ "$BUILDING_HOST" = "YES" ]; then
   CACHE_FILE=$LLVM_SRCROOT/tools/clang/cmake/caches/Apple-stage1.cmake
   BUILD_TARGET=stage2-install-distribution
-  LLVM_CONFIG_TARGET=llvm-config
+  LLVM_CONFIG_TARGET=stage2-llvm-config
 else
   CACHE_FILE=$LLVM_SRCROOT/tools/clang/cmake/caches/Apple-device.cmake
   BUILD_TARGET=install
@@ -241,7 +241,7 @@ if [ "$BUILDING_HOST" = "YES" ]; then
   $CMAKE -G 'Ninja' -C $LLVM_SRCROOT/projects/compiler-rt/cmake/caches/Apple.cmake \
       $CMAKE_OPTS \
       -DCMAKE_BUILD_TYPE=Release \
-      -DLLVM_CONFIG_PATH=$OBJROOT/obj-llvm/bin/llvm-config \
+      -DLLVM_CONFIG_PATH=$OBJROOT/obj-llvm/tools/clang/stage2-bins/bin/llvm-config \
       -DCMAKE_INSTALL_PREFIX=$TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/ \
       -DCMAKE_C_COMPILER=$TOOLCHAIN_USR/bin/clang \
       -DCMAKE_CXX_COMPILER=$TOOLCHAIN_USR/bin/clang++ \
