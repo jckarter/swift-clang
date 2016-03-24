@@ -3,6 +3,7 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_clang_library(clangIndex
+  ClangIndexRecordWriter.cpp
   CodegenNameGenerator.cpp
   CommentToXML.cpp
   FileIndexRecord.cpp
@@ -13,7 +14,7 @@ add_clang_library(clangIndex
   IndexingContext.cpp
   IndexRecordHasher.cpp
   IndexRecordReader.cpp
-  ClangIndexRecordWriter.cpp
+  IndexRecordWriter.cpp
   IndexSymbol.cpp
   IndexTypeSourceInfo.cpp
   IndexUnitReader.cpp
