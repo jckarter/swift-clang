@@ -11,6 +11,7 @@
 #define LLVM_CLANG_LIB_INDEX_CLANGINDEXRECORDWRITER_H
 
 #include "IndexRecordHasher.h"
+#include "clang/Index/IndexRecordWriter.h"
 #include "clang/Index/IndexingAction.h"
 #include "clang/Index/CodegenNameGenerator.h"
 #include "llvm/ADT/SmallString.h"
@@ -23,10 +24,11 @@ namespace index {
   class FileIndexRecord;
 
 class ClangIndexRecordWriter {
+  IndexRecordWriter Impl;
+
   ASTContext &Ctx;
   RecordingOptions RecordOpts;
 
-  SmallString<64> RecordsPath;
   std::unique_ptr<CodegenNameGenerator> CGNameGen;
   llvm::BumpPtrAllocator Allocator;
   llvm::DenseMap<const Decl *, StringRef> USRByDecl;
