@@ -8,5 +8,5 @@
 @end
 
 // CHECK: [[@LINE+2]]:6 | function/C | c:@F@foo#*$objc(cs)MyCls# | Decl | rel: 0
-// CHECK: [[@LINE+1]]:10 | objc-class/ObjC | c:objc(cs)MyCls | Ref | rel: 0
+// CHECK: [[@LINE+1]]:10 | class/ObjC | c:objc(cs)MyCls | Ref | rel: 0
 void foo(MyCls *p);

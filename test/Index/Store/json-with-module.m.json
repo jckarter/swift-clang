@@ -17,7 +17,7 @@
       "roles": "Decl"
     },
     {
-      "kind": "typedef",
+      "kind": "type-alias",
       "lang": "C",
       "usr": "c:ModTop.h@T@ModTopStruct",
       "name": "ModTopStruct",

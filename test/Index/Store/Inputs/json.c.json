@@ -26,14 +26,14 @@
       "roles": "Decl,Def"
     },
     {
-      "kind": "c++-class",
+      "kind": "class",
       "lang": "C++",
       "usr": "c:@S@Base",
       "name": "Base",
       "roles": "Def,Ref,RelBase"
     },
     {
-      "kind": "c++-class",
+      "kind": "class",
       "lang": "C++",
       "usr": "c:@S@Sub",
       "name": "Sub",
