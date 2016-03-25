@@ -285,7 +285,6 @@ install -m 0444 $LLVM_SRCROOT/tools/clang/include/clang-c/module.modulemap $TOOL
 install  $LLVM_SRCROOT/utils/clang-parse-diagnostics-file $DSTROOT/usr/local/bin/clang-parse-diagnostics-file
 rm -rf $TOOLCHAIN_USR/share/clang
 rm -rf $TOOLCHAIN_USR/include/c++/v1/support/
-rm $TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/asan_blacklist.txt
 rm $TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/cfi_blacklist.txt
 rm -rf $TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/lib/darwin/libclang_rt.safestack_*
 rm -rf $TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/lib/darwin/libclang_rt.stats_*
