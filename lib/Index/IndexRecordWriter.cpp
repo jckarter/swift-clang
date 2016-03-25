@@ -171,7 +171,7 @@ static void writeDecls(BitstreamWriter &Stream, ArrayRef<DeclInfo> Decls,
     Scratch.clear();
 
     writer::Symbol SymInfo = GetSymbolForDecl(Info.D, Scratch);
-    assert(SymInfo.Kind != SymbolKind::Unknown);
+    assert(SymInfo.Kind != INDEXSTORE_SYMBOL_KIND_UNKNOWN);
     assert(!SymInfo.USR.empty() && "Recorded decl without USR!");
 
     Blob += SymInfo.Name;
