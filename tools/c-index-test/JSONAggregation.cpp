@@ -8,8 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "JSONAggregation.h"
+#include "IndexStoreUtils.h"
 #include "indexstore/IndexStoreCXX.h"
-#include "clang/Index/IndexSymbol.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Path.h"
@@ -245,8 +245,8 @@ SymbolIndex Aggregator::getSymbolIndex(IndexRecordSymbol sym) {
   bool wasInserted = pair.second;
   if (wasInserted) {
     SymbolInfo symInfo;
-    symInfo.Kind = SymbolKind(sym.getKind());
-    symInfo.Lang = SymbolLanguage(sym.getLanguage());
+    symInfo.Kind = getSymbolKind(sym.getKind());
+    symInfo.Lang = getSymbolLanguage(sym.getLanguage());
     symInfo.USR = pair.first->first();
     symInfo.Name = copyStr(sym.getName());
     symInfo.CodegenName = copyStr(sym.getCodegenName());
