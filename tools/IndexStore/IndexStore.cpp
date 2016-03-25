@@ -149,19 +149,21 @@ indexstore_store_purge_stale_records(indexstore_t c_store,
   store->purgeStaleRecords(recNames);
 }
 
-unsigned
+indexstore_symbol_kind_t
 indexstore_symbol_get_kind(indexstore_symbol_t sym) {
-  return (unsigned)static_cast<IndexRecordDecl*>(sym)->Kind;
+  return (indexstore_symbol_kind_t)static_cast<IndexRecordDecl*>(sym)->Kind;
 }
 
-unsigned
+indexstore_symbol_language_t
 indexstore_symbol_get_language(indexstore_symbol_t sym) {
-  return (unsigned)static_cast<IndexRecordDecl*>(sym)->Lang;
+  return (indexstore_symbol_language_t) static_cast<IndexRecordDecl *>(sym)
+      ->Lang;
 }
 
-unsigned
+indexstore_symbol_sub_kind_t
 indexstore_symbol_get_sub_kind(indexstore_symbol_t sym) {
-  return (unsigned)static_cast<IndexRecordDecl*>(sym)->CXXTemplateKind;
+  return (indexstore_symbol_sub_kind_t) static_cast<IndexRecordDecl *>(sym)
+      ->CXXTemplateKind;
 }
 
 uint64_t

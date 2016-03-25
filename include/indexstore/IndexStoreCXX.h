@@ -35,9 +35,13 @@ class IndexRecordSymbol {
 public:
   IndexRecordSymbol(indexstore_symbol_t obj) : obj(obj) {}
 
-  unsigned getLanguage() { return indexstore_symbol_get_language(obj); }
-  unsigned getKind() { return indexstore_symbol_get_kind(obj); }
-  unsigned getSubKind() { return indexstore_symbol_get_sub_kind(obj); }
+  indexstore_symbol_language_t getLanguage() {
+    return indexstore_symbol_get_language(obj);
+  }
+  indexstore_symbol_kind_t getKind() { return indexstore_symbol_get_kind(obj); }
+  indexstore_symbol_sub_kind_t getSubKind() {
+    return indexstore_symbol_get_sub_kind(obj);
+  }
   uint64_t getRoles() { return indexstore_symbol_get_roles(obj); }
   uint64_t getRelatedRoles() { return indexstore_symbol_get_related_roles(obj); }
   StringRef getName() { return stringFromIndexStoreStringRef(indexstore_symbol_get_name(obj)); }
