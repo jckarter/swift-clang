@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_LIB_INDEX_INDEXUNITWRITER_H
-#define LLVM_CLANG_LIB_INDEX_INDEXUNITWRITER_H
+#ifndef LLVM_CLANG_INDEX_INDEXUNITWRITER_H
+#define LLVM_CLANG_INDEX_INDEXUNITWRITER_H
 
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/DenseMap.h"
@@ -21,7 +21,6 @@ namespace clang {
   class FileEntry;
 
 namespace index {
-  class FileIndexRecord;
 
 class IndexUnitWriter {
   SmallString<64> UnitsPath;

@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "IndexUnitWriter.h"
+#include "clang/Index/IndexUnitWriter.h"
 #include "IndexDataStoreUtils.h"
 #include "clang/Basic/FileManager.h"
 #include "llvm/ADT/APInt.h"
