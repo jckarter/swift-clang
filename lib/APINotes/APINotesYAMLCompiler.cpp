@@ -218,6 +218,13 @@ namespace {
   };
   typedef std::vector<GlobalVariable> GlobalVariablesSeq;
 
+  struct EnumConstant {
+    StringRef Name;
+    AvailabilityItem Availability;
+    StringRef SwiftName;
+  };
+  typedef std::vector<EnumConstant> EnumConstantsSeq;
+
   struct Tag {
     StringRef Name;
     AvailabilityItem Availability;
@@ -241,6 +248,7 @@ namespace {
     ClassesSeq Protocols;
     FunctionsSeq Functions;
     GlobalVariablesSeq Globals;
+    EnumConstantsSeq EnumConstants;
     TagsSeq Tags;
     TypedefsSeq Typedefs;
 
@@ -256,6 +264,7 @@ LLVM_YAML_IS_SEQUENCE_VECTOR(Property)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Class)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Function)
 LLVM_YAML_IS_SEQUENCE_VECTOR(GlobalVariable)
+LLVM_YAML_IS_SEQUENCE_VECTOR(EnumConstant)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Tag)
 LLVM_YAML_IS_SEQUENCE_VECTOR(Typedef)
 
@@ -374,6 +383,16 @@ namespace llvm {
     };
 
     template <>
+    struct MappingTraits<EnumConstant> {
+      static void mapping(IO &io, EnumConstant& v) {
+        io.mapRequired("Name",            v.Name);
+        io.mapOptional("Availability",    v.Availability.Mode);
+        io.mapOptional("AvailabilityMsg", v.Availability.Msg);
+        io.mapOptional("SwiftName",       v.SwiftName);
+      }
+    };
+
+    template <>
     struct MappingTraits<Tag> {
       static void mapping(IO &io, Tag& t) {
         io.mapRequired("Name",                  t.Name);
@@ -405,6 +424,7 @@ namespace llvm {
         io.mapOptional("Protocols",       m.Protocols);
         io.mapOptional("Functions",       m.Functions);
         io.mapOptional("Globals",         m.Globals);
+        io.mapOptional("Enumerators",     m.EnumConstants);
         io.mapOptional("Tags",            m.Tags);
         io.mapOptional("Typedefs",        m.Typedefs);
       }
@@ -705,6 +725,24 @@ namespace {
         Writer->addGlobalFunction(function.Name, info);
       }
 
+      // Write all enumerators.
+      llvm::StringSet<> knownEnumConstants;
+      for (const auto &enumConstant : TheModule.EnumConstants) {
+        // Check for duplicate enumerators
+        if (!knownEnumConstants.insert(enumConstant.Name).second) {
+          emitError("multiple definitions of enumerator '" +
+                    enumConstant.Name + "'");
+          continue;
+        }
+
+        EnumConstantInfo info;
+        if (!isAvailable(enumConstant.Availability))
+          continue;
+        convertAvailability(enumConstant.Availability, info, enumConstant.Name);
+        info.SwiftName = enumConstant.SwiftName;
+        Writer->addEnumConstant(enumConstant.Name, info);
+      }
+
       // Write all tags.
       llvm::StringSet<> knownTags;
       for (const auto &t : TheModule.Tags) {
@@ -951,6 +989,15 @@ namespace {
       TheModule.Globals.push_back(global);
     }
 
+    virtual void visitEnumConstant(StringRef name,
+                                   const EnumConstantInfo &info) {
+      EnumConstant enumConstant;
+      enumConstant.Name = name;
+      handleCommon(enumConstant, info);
+
+      TheModule.EnumConstants.push_back(enumConstant);
+    }
+
     virtual void visitTag(StringRef name, const TagInfo &info) {
       Tag tag;
       tag.Name = name;
@@ -1030,6 +1077,12 @@ bool api_notes::decompileAPINotes(std::unique_ptr<llvm::MemoryBuffer> input,
   // Sort global variables.
   std::sort(module.Globals.begin(), module.Globals.end(),
             [](const GlobalVariable &lhs, const GlobalVariable &rhs) -> bool {
+              return lhs.Name < rhs.Name;
+            });
+
+  // Sort enum constants.
+  std::sort(module.EnumConstants.begin(), module.EnumConstants.end(),
+            [](const EnumConstant &lhs, const EnumConstant &rhs) -> bool {
               return lhs.Name < rhs.Name;
             });
 
