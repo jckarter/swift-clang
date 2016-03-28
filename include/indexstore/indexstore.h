@@ -173,6 +173,7 @@ typedef enum {
   INDEXSTORE_SYMBOL_ROLE_REL_BASEOF      = 1 << 10,
   INDEXSTORE_SYMBOL_ROLE_REL_OVERRIDEOF  = 1 << 11,
   INDEXSTORE_SYMBOL_ROLE_REL_RECEIVEDBY  = 1 << 12,
+  INDEXSTORE_SYMBOL_ROLE_REL_CALLEDBY    = 1 << 13,
 } indexstore_symbol_role_t;
 
 INDEXSTORE_PUBLIC indexstore_symbol_language_t
