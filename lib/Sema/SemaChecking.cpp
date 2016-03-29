@@ -4838,19 +4838,6 @@ bool CheckScanfHandler::HandleScanfSpecifier(
   return true;
 }
 
-namespace {
-  class DiagsFormatStringSeverityRAII {
-  private:
-    DiagnosticsEngine &Diags;
-    SourceLocation Loc;
-
-  public:
-    DiagsFormatStringSeverityRAII(DiagnosticsEngine &Diags, SourceLocation Loc)
-      : Diags(Diags), Loc(Loc) {}
-    ~DiagsFormatStringSeverityRAII() { Diags.popMappings(Loc); }
-  };
-}
-
 void Sema::CheckFormatString(const StringLiteral *FExpr,
                              const Expr *OrigFormatExpr,
                              ArrayRef<const Expr *> Args,
@@ -4859,14 +4846,6 @@ void Sema::CheckFormatString(const StringLiteral *FExpr,
                              bool inFunctionCall, VariadicCallType CallType,
                              llvm::SmallBitVector &CheckedVarArgs) {
 
-  Optional<DiagsFormatStringSeverityRAII> PopSeverity;
-  if (Type == FST_OSLog) {
-    Diags.pushMappings(FExpr->getLocStart());
-    Diags.setSeverityForGroup(diag::Flavor::WarningOrError,
-                              "format", diag::Severity::Error);
-    PopSeverity.emplace(Diags, FExpr->getLocStart());
-  }
-  
   // CHECK: is the format string a wide literal?
   if (!FExpr->isAscii() && !FExpr->isUTF8()) {
     CheckFormatHandler::EmitFormatDiagnostic(
