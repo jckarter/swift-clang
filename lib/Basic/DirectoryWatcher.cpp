@@ -15,7 +15,17 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/FileSystem.h"
 
+#define HAVE_DISPATCH 0
+
+#if defined(__has_include)
+#if __has_include(<dispatch/dispatch.h>)
+
 #include <dispatch/dispatch.h>
+#undef HAVE_DISPATCH
+#define HAVE_DISPATCH 1
+
+#endif
+#endif
 
 using namespace clang;
 using namespace llvm;
@@ -101,6 +111,7 @@ private:
 }
 
 struct DirectoryWatcher::Implementation {
+#if HAVE_DISPATCH
   dispatch_queue_t queue;
   dispatch_source_t DirSource;
 
@@ -109,6 +120,7 @@ struct DirectoryWatcher::Implementation {
     dispatch_release(DirSource);
     dispatch_release(queue);
   }
+#endif
 };
 
 DirectoryWatcher::DirectoryWatcher()
@@ -121,6 +133,7 @@ DirectoryWatcher::~DirectoryWatcher() {
 std::unique_ptr<DirectoryWatcher> DirectoryWatcher::create(StringRef Path,
         EventReceiver Receiver,  bool TrackFileModifications,
         std::string &Error) {
+#if HAVE_DISPATCH
 
   using namespace llvm::sys;
 
@@ -188,4 +201,7 @@ std::unique_ptr<DirectoryWatcher> DirectoryWatcher::create(StringRef Path,
   });
 
   return DirWatch;
+#else
+  return nullptr;
+#endif
 }
