@@ -4,4 +4,6 @@
 // RUN: sed -e "s:%S::g" -e "s:%T::g" %t.json > %t.final.json
 // RUN: diff -u %s.json %t.final.json
 
+// XFAIL: linux
+
 @import ModDep;

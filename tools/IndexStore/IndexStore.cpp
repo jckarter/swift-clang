@@ -68,6 +68,7 @@ indexstore_store_dispose(indexstore_t store) {
   delete static_cast<IndexDataStore*>(store);
 }
 
+#if INDEXSTORE_HAS_BLOCKS
 bool
 indexstore_store_units_apply(indexstore_t c_store,
                             bool(^applier)(indexstore_string_ref_t unit_name)) {
@@ -129,6 +130,7 @@ indexstore_store_set_unit_event_handler(indexstore_t c_store,
     handler(store_events.data(), store_events.size());
   });
 }
+#endif
 
 void
 indexstore_store_discard_unit(indexstore_t c_store, const char *unit_name) {
@@ -209,6 +211,7 @@ indexstore_occurrence_get_symbol(indexstore_occurrence_t occur) {
   return (indexstore_symbol_t)static_cast<IndexRecordOccurrence*>(occur)->Dcl;
 }
 
+#if INDEXSTORE_HAS_BLOCKS
 bool
 indexstore_occurrence_relations_apply(indexstore_occurrence_t occur,
                       bool(^applier)(indexstore_symbol_relation_t symbol_rel)) {
@@ -219,6 +222,7 @@ indexstore_occurrence_relations_apply(indexstore_occurrence_t occur,
   }
   return true;
 }
+#endif
 
 uint64_t
 indexstore_occurrence_get_roles(indexstore_occurrence_t occur) {
@@ -260,6 +264,7 @@ indexstore_record_reader_dispose(indexstore_record_reader_t rdr) {
   delete reader;
 }
 
+#if INDEXSTORE_HAS_BLOCKS
 /// Goes through the symbol data and passes symbols to \c receiver, for the
 /// symbol data that \c filter returns true on.
 ///
@@ -321,6 +326,7 @@ indexstore_record_reader_occurrences_of_symbols_apply(indexstore_record_reader_t
                                    {(IndexRecordDecl**)related_symbols, related_symbols_count},
                                    receiverFn);
 }
+#endif
 
 
 indexstore_unit_reader_t
@@ -388,6 +394,7 @@ indexstore_unit_reader_get_dependency_filepath(indexstore_unit_reader_t rdr,
   return toIndexStoreString(reader->getDependencyFiles()[index]);
 }
 
+#if INDEXSTORE_HAS_BLOCKS
 bool
 indexstore_unit_reader_dependencies_filepaths_apply(indexstore_unit_reader_t rdr,
                                   bool(^applier)(indexstore_string_ref_t path)) {
@@ -399,6 +406,7 @@ indexstore_unit_reader_dependencies_filepaths_apply(indexstore_unit_reader_t rdr
   }
   return true;
 }
+#endif
 
 namespace {
 struct DependencyInfo {
@@ -433,6 +441,7 @@ indexstore_unit_dependency_get_index(indexstore_unit_dependency_t c_dep) {
   return dep->Index;
 }
 
+#if INDEXSTORE_HAS_BLOCKS
 bool
 indexstore_unit_reader_dependencies_apply(indexstore_unit_reader_t rdr,
                              bool(^applier)(indexstore_unit_dependency_t)) {
@@ -445,3 +454,4 @@ indexstore_unit_reader_dependencies_apply(indexstore_unit_reader_t rdr,
     return applier(&depInfo);
   });
 }
+#endif

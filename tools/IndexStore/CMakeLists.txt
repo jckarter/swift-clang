@@ -20,6 +20,9 @@ else()
   set(output_name "IndexStore")
 endif()
 
+# FIXME: needs to be ported to non-Apple platforms.
+if(APPLE)
+
 add_clang_library(IndexStore ${ENABLE_SHARED} ${ENABLE_STATIC}
   OUTPUT_NAME ${output_name}
   ${SOURCES}
@@ -70,3 +73,4 @@ install(DIRECTORY ../../include/indexstore
   PATTERN "*.h"
   PATTERN ".svn" EXCLUDE
   )
+endif()
