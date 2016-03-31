@@ -209,6 +209,8 @@ $CMAKE -G 'Ninja' -C $CACHE_FILE \
     -DBOOTSTRAP_LLVM_INCLUDE_UTILS=$INCLUDE_TESTS \
     -DBOOTSTRAP_CLANG_INCLUDE_TESTS=$INCLUDE_TESTS \
     -DBOOTSTRAP_LLVM_BUILD_RUNTIME=Off \
+    -DLLVM_EXTERNALIZE_DEBUGINFO_SKIP_STRIP=On \
+    -DBOOTSTRAP_LLVM_EXTERNALIZE_DEBUGINFO_SKIP_STRIP=On \
     $CMAKE_TOOLCHAIN_FLAGS \
     $ORDER_FILE_CMAKE_FLAG \
     $PROFDATA_FILE_CMAKE_FLAG \
@@ -245,6 +247,7 @@ if [ "$BUILDING_HOST" = "YES" ]; then
       -DCMAKE_INSTALL_PREFIX=$TOOLCHAIN_USR/lib/clang/$CLANG_VERSION/ \
       -DCMAKE_C_COMPILER=$TOOLCHAIN_USR/bin/clang \
       -DCMAKE_CXX_COMPILER=$TOOLCHAIN_USR/bin/clang++ \
+      -DCOMPILER_RT_EXTERNALIZE_DEBUGINFO_SKIP_STRIP=On \
       -DCMAKE_OSX_DEPLOYMENT_TARGET=10.7 \
       "$LLVM_SRCROOT/projects/compiler-rt" \
       || exit 1
@@ -337,6 +340,10 @@ fi
 
 find $OBJECT_DIR -name \*.dSYM -exec cp -r {} $SYMROOT/ \; || exit 1
 find $OBJECT_DIR -type f -perm +111 -exec cp -r {} $SYMROOT/ \; || exit 1
+
+# Strip the dstroot
+STRIP=`xcrun -find strip`
+find $TOOLCHAIN_USR -type f -perm +111 -exec $STRIP -Sxl {} \; || exit 1
 
 mv $SYMROOT/clang-$MAJ_MIN_VER $SYMROOT/clang
 mv $SYMROOT/clang-$MAJ_MIN_VER.dSYM $SYMROOT/clang.dSYM
