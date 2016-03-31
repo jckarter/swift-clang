@@ -33,6 +33,8 @@ add_clang_library(IndexStore ${ENABLE_SHARED} ${ENABLE_STATIC}
   Support
   )
 
+set(INDEXSTORE_LIBRARY_VERSION "${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}.${LLVM_VERSION_PATCH}")
+
 if(ENABLE_SHARED)
   if(WIN32)
     set_target_properties(IndexStore
@@ -41,7 +43,7 @@ if(ENABLE_SHARED)
       DEFINE_SYMBOL _CINDEX_LIB_)
   elseif(APPLE)
     set(INDEXSTORE_LINK_FLAGS " -Wl,-compatibility_version -Wl,1")
-    set(INDEXSTORE_LINK_FLAGS "${INDEXSTORE_LINK_FLAGS} -Wl,-current_version -Wl,${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}.${LLVM_VERSION_PATCH}")
+    set(INDEXSTORE_LINK_FLAGS "${INDEXSTORE_LINK_FLAGS} -Wl,-current_version -Wl,${INDEXSTORE_LIBRARY_VERSION}")
 
     set_property(TARGET IndexStore APPEND_STRING PROPERTY
                  LINK_FLAGS ${INDEXSTORE_LINK_FLAGS})
