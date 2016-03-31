@@ -20,6 +20,8 @@ using namespace clang::index;
 using namespace indexstore;
 using namespace llvm;
 
+#if INDEXSTORE_HAS_BLOCKS
+
 namespace {
 
 typedef size_t FilePathIndex;
@@ -400,3 +402,10 @@ bool index::aggregateDataAsJSON(StringRef StorePath, raw_ostream &OS) {
   aggregator->dumpJSON(OS);
   return false;
 }
+
+#else
+
+bool index::aggregateDataAsJSON(StringRef StorePath, raw_ostream &OS) {
+  return true;
+}
+#endif

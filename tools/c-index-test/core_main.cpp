@@ -181,6 +181,8 @@ static bool printSourceSymbols(ArrayRef<const char *> Args) {
   return false;
 }
 
+#if INDEXSTORE_HAS_BLOCKS
+
 //===----------------------------------------------------------------------===//
 // Print Record
 //===----------------------------------------------------------------------===//
@@ -272,6 +274,8 @@ static int printStoreRecords(StringRef StorePath, raw_ostream &OS) {
 // Helper Utils
 //===----------------------------------------------------------------------===//
 
+#endif
+
 static void printSymbolInfo(SymbolInfo SymInfo, raw_ostream &OS) {
   OS << getSymbolKindString(SymInfo.Kind);
   if (SymInfo.TemplateKind != SymbolCXXTemplateKind::NonTemplate) {
@@ -294,6 +298,8 @@ static void printSymbolNameAndUSR(const Decl *D, ASTContext &Ctx,
     OS << USRBuf;
   }
 }
+
+#if INDEXSTORE_HAS_BLOCKS
 
 static void printSymbol(const IndexRecordDecl &Rec, raw_ostream &OS) {
   SymbolInfo SymInfo{ Rec.Kind, Rec.CXXTemplateKind, Rec.Lang };
@@ -510,6 +516,16 @@ static void printSymbol(indexstore::IndexRecordOccurrence Occur, raw_ostream &OS
   });
 }
 
+#else
+
+static int printRecord(StringRef Filename, raw_ostream &OS) {
+  return 1;
+}
+static int printStoreRecords(StringRef StorePath, raw_ostream &OS) {
+  return 1;
+}
+
+#endif
 //===----------------------------------------------------------------------===//
 // Command line processing.
 //===----------------------------------------------------------------------===//

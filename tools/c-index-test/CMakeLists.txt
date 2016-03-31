@@ -8,6 +8,11 @@ add_clang_executable(c-index-test
   JSONAggregation.cpp
   )
 
+set(INDEXSTORE_LIB)
+if(APPLE)
+  set(INDEXSTORE_LIB IndexStore)
+endif()
+
 if(NOT MSVC)
   set_property(
     SOURCE c-index-test.c
@@ -23,7 +28,7 @@ if (LLVM_BUILD_STATIC)
 else()
   target_link_libraries(c-index-test
     libclang
-    IndexStore
+    ${INDEXSTORE_LIB}
     clangAST
     clangBasic
     clangFrontend

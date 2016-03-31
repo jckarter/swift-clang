@@ -58,6 +58,16 @@
 # endif
 #endif
 
+#ifndef __has_feature
+# define __has_feature(x) 0
+#endif
+
+#if __has_feature(blocks)
+# define INDEXSTORE_HAS_BLOCKS 1
+#else
+# define INDEXSTORE_HAS_BLOCKS 0
+#endif
+
 INDEXSTORE_BEGIN_DECLS
 
 typedef void *indexstore_error_t;
@@ -84,9 +94,11 @@ indexstore_store_create(const char *store_path, indexstore_error_t *error);
 INDEXSTORE_PUBLIC void
 indexstore_store_dispose(indexstore_t);
 
+#if INDEXSTORE_HAS_BLOCKS
 INDEXSTORE_PUBLIC bool
 indexstore_store_units_apply(indexstore_t,
                              bool(^applier)(indexstore_string_ref_t unit_name));
+#endif
 
 typedef enum {
   INDEXSTORE_UNIT_EVENT_ADDED = 1,
@@ -99,12 +111,14 @@ typedef struct {
   indexstore_string_ref_t unit_name;
 } indexstore_unit_event_t;
 
+#if INDEXSTORE_HAS_BLOCKS
 typedef void (^indexstore_unit_event_handler_t)(indexstore_unit_event_t *events,
                                                 size_t count);
 
 INDEXSTORE_PUBLIC void
 indexstore_store_set_unit_event_handler(indexstore_t,
                                        indexstore_unit_event_handler_t handler);
+#endif
 
 INDEXSTORE_PUBLIC void
 indexstore_store_discard_unit(indexstore_t, const char *unit_name);
@@ -212,9 +226,11 @@ typedef void *indexstore_occurrence_t;
 INDEXSTORE_PUBLIC indexstore_symbol_t
 indexstore_occurrence_get_symbol(indexstore_occurrence_t);
 
+#if INDEXSTORE_HAS_BLOCKS
 INDEXSTORE_PUBLIC bool
 indexstore_occurrence_relations_apply(indexstore_occurrence_t,
                       bool(^applier)(indexstore_symbol_relation_t symbol_rel));
+#endif
 
 INDEXSTORE_PUBLIC uint64_t
 indexstore_occurrence_get_roles(indexstore_occurrence_t);
@@ -232,6 +248,7 @@ indexstore_record_reader_create(indexstore_t store, const char *record_name,
 INDEXSTORE_PUBLIC void
 indexstore_record_reader_dispose(indexstore_record_reader_t);
 
+#if INDEXSTORE_HAS_BLOCKS
 /// Goes through the symbol data and passes symbols to \c receiver, for the
 /// symbol data that \c filter returns true on.
 ///
@@ -263,6 +280,7 @@ indexstore_record_reader_occurrences_of_symbols_apply(indexstore_record_reader_t
         indexstore_symbol_t *symbols, size_t symbols_count,
         indexstore_symbol_t *related_symbols, size_t related_symbols_count,
         bool(^applier)(indexstore_occurrence_t occur));
+#endif
 
 
 typedef void *indexstore_unit_reader_t;
@@ -294,9 +312,11 @@ indexstore_unit_reader_dependencies_count(indexstore_unit_reader_t);
 INDEXSTORE_PUBLIC indexstore_string_ref_t
 indexstore_unit_reader_get_dependency_filepath(indexstore_unit_reader_t, size_t index);
 
+#if INDEXSTORE_HAS_BLOCKS
 INDEXSTORE_PUBLIC bool
 indexstore_unit_reader_dependencies_filepaths_apply(indexstore_unit_reader_t,
                                   bool(^applier)(indexstore_string_ref_t path));
+#endif
 
 typedef void *indexstore_unit_dependency_t;
 
@@ -317,9 +337,11 @@ indexstore_unit_dependency_get_name(indexstore_unit_dependency_t);
 INDEXSTORE_PUBLIC size_t
 indexstore_unit_dependency_get_index(indexstore_unit_dependency_t);
 
+#if INDEXSTORE_HAS_BLOCKS
 INDEXSTORE_PUBLIC bool
 indexstore_unit_reader_dependencies_apply(indexstore_unit_reader_t,
                              bool(^applier)(indexstore_unit_dependency_t));
+#endif
 
 INDEXSTORE_END_DECLS
 

@@ -2,6 +2,8 @@
 // RUN: %clang_cc1 %s -index-store-path %t.idx
 // RUN: c-index-test core -print-record %t.idx | FileCheck %s
 
+// XFAIL: linux
+
 @class MyCls;
 
 @interface MyCls
