@@ -1018,6 +1018,7 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
     << Module->Name << ModuleFileName;
 
   if (!FrontendOpts.IndexStorePath.empty()) {
+#if defined(__APPLE__)
     index::IndexingOptions IndexOpts;
     index::RecordingOptions RecordOpts;
     RecordOpts.DataDirPath = FrontendOpts.IndexStorePath;
@@ -1030,6 +1031,7 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
       FrontendOpts.IndexRecordSystemDependencies;
     CreateModuleAction = index::createIndexDataRecordingAction(IndexOpts,
                                      RecordOpts, std::move(CreateModuleAction));
+#endif
   }
 
   // Execute the action to actually build the module in-place. Use a separate

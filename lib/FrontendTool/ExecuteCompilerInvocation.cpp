@@ -159,6 +159,7 @@ CreateFrontendAction(CompilerInstance &CI) {
 #endif
 
   if (!FEOpts.IndexStorePath.empty()) {
+#if defined(__APPLE__)
     index::RecordingOptions RecordOpts;
     index::IndexingOptions IndexOpts;
     RecordOpts.DataDirPath = FEOpts.IndexStorePath;
@@ -171,6 +172,7 @@ CreateFrontendAction(CompilerInstance &CI) {
       FEOpts.IndexRecordSystemDependencies;
     Act = index::createIndexDataRecordingAction(IndexOpts, RecordOpts,
                                                 std::move(Act));
+#endif
   }
 
   // If there are any AST files to merge, create a frontend action
