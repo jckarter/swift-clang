@@ -13,6 +13,7 @@
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/StringRef.h"
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
