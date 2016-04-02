@@ -17,6 +17,7 @@
 #include "clang/Index/IndexingAction.h"
 #include "clang/Index/IndexDataConsumer.h"
 #include "clang/Index/IndexRecordReader.h"
+#include "clang/Index/IndexUnitReader.h"
 #include "clang/Index/USRGeneration.h"
 #include "clang/Index/CodegenNameGenerator.h"
 #include "llvm/Support/CommandLine.h"
@@ -37,6 +38,7 @@ enum class ActionType {
   None,
   PrintSourceSymbols,
   PrintRecord,
+  PrintUnit,
   AggregateAsJSON,
 };
 
@@ -51,6 +53,8 @@ Action(cl::desc("Action:"), cl::init(ActionType::None),
                      "print-source-symbols", "Print symbols from source"),
           clEnumValN(ActionType::PrintRecord,
                      "print-record", "Print record info"),
+          clEnumValN(ActionType::PrintUnit,
+                     "print-unit", "Print unit info"),
           clEnumValN(ActionType::AggregateAsJSON,
                      "aggregate-json", "Aggregate index data in JSON format"),
           clEnumValEnd),
@@ -265,6 +269,86 @@ static int printStoreRecords(StringRef StorePath, raw_ostream &OS) {
       }
       return true;
     });
+  });
+
+  return !Success;
+}
+
+
+//===----------------------------------------------------------------------===//
+// Print Unit
+//===----------------------------------------------------------------------===//
+
+static int printUnit(StringRef Filename, raw_ostream &OS) {
+  std::string Error;
+  auto Reader = IndexUnitReader::createWithFilePath(Filename, Error);
+  if (!Reader) {
+    errs() << Error << '\n';
+    return true;
+  }
+
+  OS << "work-dir: " << Reader->getWorkingDirectory() << '\n';
+  OS << "out-file: " << Reader->getOutputFile() << '\n';
+  OS << "target: " << Reader->getTarget() << '\n';
+  OS << "DEPEND START: " << Reader->getDependencyFiles().size() << '\n';
+  Reader->foreachDependency([&](bool isUnit, StringRef unitOrRecordName,
+                                StringRef Filename, unsigned depIndex) -> bool {
+    if (isUnit)
+      OS << "Unit | ";
+    else
+      OS << "Record | ";
+    OS << Filename << " | " << unitOrRecordName << '\n';
+    return true;
+  });
+  OS << "DEPEND END\n";
+
+  return false;
+};
+
+//===----------------------------------------------------------------------===//
+// Print Store Units
+//===----------------------------------------------------------------------===//
+
+static bool printStoreUnit(indexstore::IndexStore &Store, StringRef UnitName,
+                           raw_ostream &OS) {
+  std::string Error;
+  indexstore::IndexUnitReader Reader(Store, UnitName, Error);
+  if (!Reader) {
+    errs() << "error loading unit: " << Error << "\n";
+    return true;
+  }
+
+  OS << "work-dir: " << Reader.getWorkingDirectory() << '\n';
+  OS << "out-file: " << Reader.getOutputFile() << '\n';
+  OS << "target: " << Reader.getTarget() << '\n';
+  OS << "DEPEND START: " << Reader.getDependenciesCount() << '\n';
+  Reader.foreachDependency([&](indexstore::IndexUnitDependency Dep) -> bool {
+    if (Dep.getKind() == indexstore::IndexUnitDependency::DependencyKind::Unit)
+      OS << "Unit | ";
+    else
+      OS << "Record | ";
+    OS << Dep.getFilePath() << " | " << Dep.getName() << '\n';
+    return true;
+  });
+  OS << "DEPEND END\n";
+
+  return false;
+}
+
+static int printStoreUnits(StringRef StorePath, raw_ostream &OS) {
+  std::string Error;
+  indexstore::IndexStore Store(StorePath, Error);
+  if (!Store) {
+    errs() << "error loading store: " << Error << "\n";
+    return 1;
+  }
+
+  bool Success = Store.foreachUnit([&](StringRef UnitName) -> bool {
+    OS << UnitName << '\n';
+    OS << "--------\n";
+    bool err = printStoreUnit(Store, UnitName, OS);
+    OS << '\n';
+    return !err;
   });
 
   return !Success;
@@ -567,6 +651,18 @@ int indextest_core_main(int argc, const char **argv) {
       return printStoreRecords(options::InputFiles[0], outs());
     else
       return printRecord(options::InputFiles[0], outs());
+  }
+
+  if (options::Action == ActionType::PrintUnit) {
+    if (options::InputFiles.empty()) {
+      errs() << "error: missing input file or directory\n";
+      return 1;
+    }
+
+    if (sys::fs::is_directory(options::InputFiles[0]))
+      return printStoreUnits(options::InputFiles[0], outs());
+    else
+      return printUnit(options::InputFiles[0], outs());
   }
 
   if (options::Action == ActionType::AggregateAsJSON) {
