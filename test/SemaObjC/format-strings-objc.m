@@ -268,14 +268,21 @@ void testObjCModifierFlags() {
 // Test os_log_format primitive with ObjC string literal format argument.
 void test_os_log_format(char c, const char *pc, int i, int *pi, void *p, void *buf, NSString *nss) {
   __builtin_os_log_format(buf, @"");
-  __builtin_os_log_format(buf, @"%d"); // expected-warning {{more '%' conversions than data arguments}}
+  __builtin_os_log_format(buf, @"%d"); // expected-error {{more '%' conversions than data arguments}}
   __builtin_os_log_format(buf, @"%d", i);
-  __builtin_os_log_format(buf, @"%P", p); // expected-warning {{using '%P' format specifier without precision}}
+  __builtin_os_log_format(buf, @"%P", p); // expected-error {{using '%P' format specifier without precision}}
   __builtin_os_log_format(buf, @"%.10P", p);
-  __builtin_os_log_format(buf, @"%.*P", p); // expected-warning {{field precision should have type 'int', but argument has type 'void *'}}
+  __builtin_os_log_format(buf, @"%.*P", p); // expected-error {{field precision should have type 'int', but argument has type 'void *'}}
   __builtin_os_log_format(buf, @"%.*P", i, p);
-  __builtin_os_log_format(buf, @"%.*P", i, i); // expected-warning {{format specifies type 'void *' but the argument has type 'int'}}
+  __builtin_os_log_format(buf, @"%.*P", i, i); // expected-error {{format specifies type 'void *' but the argument has type 'int'}}
 
   __builtin_os_log_format(buf, @"%{private}s", pc);
   __builtin_os_log_format(buf, @"%@", nss);
+}
+
+// <rdar://problem/25428582>
+void _os_log_internal(char *, ...) __attribute__((format(os_log, 1, 2)));
+void testPopFormatWarningSeverity(void *_Nonnull s) {
+  testPopFormatWarningSeverity(0); // expected-warning{{null passed to a callee that requires a non-null argument}}
+  { _os_log_internal(""); }
 }
