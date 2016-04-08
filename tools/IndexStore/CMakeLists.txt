@@ -64,7 +64,7 @@ endif()
 set(INDEXSTORE_HEADERS_INSTALL_DESTINATION "local/include")
 
 install(DIRECTORY ../../include/indexstore
-  COMPONENT IndexStore-headers
+  COMPONENT IndexStore
   DESTINATION "${INDEXSTORE_HEADERS_INSTALL_DESTINATION}"
   FILES_MATCHING
   PATTERN "*.h"
