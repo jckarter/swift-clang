@@ -41,10 +41,7 @@ class InlineOwnedString : public OwnedString {
 
   InlineOwnedString(llvm::StringRef S)
       : OwnedString({getInlineData(), S.size()}) {
-    auto dropQualifiers = [](const char *P) {
-      return reinterpret_cast<void *>(const_cast<char *>(P));
-    };
-    memcpy(dropQualifiers(getInlineData()), dropQualifiers(S.data()), S.size());
+    memcpy((void *)getInlineData(), (const void *)S.data(), S.size());
     const_cast<char *>(getInlineData())[S.size()] = '\0';
   }
 
@@ -54,7 +51,7 @@ class InlineOwnedString : public OwnedString {
   }
 
   const char *getInlineData() const {
-    return reinterpret_cast<const char *>(this) + sizeof(OwnedString);
+    return (const char *)(this) + sizeof(OwnedString);
   }
 
 public:
@@ -83,8 +80,7 @@ class raw_inlinestring_ostream : public llvm::raw_ostream {
   /// See raw_ostream::write_impl.
   void write_impl(const char *Ptr, size_t Size) override {
     assert(current_pos() + Size <= IOS.size());
-    memcpy(reinterpret_cast<void *>(IOS.data() + current_pos()),
-           reinterpret_cast<const void *>(Ptr), Size);
+    memcpy((void *)(IOS.data() + current_pos()), (const void *)(Ptr), Size);
   }
 
   /// Return the current position within the stream, not counting the bytes

@@ -51,7 +51,7 @@ private:
     std::unique_ptr<Dict> D;
 
     VariantData() {
-      memset(reinterpret_cast<void *>(this), 0, sizeof(VariantData));
+      memset((void *)this, 0, sizeof(VariantData));
     }
 
     ~VariantData() {}
