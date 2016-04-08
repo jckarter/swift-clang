@@ -20,6 +20,8 @@ if (LLVM_BUILD_STATIC)
   target_link_libraries(c-index-test
     libclang_static
     clangIndex
+    clangServiceCore
+    clangServiceSupport
   )
 else()
   target_link_libraries(c-index-test
@@ -29,7 +31,8 @@ else()
     clangBasic
     clangFrontend
     clangIndex
-    ClangService
+    clangServiceCore
+    clangServiceSupport
   )
 endif()
 
