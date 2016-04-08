@@ -367,7 +367,8 @@ struct CSCXCompletionResult {
       for (i = 0; i < annotationCount; ++i) {
         if (i != 0)
           fprintf(file, ", ");
-        fprintf(file, "\"%s\"", CompletionString.getAnnotation(i).get());
+        CUniqueStr Annotation = CompletionString.getAnnotation(i);
+        fprintf(file, "\"%s\"", Annotation.get());
       }
       fprintf(file, ")");
     }
@@ -382,9 +383,10 @@ struct CSCXCompletionResult {
       }
     }
 
-    const char *BriefCommentCString = CompletionString.getBriefComment().get();
-    if (BriefCommentCString && *BriefCommentCString != '\0') {
-      fprintf(file, "(brief comment: %s)", BriefCommentCString);
+
+    CUniqueStr BriefComment = CompletionString.getBriefComment();
+    if (strlen(BriefComment.get())) {
+      fprintf(file, "(brief comment: %s)", BriefComment.get());
     }
 
     fprintf(file, "\n");
@@ -434,7 +436,8 @@ void PrintDiagnosticImpl(CSCXDiagnostic &Diagnostic, FILE *out) {
       CXDiagnostic_DisplaySourceLocation | CXDiagnostic_DisplayColumn |
       CXDiagnostic_DisplaySourceRanges | CXDiagnostic_DisplayOption;
 
-  fprintf(out, "%s\n", Diagnostic.getFormattedStr(display_opts).get());
+  CUniqueStr FormattedStr = Diagnostic.getFormattedStr(display_opts);
+  fprintf(out, "%s\n", FormattedStr.get());
 
   CSCXSourceLocation loc = Diagnostic.getLocation();
   CSCXFile file = loc.getSpellingLocation(nullptr, nullptr, nullptr);
@@ -446,7 +449,8 @@ void PrintDiagnosticImpl(CSCXDiagnostic &Diagnostic, FILE *out) {
 
   for (unsigned i = 0; i != num_fixits; ++i) {
     CSCXSourceRange range;
-    char *insertion_text = Diagnostic.getFixIt(i, &range).get();
+    CUniqueStr FixitInsertion = Diagnostic.getFixIt(i, &range);
+    char *insertion_text = FixitInsertion.get();
     CSCXSourceLocation start = range.getStart();
     CSCXSourceLocation end = range.getEnd();
     unsigned start_line, start_column, end_line, end_column;
