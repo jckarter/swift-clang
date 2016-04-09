@@ -137,6 +137,7 @@ public:
     Added,
     Removed,
     Modified,
+    DirectoryDeleted,
   };
   struct UnitEvent {
     UnitEventKind Kind;
@@ -144,14 +145,20 @@ public:
   };
   typedef std::function<void(ArrayRef<UnitEvent> Events)> UnitEventHandler;
 
-  void setUnitEventHandler(UnitEventHandler handler) {
+  bool setUnitEventHandler(UnitEventHandler handler, std::string &error) {
 #if INDEXSTORE_HAS_BLOCKS
     if (!handler) {
-      indexstore_store_set_unit_event_handler(obj, nullptr);
-      return;
+      indexstore_error_t c_err = nullptr;
+      bool ret = indexstore_store_set_unit_event_handler(obj, nullptr, &c_err);
+      if (c_err) {
+        error = indexstore_error_get_description(c_err);
+        indexstore_error_dispose(c_err);
+      }
+      return ret;
     }
 
-    indexstore_store_set_unit_event_handler(obj, ^(indexstore_unit_event_t *events, size_t count) {
+    indexstore_error_t c_err = nullptr;
+    bool ret = indexstore_store_set_unit_event_handler(obj, ^(indexstore_unit_event_t *events, size_t count) {
       llvm::SmallVector<UnitEvent, 16> unitEvts;
       unitEvts.reserve(count);
       for (size_t i = 0; i != count; ++i) {
@@ -161,11 +168,18 @@ public:
         case INDEXSTORE_UNIT_EVENT_ADDED: K = UnitEventKind::Added; break;
         case INDEXSTORE_UNIT_EVENT_REMOVED: K = UnitEventKind::Removed; break;
         case INDEXSTORE_UNIT_EVENT_MODIFIED: K = UnitEventKind::Modified; break;
+        case INDEXSTORE_UNIT_EVENT_DIRECTORY_DELETED: K = UnitEventKind::DirectoryDeleted; break;
         }
         unitEvts.push_back(UnitEvent{K, stringFromIndexStoreStringRef(c_evt.unit_name)});
       }
       handler(unitEvts);
-    });
+    }, &c_err);
+
+    if (c_err) {
+      error = indexstore_error_get_description(c_err);
+      indexstore_error_dispose(c_err);
+    }
+    return ret;
 #endif
   }
 

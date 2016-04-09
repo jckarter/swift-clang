@@ -104,6 +104,7 @@ typedef enum {
   INDEXSTORE_UNIT_EVENT_ADDED = 1,
   INDEXSTORE_UNIT_EVENT_REMOVED = 2,
   INDEXSTORE_UNIT_EVENT_MODIFIED = 3,
+  INDEXSTORE_UNIT_EVENT_DIRECTORY_DELETED = 4,
 } indexstore_unit_event_kind_t;
 
 typedef struct {
@@ -115,9 +116,10 @@ typedef struct {
 typedef void (^indexstore_unit_event_handler_t)(indexstore_unit_event_t *events,
                                                 size_t count);
 
-INDEXSTORE_PUBLIC void
+INDEXSTORE_PUBLIC bool
 indexstore_store_set_unit_event_handler(indexstore_t,
-                                       indexstore_unit_event_handler_t handler);
+                                       indexstore_unit_event_handler_t handler,
+                                       indexstore_error_t *error);
 #endif
 
 INDEXSTORE_PUBLIC void
