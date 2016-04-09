@@ -37,9 +37,14 @@ public:
   ~DirectoryWatcher();
 
   enum class EventKind {
+    /// A file was added.
     Added,
+    /// A file was removed.
     Removed,
-    Modified
+    /// A file was modified.
+    Modified,
+    /// The watched directory got deleted. No more events will follow.
+    DirectoryDeleted,
   };
 
   struct Event {

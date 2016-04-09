@@ -35,6 +35,8 @@ public:
     Added,
     Removed,
     Modified,
+    /// The directory got deleted. No more events will follow.
+    DirectoryDeleted,
   };
   struct UnitEvent {
     UnitEventKind Kind;
@@ -42,7 +44,8 @@ public:
   };
   typedef std::function<void(ArrayRef<UnitEvent> Events)> UnitEventHandler;
 
-  void setUnitEventHandler(UnitEventHandler Handler);
+  /// \returns true if an error occurred.
+  bool setUnitEventHandler(UnitEventHandler Handler, std::string &Error);
 
   void discardUnit(StringRef UnitName);
 

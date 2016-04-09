@@ -82,13 +82,17 @@ indexstore_store_units_apply(indexstore_t c_store,
   return true;
 }
 
-void
+bool
 indexstore_store_set_unit_event_handler(indexstore_t c_store,
-                                      indexstore_unit_event_handler_t blk_handler) {
+                                    indexstore_unit_event_handler_t blk_handler,
+                                    indexstore_error_t *c_error) {
   IndexDataStore *store = static_cast<IndexDataStore*>(c_store);
   if (!blk_handler) {
-    store->setUnitEventHandler(nullptr);
-    return;
+    std::string error;
+    bool err = store->setUnitEventHandler(nullptr, error);
+    if (err && c_error)
+      *c_error = new IndexStoreError{ error };
+    return err;
   }
 
   class BlockWrapper {
@@ -111,7 +115,8 @@ indexstore_store_set_unit_event_handler(indexstore_t c_store,
 
   BlockWrapper handler(blk_handler);
 
-  store->setUnitEventHandler([handler](ArrayRef<IndexDataStore::UnitEvent> events) {
+  std::string error;
+  bool err = store->setUnitEventHandler([handler](ArrayRef<IndexDataStore::UnitEvent> events) {
     SmallVector<indexstore_unit_event_t, 16> store_events;
     store_events.reserve(events.size());
     for (const IndexDataStore::UnitEvent &evt : events) {
@@ -123,12 +128,18 @@ indexstore_store_set_unit_event_handler(indexstore_t c_store,
         k = INDEXSTORE_UNIT_EVENT_REMOVED; break;
       case IndexDataStore::UnitEventKind::Modified:
         k = INDEXSTORE_UNIT_EVENT_MODIFIED; break;
+      case IndexDataStore::UnitEventKind::DirectoryDeleted:
+        k = INDEXSTORE_UNIT_EVENT_DIRECTORY_DELETED; break;
       }
       store_events.push_back(indexstore_unit_event_t{k, toIndexStoreString(evt.UnitName)});
     }
 
     handler(store_events.data(), store_events.size());
-  });
+  }, error);
+
+  if (err && c_error)
+    *c_error = new IndexStoreError{ error };
+  return err;
 }
 #endif
 

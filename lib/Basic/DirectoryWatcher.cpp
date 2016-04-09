@@ -80,9 +80,14 @@ struct DirData {
     }
 
     if (!Events.empty() || !InvokedOnce) {
-      Receiver(llvm::makeArrayRef(Events));
+      Receiver(Events);
       InvokedOnce = true;
     }
+  }
+
+  void onDirDeleted() {
+    DirectoryWatcher::Event DeletedEvt{DirectoryWatcher::EventKind::DirectoryDeleted, Path};
+    Receiver(DeletedEvt);
   }
 
 private:
@@ -166,8 +171,7 @@ std::unique_ptr<DirectoryWatcher> DirectoryWatcher::create(StringRef Path,
   dispatch_source_set_event_handler(source, ^{
       dispatch_source_vnode_flags_t flags = dispatch_source_get_data(source);
       if (flags & DISPATCH_VNODE_DELETE) {
-        // FIXME: Recover.  
-        llvm::report_fatal_error("Watched directory got deleted!");
+        Data->onDirDeleted();
       }
       if (flags & DISPATCH_VNODE_WRITE) {
         Data->onDirChange();

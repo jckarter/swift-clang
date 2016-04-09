@@ -72,7 +72,8 @@ public:
 
   StringRef getFilePath() const { return FilePath; }
   std::vector<std::string> getAllUnitFilenames() const;
-  void setUnitEventHandler(IndexDataStore::UnitEventHandler handler);
+  bool setUnitEventHandler(IndexDataStore::UnitEventHandler Handler,
+                           std::string &Error);
   void discardUnit(StringRef UnitName);
   void purgeStaleRecords(ArrayRef<StringRef> ActiveRecords);
 };
@@ -97,12 +98,13 @@ std::vector<std::string> IndexDataStoreImpl::getAllUnitFilenames() const {
   return filenames;
 }
 
-void IndexDataStoreImpl::setUnitEventHandler(IndexDataStore::UnitEventHandler handler) {
+bool IndexDataStoreImpl::setUnitEventHandler(IndexDataStore::UnitEventHandler handler,
+                                             std::string &Error) {
   bool nullifying = handler == nullptr;
   TheUnitEventHandlerData->setHandler(std::move(handler));
   if (nullifying) {
     DirWatcher.reset();
-    return;
+    return false;
   }
 
   if (!DirWatcher) {
@@ -116,6 +118,7 @@ void IndexDataStoreImpl::setUnitEventHandler(IndexDataStore::UnitEventHandler ha
       UnitEvents.reserve(Events.size());
       for (const DirectoryWatcher::Event &evt : Events) {
         IndexDataStore::UnitEventKind K;
+        StringRef UnitName = sys::path::filename(evt.Filename);
         switch (evt.Kind) {
         case DirectoryWatcher::EventKind::Added:
           K = IndexDataStore::UnitEventKind::Added; break;
@@ -123,8 +126,12 @@ void IndexDataStoreImpl::setUnitEventHandler(IndexDataStore::UnitEventHandler ha
           K = IndexDataStore::UnitEventKind::Removed; break;
         case DirectoryWatcher::EventKind::Modified:
           K = IndexDataStore::UnitEventKind::Modified; break;
+        case DirectoryWatcher::EventKind::DirectoryDeleted:
+          K = IndexDataStore::UnitEventKind::DirectoryDeleted;
+          UnitName = StringRef();
+          break;
         }
-        UnitEvents.push_back(IndexDataStore::UnitEvent{K, sys::path::filename(evt.Filename)});
+        UnitEvents.push_back(IndexDataStore::UnitEvent{K, UnitName});
       }
 
       if (auto handler = localUnitEventHandlerData->getHandler()) {
@@ -132,10 +139,13 @@ void IndexDataStoreImpl::setUnitEventHandler(IndexDataStore::UnitEventHandler ha
       }
     };
 
-    std::string Error; // FIXME: Report error ?
     DirWatcher = DirectoryWatcher::create(UnitPath.str(), OnUnitsChange,
                                         /*TrackFileModifications=*/true, Error);
+    if (!DirWatcher)
+      return true;
   }
+
+  return false;
 }
 
 void IndexDataStoreImpl::discardUnit(StringRef UnitName) {
@@ -227,8 +237,9 @@ unsigned IndexDataStore::getFormatVersion() {
   return STORE_FORMAT_VERSION;
 }
 
-void IndexDataStore::setUnitEventHandler(UnitEventHandler Handler) {
-  IMPL->setUnitEventHandler(std::move(Handler));
+bool IndexDataStore::setUnitEventHandler(UnitEventHandler Handler,
+                                         std::string &Error) {
+  return IMPL->setUnitEventHandler(std::move(Handler), Error);
 }
 
 void IndexDataStore::discardUnit(StringRef UnitName) {
