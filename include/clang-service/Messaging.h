@@ -1,7 +1,13 @@
 #ifndef LLVM_CLANG_CLANGSERVICE_MESSAGING_H
 #define LLVM_CLANG_CLANGSERVICE_MESSAGING_H
 
+#include "llvm/ADT/StringRef.h"
+
+#include <cstdint>
+
 namespace ClangService {
+
+class Value;
 
 // FIXME: Share definitions with sourcekitd/Internal-XPC.h.
 static const char *KeyInternalMsg = "internal_msg";
@@ -23,6 +29,22 @@ enum class ErrorKind : char {
   RequestCancelled,
   Fatal,
   NoError
+};
+
+ErrorKind getResponseErrorKind(Value &Response);
+
+llvm::StringRef getResponseErrorString(Value &Response);
+
+enum class IndexingStatus : int64_t {
+  AbortQueryEvent,
+  DiagnosticsEvent,
+  MainFileEvent,
+  PPIncludeEvent,
+  ImportedASTEvent,
+  StartedTUEvent,
+  DeclarationEvent,
+  EntityReferenceEvent,
+  Done
 };
 
 } // end namespace ClangService

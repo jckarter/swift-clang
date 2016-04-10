@@ -1,4 +1,4 @@
-#include "clang-service/Service.h"
+#include "clang-service/Messaging.h"
 #include "clang-service/XPC/Client.h"
 #include "clang-service/Support/InProcessClient.h"
 
@@ -30,13 +30,13 @@ struct CommunicationTest : ::testing::Test {
 
 TEST_F(CommunicationTest, Invalid) {
   Value R1 = C->request({});
-  EXPECT_TRUE(Service::getResponseErrorKind(R1) == ErrorKind::RequestInvalid);
+  EXPECT_TRUE(getResponseErrorKind(R1) == ErrorKind::RequestInvalid);
 
   Value R2 = C->request(Value::dict({{KeyRequest, false}}));
-  EXPECT_TRUE(Service::getResponseErrorKind(R2) == ErrorKind::RequestInvalid);
+  EXPECT_TRUE(getResponseErrorKind(R2) == ErrorKind::RequestInvalid);
 
   Value R3 = C->request(Value::dict({{KeyRequest, " "}}));
-  EXPECT_TRUE(Service::getResponseErrorKind(R3) == ErrorKind::RequestInvalid);
+  EXPECT_TRUE(getResponseErrorKind(R3) == ErrorKind::RequestInvalid);
 }
 
 TEST_F(CommunicationTest, Version) {

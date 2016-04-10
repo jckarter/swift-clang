@@ -17,6 +17,8 @@ template <> struct DenseMapInfo<ClangService::CSUID>;
 namespace ClangService {
 
 class CSUID {
+  /// CSUID is an efficient, taggable resource identifier.
+
 public:
   CSUID() : UID(nullptr) {}
 
@@ -55,6 +57,8 @@ private:
 };
 
 class LazyCSUID {
+  /// LazyCSUID is like CSUID, but it defers initialization to its first use.
+
   const char *S;
   std::atomic<CSUID> UID;
 

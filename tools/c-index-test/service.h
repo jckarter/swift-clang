@@ -9,10 +9,8 @@ extern "C" {
 
 #include <stdio.h>
 
-void read_file_until_cur(FILE *file, char **out_buf, off_t *out_buf_len);
-
 void PrintExtent(FILE *out, unsigned begin_line, unsigned begin_column,
-                        unsigned end_line, unsigned end_column);
+                 unsigned end_line, unsigned end_column);
 
 void PrintDiagnostic(CXDiagnostic diag);
 

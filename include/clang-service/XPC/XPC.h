@@ -12,6 +12,8 @@
 namespace XPC {
 
 class Ref {
+  /// Ref is a RAII wrapper for retained XPC objects.
+
   xpc_object_t Obj;
 
 public:
@@ -43,6 +45,8 @@ public:
 };
 
 class Retain : public Ref {
+  /// Retain is a RAII wrapper for non-retained XPC objects.
+
 public:
   explicit Retain(xpc_object_t XO) : Ref(XO) {
     if (XO)
@@ -51,10 +55,11 @@ public:
 };
 
 class OwnedString : public ClangService::OwnedString {
+  /// Create an OwnedString by retaining an XPC string.
+ 
   Retain Obj;
 
 public:
-  /// Create an OwnedString by retaining \p XO.
   explicit OwnedString(xpc_object_t XO)
       : ClangService::OwnedString(
             {xpc_string_get_string_ptr(XO), xpc_string_get_length(XO)}),
@@ -66,6 +71,8 @@ public:
 };
 
 class OwnedData : public ClangService::OwnedString {
+  /// Create an OwnedString by retaining an XPC data object.
+
   Retain Obj;
 
 public:

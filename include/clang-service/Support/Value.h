@@ -21,6 +21,8 @@ class raw_ostream;
 namespace ClangService {
 
 class Value {
+  /// Value represents a structured message.
+
 public:
   enum class VariantKind : unsigned {
     NullKind,

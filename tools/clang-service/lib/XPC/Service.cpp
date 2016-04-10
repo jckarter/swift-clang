@@ -1,5 +1,4 @@
 #include "clang-service/Messaging.h"
-#include "clang-service/Support/LiveData.h"
 #include "clang-service/XPC/XPC.h"
 #include "clang-service/XPC/Service.h"
 
@@ -64,8 +63,7 @@ void Service::handleClientActivity(xpc_connection_t Peer, xpc_object_t Event) {
   Value Request = XPC::deserialize(Event);
   Value RequestMsg = extractRequestMessage(std::move(Request));
 
-  ClangService::LiveData LD;
-  Value Response = handle(std::move(RequestMsg), LD);
+  Value Response = handle(std::move(RequestMsg));
 
   ClangService::ErrorKind EK = getResponseErrorKind(Response);
 

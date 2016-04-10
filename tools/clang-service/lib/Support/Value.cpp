@@ -1,13 +1,10 @@
+#include "clang-service/Messaging.h"
 #include "clang-service/Support/Value.h"
 #include "clang-service/Support/ValueUtils.h"
 
 #include "llvm/Support/raw_ostream.h"
 
 #include <algorithm>
-
-using llvm::make_unique;
-using llvm::outs;
-using llvm::StringRef;
 
 namespace ClangService {
 
@@ -233,8 +230,27 @@ bool operator==(const Value &LHS, const Value &RHS) {
   }
 }
 
+ErrorKind getResponseErrorKind(Value &Response) {
+  if (!Response.isDataLike())
+    return ErrorKind::NoError;
+
+  auto EK = ErrorKind(Response.getData()[0]);
+  if (EK == ErrorKind::RequestInvalid) return EK;
+  if (EK == ErrorKind::RequestFailed) return EK;
+  if (EK == ErrorKind::RequestInterrupted) return EK;
+  if (EK == ErrorKind::RequestCancelled) return EK;
+  if (EK == ErrorKind::Fatal) return EK;
+  return ErrorKind::NoError;
+}
+
+llvm::StringRef getResponseErrorString(Value &Response) {
+  if (getResponseErrorKind(Response) == ErrorKind::NoError)
+    return "NoError";
+  return Response.getDataRef().substr(1);
+}
+
 Value toStringArray(llvm::ArrayRef<const char *> Arr) {
-  auto A = make_unique<Value::Array>();
+  auto A = llvm::make_unique<Value::Array>();
   A->reserve(Arr.size());
   for (auto *Elt : Arr)
     A->emplace_back(Elt);
@@ -253,7 +269,7 @@ bool toStringArray(Value &V, llvm::SmallVectorImpl<const char *> &Out) {
 }
 
 Value toUnsavedFilesArray(llvm::ArrayRef<CXUnsavedFile *> Arr) {
-  auto A = make_unique<Value::Array>();
+  auto A = llvm::make_unique<Value::Array>();
   A->reserve(Arr.size());
   for (auto *Elt : Arr) {
     A->push_back(

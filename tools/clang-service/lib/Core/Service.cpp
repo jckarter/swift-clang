@@ -1,14 +1,16 @@
+#include "clang-service/Messaging.h"
 #include "clang-service/Service.h"
 #include "clang-service/SafeLibclang.h"
-#include "clang-service/Support/LiveData.h"
 #include "clang-service/Support/ValueUtils.h"
 
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/raw_os_ostream.h"
 
+#include <condition_variable>
 #include <fstream>
 #include <mutex>
+#include <thread>
 
 using llvm::make_unique;
 using llvm::StringRef;
@@ -71,12 +73,14 @@ Value makeRequestCancelledError(StringRef Description) {
 } // end anonymous namespace
 
 struct TokenGenerator {
-  uint64_t NextToken;
+  /// TokenGenerator generates and recycles unique integer tokens.
+
+  int64_t NextToken;
   llvm::SmallVector<uint64_t, 4> UnusedTokens;
 
-  TokenGenerator() : NextToken(0), UnusedTokens() {}
+  TokenGenerator() : NextToken(1), UnusedTokens() {}
 
-  uint64_t getUniqueToken() {
+  int64_t getUniqueToken() {
     if (!UnusedTokens.empty()) {
       uint64_t Token = UnusedTokens.back();
       UnusedTokens.pop_back();
@@ -85,35 +89,199 @@ struct TokenGenerator {
     return NextToken++;
   }
 
-  void recycleToken(uint64_t Token) { UnusedTokens.push_back(Token); }
+  void recycleToken(int64_t Token) { UnusedTokens.push_back(Token); }
 };
 
-template <typename T> using TokenMap = llvm::SmallDenseMap<uint64_t, T>;
+template <typename T> using TokenMap = llvm::SmallDenseMap<int64_t, T>;
 
-struct CodeCompletionContext {
-  SafeCXIndex Idx;
+template <typename T> class TokenManager {
+  /// TokenManager owns a set of tokens. It cleans up any metadata associated
+  /// with those tokens at the end of its lifetime.
 
-  CodeCompletionContext(SafeCXIndex Idx) : Idx(std::move(Idx)) {}
+  int64_t ManagerToken;
+  std::mutex &TGLock;
+  TokenGenerator &TG;
+  TokenMap<T> &Mappings;
+  llvm::SmallVector<int64_t, 4> Tokens;
+
+public:
+  TokenManager(int64_t ManagerToken, std::mutex &TGLock, TokenGenerator &TG,
+               TokenMap<T> &Mappings)
+      : ManagerToken(ManagerToken), TGLock(TGLock), TG(TG), Mappings(Mappings),
+        Tokens() {}
+
+  ~TokenManager() {
+    if (Tokens.empty())
+      return;
+    LockGuard Guard{TGLock};
+    for (auto Token : Tokens) {
+      Mappings.erase(Token);
+      TG.recycleToken(Token);
+    }
+  }
+
+  TokenManager(const TokenManager &) = delete;
+
+  TokenManager &operator=(const TokenManager &) = delete;
+
+  TokenManager(TokenManager &&TM)
+      : ManagerToken(TM.ManagerToken), TGLock(TM.TGLock), TG(TM.TG),
+        Mappings(TM.Mappings), Tokens(std::move(TM.Tokens)) {}
+
+  TokenManager &operator=(TokenManager &&TM) {
+    assert(Tokens.empty() && "Leaked tokens");
+    ManagerToken = TM.ManagerToken;
+    TGLock = TM.TGLock;
+    TG = TM.TG;
+    Mappings = TM.Mappings;
+    Tokens = std::move(TM.Tokens);
+    return *this;
+  }
+
+  int64_t getUniqueToken(T Obj) {
+    int64_t Token;
+    {
+      LockGuard Guard{TGLock};
+      Token = TG.getUniqueToken();
+      Mappings[Token] = Obj;
+    }
+    Tokens.push_back(Token);
+    return Token;
+  }
+
+  int64_t getManagerToken() const { return ManagerToken; }
 };
 
-struct IndexingContext {
-  ServiceState *State;
+union LocationObject {
+  CXFile File;
+  CXSourceLocation SLoc;
+  CXModule Module;
+  CXCursor Cursor;
+
+  LocationObject() : Cursor({}) {}
+  LocationObject(void *P) : File(P) {}
+  LocationObject(CXSourceLocation SLoc) : SLoc(SLoc) {}
+  LocationObject(CXCursor Cursor) : Cursor(Cursor) {}
+};
+
+using LocTokenManager = TokenManager<LocationObject>;
+
+struct TokenContext {
+  /// TokenContext is a generic context which owns location-like tokens.
+
+  LocTokenManager LTM;
+
+  TokenContext(LocTokenManager LTM) : LTM(std::move(LTM)) {}
+
+  virtual ~TokenContext() {}
+
+  virtual LocTokenManager &getLocTokenManager() { return LTM; }
+};
+
+struct CodeCompletionContext : public TokenContext {
+  /// CodeCompletionContext stores code completion results.
+
+  SafeCXIndex Idx;
+  UniqueCXCodeCompleteResultsPtr Results;
+
+  CodeCompletionContext(LocTokenManager LTM, SafeCXIndex Idx,
+                        UniqueCXCodeCompleteResultsPtr Results)
+      : TokenContext(std::move(LTM)), Idx(std::move(Idx)),
+        Results(std::move(Results)) {}
+
+  virtual ~CodeCompletionContext() {}
+};
+
+struct IndexingContext : public TokenContext {
+  /// IndexingContext manages an indexing session and stores its results.
+
   SafeCXIndex Idx;
 
-  IndexingContext(ServiceState *State, SafeCXIndex Idx)
-      : State(State), Idx(std::move(Idx)) {}
+  // Initialization:
+  //
+  //   [ Manager Thread ]   ->[ Worker Thread ]
+  //     1. lock_mutex()   /    1. lock_mutex()
+  //     2. spawn_worker()      2. make(&response)
+  //     3. wait(&lock) <-----  3. notify()
+  //     4. take(&response)     4. wait(&lock)
+  //
+  // Continuing the session:
+  //
+  //   [ Manager Thread ]     [ Worker Thread ]
+  //     1. make(&response)  >  1. lock_mutex()
+  //     2. lock_mutex()    /   2. make(&response)
+  //     3. notify() -------
+  //     4. wait(&lock) <-----  3. notify()
+  //     5. take(&response)     4. wait(&lock)
+
+  std::mutex SessionLock;
+  std::condition_variable ContinueSessionCond;
+  LockGuard WorkerGuard;
+  std::thread Worker;
+
+  // Use separate values for message-passing to avoid spurious wakeups.
+  Value WorkerResponse;
+  Value ManagerResponse;
+
+  Value ClientKeyFiles;
+  llvm::SmallVector<const char *, 8> CmdArgs;
+  llvm::SmallVector<CXUnsavedFile, 4> UnsavedFiles;
+
+  bool DoDiagnostics;
+  CXDiagnosticDisplayOptions DiagnosticOpts;
+  unsigned ParseOpts;
+
+  IndexingContext(LocTokenManager LTM, SafeCXIndex Idx, Value ClientKeyFiles,
+                  llvm::SmallVector<const char *, 8> CmdArgs,
+                  llvm::SmallVector<CXUnsavedFile, 4> UnsavedFiles,
+                  bool DoDiagnostics, CXDiagnosticDisplayOptions DiagnosticOpts,
+                  unsigned ParseOpts)
+      : TokenContext(std::move(LTM)), Idx(std::move(Idx)), SessionLock(),
+        ContinueSessionCond(), WorkerGuard(), Worker(), WorkerResponse(),
+        ManagerResponse(), ClientKeyFiles(std::move(ClientKeyFiles)),
+        CmdArgs(std::move(CmdArgs)), UnsavedFiles(std::move(UnsavedFiles)),
+        DoDiagnostics(DoDiagnostics), DiagnosticOpts(DiagnosticOpts),
+        ParseOpts(ParseOpts) {}
+
+  virtual ~IndexingContext() {}
+
+  Value awaitWorkerResponse(LockGuard &Guard) {
+    assert(Guard.owns_lock() && "Calling thread does not own lock");
+    ContinueSessionCond.notify_one();
+    ContinueSessionCond.wait(Guard, [&] { return !WorkerResponse.isNull(); });
+
+    auto &WRD = WorkerResponse.getDict();
+    WRD[KeyToken] = getLocTokenManager().getManagerToken();
+    if (WRD[KeyIndexingStatus].getInt64() == int64_t(IndexingStatus::Done))
+      Worker.join();
+
+    return std::move(WorkerResponse);
+  }
+
+  Value awaitManagerResponse() {
+    assert(!WorkerResponse.isNull() && "Manager will not wake up");
+    assert(WorkerGuard.owns_lock() && "Worker thread does not own lock");
+    ContinueSessionCond.notify_one();
+    ContinueSessionCond.wait(WorkerGuard,
+                             [&] { return !ManagerResponse.isNull(); });
+    return std::move(ManagerResponse);
+  }
 };
 
 struct ServiceState {
   std::mutex LogLock;
 
-  std::mutex CodeCompletionCtxsLock;
-  TokenGenerator CodeCompletionTokenGen;
-  TokenMap<std::unique_ptr<CodeCompletionContext>> CodeCompletionCtxs;
+  std::mutex LocTokensLock;
+  TokenGenerator LocTokenGen;
+  TokenMap<LocationObject> LocTokens;
 
-  std::mutex IndexingCtxsLock;
-  TokenGenerator IndexingTokenGen;
-  TokenMap<std::unique_ptr<IndexingContext>> IndexingCtxs;
+  std::mutex CtxsLock;
+  TokenGenerator CtxTokenGen;
+  TokenMap<std::unique_ptr<TokenContext>> Ctxs;
+
+  LocTokenManager createLocTokenManager(int64_t ManagerToken) {
+    return {ManagerToken, LocTokensLock, LocTokenGen, LocTokens};
+  }
 };
 
 Service::Service() : State(new ServiceState) {}
@@ -138,130 +306,212 @@ Value toValue(UniqueCXString S) {
 }
 
 /// CXFile ::= {
-///   key.location.file.name: string,
-///   key.location.file.uid: data (Optional)
+///   key.token: int64,
+///   key.manager: int64
 /// }
-Value toValue(CXFile File) {
-  UniqueCXString Name{clang_getFileName(File)};
-  Value VName = toValue(std::move(Name));
-
-  CXFileUniqueID FUID;
-  Value VFUID;
-  if (!clang_getFileUniqueID(File, &FUID)) {
-    auto IOS = InlineOwnedString::create(
-        {(const char *)&FUID, sizeof(CXFileUniqueID)});
-    VFUID = Value::data(std::move(IOS));
-  }
-
-  return Value::dict({{KeyLocationFileName, std::move(VName)},
-                      {KeyLocationFileUID, std::move(VFUID)}});
+Value toFileValue(CXFile File, LocTokenManager &LTM) {
+  if (File)
+    return Value::dict({{KeyToken, LTM.getUniqueToken({File})},
+                        {KeyManager, LTM.getManagerToken()}});
+  return Value::dict({{KeyToken, 0LL}, {KeyManager, 0LL}});
 }
 
-// FIXME: Split this up into something smaller.
 /// CXSourceLocation ::= {
-///   key.location.in_sys_header: bool,
-///   key.location.from_main_file: bool,
-///
-///   key.location.expansion.file: CXFile,
-///   key.location.expansion.line: int64,
-///   key.location.expansion.column: int64,
-///   key.location.expansion.offset: int64,
-///
-///   key.location.presumed.filename: string,
-///   key.location.presumed.line: int64,
-///   key.location.presumed.column: int64,
-///
-///   key.location.instantiation.file: CXFile,
-///   key.location.instantiation.line: int64,
-///   key.location.instantiation.column: int64,
-///   key.location.instantiation.offset: int64,
-///
-///   key.location.spelling.file: CXFile,
-///   key.location.spelling.line: int64,
-///   key.location.spelling.column: int64,
-///   key.location.spelling.offset: int64
-///
-///   key.location.file.file: CXFile,
-///   key.location.file.line: int64,
-///   key.location.file.column: int64,
-///   key.location.file.offset: int64
+///   key.token: int64,
+///   key.manager: int64
 /// }
-Value toValue(CXSourceLocation Loc) {
-  bool in_sys_header = clang_Location_isInSystemHeader(Loc);
-  bool from_main_file = clang_Location_isFromMainFile(Loc);
+Value toValue(CXSourceLocation Loc, LocTokenManager &LTM) {
+  return Value::dict({{KeyToken, LTM.getUniqueToken({Loc})},
+                      {KeyManager, LTM.getManagerToken()}});
+}
 
-  CXFile expansion_file;
-  unsigned expansion_line;
-  unsigned expansion_col;
-  unsigned expansion_offset;
-  clang_getExpansionLocation(Loc, &expansion_file, &expansion_line,
-                             &expansion_col, &expansion_offset);
+/// CXSourceLocation/Spelling ::= {
+///   key.loc.file: CXFile,
+///   key.loc.line: int64,
+///   key.loc.column: int64,
+///   key.loc.offset: int64
+/// }
+Value toSpellingLocationValue(CXSourceLocation Loc, LocTokenManager &LTM) {
+  CXFile File;
+  unsigned Line, Col, Offset;
+  clang_getSpellingLocation(Loc, &File, &Line, &Col, &Offset);
+  return Value::dict({{KeyFile, toFileValue(File, LTM)},
+                      {KeyLineOffset, int64_t(Line)},
+                      {KeyColOffset, int64_t(Col)},
+                      {KeyOffset, int64_t(Offset)}});
+}
 
-  UniqueCXString presumed_filename{/*unsafe!=*/{}};
-  unsigned presumed_line;
-  unsigned presumed_col;
-  clang_getPresumedLocation(Loc, presumed_filename.storage(), &presumed_line,
-                            &presumed_col);
-  Value Vpresumed_filename = toValue(std::move(presumed_filename));
+/// CXModule ::= {
+///   key.token: int64,
+///   key.manager: int64
+/// }
+Value toModuleValue(CXModule Module, LocTokenManager &LTM) {
+  return Value::dict({{KeyToken, LTM.getUniqueToken({Module})},
+                      {KeyManager, LTM.getManagerToken()}});
+}
 
-  CXFile inst_file;
-  unsigned inst_line;
-  unsigned inst_col;
-  unsigned inst_offset;
-  clang_getInstantiationLocation(Loc, &inst_file, &inst_line, &inst_col,
-                                 &inst_offset);
+/// CXCursor ::= {
+///   key.token: int64,
+///   key.manager: int64,
+///   key.loc.cursor.kind: int64
+/// }
+Value toValue(CXCursor Cursor, LocTokenManager &LTM) {
+  return Value::dict({{KeyToken, LTM.getUniqueToken({Cursor})},
+                      {KeyManager, LTM.getManagerToken()},
+                      {KeyCursorKind, int64_t(clang_getCursorKind(Cursor))}});
+}
 
-  CXFile spell_file;
-  unsigned spell_line;
-  unsigned spell_col;
-  unsigned spell_offset;
-  clang_getSpellingLocation(Loc, &spell_file, &spell_line, &spell_col,
-                            &spell_offset);
+/// CXIdxLoc ::= {
+///   key.loc.file: CXFile,
+///   key.indexing.client_file: int64,
+///   key.loc: CXSourceLocation
+/// }
+Value toValue(CXIdxLoc ILoc, LocTokenManager &LTM) {
+  CXFile File;
+  CXIdxClientFile IdxFile;
+  clang_indexLoc_getFileLocation(ILoc, &IdxFile, &File, nullptr, nullptr,
+                                 nullptr);
+  CXSourceLocation Loc = clang_indexLoc_getCXSourceLocation(ILoc);
+  return Value::dict({{KeyFile, toFileValue(File, LTM)},
+                      {KeyIdxClientFile, int64_t(IdxFile)},
+                      {KeySourceLoc, toValue(Loc, LTM)}});
+}
 
-  CXFile file;
-  unsigned line;
-  unsigned col;
-  unsigned offset;
-  clang_getFileLocation(Loc, &file, &line, &col, &offset);
+/// CXIdxIncludedFileInfo ::= {
+///   key.indexing.loc: CXIdxLoc,
+///   key.loc.name: string,
+///   key.loc.file: CXFile,
+///   key.indexing.is_import: bool,
+///   key.indexing.is_angled: bool,
+///   key.indexing.is_module_import: bool
+/// }
+Value toIncludedFileInfoValue(const CXIdxIncludedFileInfo *IFI,
+                              LocTokenManager &LTM) {
+  // FIXME: Use an OwnedString to capture IFI->filename.
+  return Value::dict({{KeyIdxLoc, toValue(IFI->hashLoc, LTM)},
+                      {KeyName, IFI->filename ? IFI->filename : ""},
+                      {KeyFile, toFileValue(IFI->file, LTM)},
+                      {KeyIdxIsImport, bool(IFI->isImport)},
+                      {KeyIdxIsAngled, bool(IFI->isAngled)},
+                      {KeyIdxIsModuleImport, bool(IFI->isModuleImport)}});
+}
 
-  return Value::dict({
-      {KeyLocationInSysHeader, in_sys_header},
-      {KeyLocationFromMainFile, from_main_file},
+/// CXIdxImportedASTFileInfo ::= {
+///   key.loc.file: CXFile,
+///   key.loc.module: CXModule,
+///   key.indexing.loc: CXIdxLoc,
+///   key.indexing.is_implicit: bool
+/// }
+Value toImportedASTFileInfoValue(const CXIdxImportedASTFileInfo *IAFI,
+                                 LocTokenManager &LTM) {
+  return Value::dict({{KeyFile, toFileValue(IAFI->file, LTM)},
+                      {KeyModule, toModuleValue(IAFI->module, LTM)},
+                      {KeyIdxLoc, toValue(IAFI->loc, LTM)},
+                      {KeyIdxIsImplicit, bool(IAFI->isImplicit)}});
+}
 
-      {KeyLocationExpansionFile, toValue(expansion_file)},
-      {KeyLocationExpansionLineOffset, int64_t(expansion_line)},
-      {KeyLocationExpansionColOffset, int64_t(expansion_col)},
-      {KeyLocationExpansionOffset, int64_t(expansion_offset)},
+/// [CXIdxAttrInfo] ::= [{
+///   key.indexing.attr_kind: int64,
+///   key.loc.cursor: CXCursor,
+///   key.indexing.loc: CXIdxLoc
+/// }]
+Value toValue(const CXIdxAttrInfo *const *Attributes, unsigned NumAttrs,
+              LocTokenManager &LTM) {
+  auto VAttrs = Value::array({});
+  auto &AAttrs = VAttrs.getArray();
+  AAttrs.reserve(NumAttrs);
+  for (unsigned I = 0; I < NumAttrs; ++I) {
+    const CXIdxAttrInfo *AI = Attributes[I];
+    AAttrs.push_back(Value::dict({{KeyIdxAttrKind, int64_t(AI->kind)},
+                                  {KeyCursor, toValue(AI->cursor, LTM)},
+                                  {KeyIdxLoc, toValue(AI->loc, LTM)}}));
+  }
+  return VAttrs;
+}
 
-      {KeyLocationPresumedFilename, std::move(Vpresumed_filename)},
-      {KeyLocationPresumedLineOffset, int64_t(presumed_line)},
-      {KeyLocationPresumedColOffset, int64_t(presumed_col)},
+/// CXIdxContainerInfo ::= CXCursor (Optional)
+Value toValue(const CXIdxContainerInfo *CI, LocTokenManager &LTM) {
+  if (CI)
+    return toValue(CI->cursor, LTM);
+  return {};
+}
 
-      {KeyLocationInstantiationFile, toValue(inst_file)},
-      {KeyLocationInstantiationLineOffset, int64_t(inst_line)},
-      {KeyLocationInstantiationColOffset, int64_t(inst_col)},
-      {KeyLocationInstantiationOffset, int64_t(inst_offset)},
+/// CXIdxEntityInfo ::= {
+///   key.indexing.entity_kind: int64,
+///   key.indexing.entity_cxx_template_kind: int64,
+///   key.indexing.entity_lang: int64,
+///   key.indexing.entity_name: string,
+///   key.indexing.entity_usr: string,
+///   key.loc.cursor: CXCursor,
+///   key.indexing.attr_infos: [CXIdxAttrInfo]
+/// }
+Value toValue(const CXIdxEntityInfo *EI, LocTokenManager &LTM) {
+  // FIXME: Use an OwnedString to capture EI->{name, USR}.
+  return Value::dict(
+      {{KeyIdxEntityKind, int64_t(EI->kind)},
+       {KeyIdxEntityCXXTemplateKind, int64_t(EI->templateKind)},
+       {KeyIdxEntityLanguage, int64_t(EI->lang)},
+       {KeyIdxEntityName, EI->name ? EI->name : ""},
+       {KeyIdxEntityUSR, EI->USR ? EI->USR : ""},
+       {KeyCursor, toValue(EI->cursor, LTM)},
+       {KeyIdxAttrInfos, toValue(EI->attributes, EI->numAttributes, LTM)}});
+}
 
-      {KeyLocationSpellingFile, toValue(spell_file)},
-      {KeyLocationSpellingLineOffset, int64_t(spell_line)},
-      {KeyLocationSpellingColOffset, int64_t(spell_col)},
-      {KeyLocationSpellingOffset, int64_t(spell_offset)},
+/// CXIdxDeclInfo ::= {
+///   key.indexing.entity_info: CXIdxEntityInfo,
+///   key.loc.cursor: CXCursor,
+///   key.indexing.loc: CXIdxLoc,
+///   key.indexing.sem.container_info: CXIdxContainerInfo,
+///   key.indexing.lex.container_info: CXIdxContainerInfo,
+///   key.indexing.is_redeclaration: bool,
+///   key.indexing.is_definition: bool,
+///   key.indexing.is_container: bool,
+///   key.indexing.decl.container_info: CXIdxContainerInfo,
+///   key.indexing.is_implicit: bool,
+///   key.indexing.attr_infos: [CXIdxAttrInfo],
+///   key.indexing.decl_info_flags: int64
+/// }
+Value toValue(const CXIdxDeclInfo *IDI, LocTokenManager &LTM) {
+  return Value::dict(
+      {{KeyIdxEntityInfo, toValue(IDI->entityInfo, LTM)},
+       {KeyCursor, toValue(IDI->cursor, LTM)},
+       {KeyIdxLoc, toValue(IDI->loc, LTM)},
+       {KeyIdxContainerSemInfo, toValue(IDI->semanticContainer, LTM)},
+       {KeyIdxContainerLexInfo, toValue(IDI->lexicalContainer, LTM)},
+       {KeyIdxIsRedeclaration, bool(IDI->isRedeclaration)},
+       {KeyIdxIsDefinition, bool(IDI->isDefinition)},
+       {KeyIdxIsContainer, bool(IDI->isContainer)},
+       {KeyIdxContainerDeclInfo, toValue(IDI->declAsContainer, LTM)},
+       {KeyIdxIsImplicit, bool(IDI->isImplicit)},
+       {KeyIdxAttrInfos, toValue(IDI->attributes, IDI->numAttributes, LTM)},
+       {KeyIdxDeclInfoFlags, int64_t(IDI->flags)}});
+}
 
-      {KeyLocationFileFile, toValue(file)},
-      {KeyLocationFileLineOffset, int64_t(line)},
-      {KeyLocationFileColOffset, int64_t(col)},
-      {KeyLocationFileOffset, int64_t(offset)}});
+/// CXIdxEntityRefInfo ::= {
+///   key.indexing.entity_ref_kind: int64,
+///   key.loc.cursor: CXCursor,
+///   key.indexing.loc: CXIdxLoc,
+///   key.indexing.entity_info: CXIdxEntityInfo,
+///   kex.indexing.entity_info.parent: CXIdxEntityInfo,
+///   key.indexing.sem.container_info: CXIdxContainerInfo
+/// }
+Value toValue(const CXIdxEntityRefInfo *ERI, LocTokenManager &LTM) {
+  return Value::dict({{KeyIdxEntityRefKind, int64_t(ERI->kind)},
+                      {KeyCursor, toValue(ERI->cursor, LTM)},
+                      {KeyIdxLoc, toValue(ERI->loc, LTM)},
+                      {KeyIdxEntityInfo, toValue(ERI->referencedEntity, LTM)},
+                      {KeyIdxEntityInfoParent, toValue(ERI->parentEntity, LTM)},
+                      {KeyIdxContainerSemInfo, toValue(ERI->container, LTM)}});
 }
 
 /// CXSourceRange ::= {
 ///   key.range.start: CXSourceLocation,
 ///   key.range.end: CXSourceLocation
 /// }
-Value toValue(CXSourceRange &Range) {
-  CXSourceLocation Start = clang_getRangeStart(Range);
-  CXSourceLocation End = clang_getRangeEnd(Range);
+Value toValue(CXSourceRange &Range, LocTokenManager &LTM) {
   return Value::dict(
-      {{KeyRangeStart, toValue(Start)}, {KeyRangeEnd, toValue(End)}});
+      {{KeyRangeStart, toValue(clang_getRangeStart(Range), LTM)},
+       {KeyRangeEnd, toValue(clang_getRangeEnd(Range), LTM)}});
 }
 
 /// CXDiagnostic ::= {
@@ -270,11 +520,9 @@ Value toValue(CXSourceRange &Range) {
 ///   key.diagnostic.location: CXSourceLocation,
 ///   key.diagnostic.fixits: [[string, CXSourceRange]]
 /// }
-///
-/// Note: This routine assumes that all data referred to by the diagnostic will
-/// live long enough to be transferred.
 Value toValue(CXDiagnostic Diagnostic,
-              CXDiagnosticDisplayOptions DiagnosticOpts) {
+              CXDiagnosticDisplayOptions DiagnosticOpts,
+              LocTokenManager &LTM) {
   CXDiagnosticSeverity Severity = clang_getDiagnosticSeverity(Diagnostic);
 
   UniqueCXString DiagStr{clang_formatDiagnostic(Diagnostic, DiagnosticOpts)};
@@ -290,15 +538,33 @@ Value toValue(CXDiagnostic Diagnostic,
     CXSourceRange Replacement;
     UniqueCXString Fixit{clang_getDiagnosticFixIt(Diagnostic, I, &Replacement)};
     AFixits.push_back(
-        Value::array({toValue(std::move(Fixit)), toValue(Replacement)}));
+        Value::array({toValue(std::move(Fixit)), toValue(Replacement, LTM)}));
   }
 
   return Value::dict({{KeyDiagnosticSeverity, int64_t(Severity)},
                       {KeyDiagnosticString, std::move(VDiagStr)},
-                      {KeyDiagnosticLocation, toValue(SourceLoc)},
+                      {KeyDiagnosticLocation, toValue(SourceLoc, LTM)},
                       {KeyDiagnosticFixits, std::move(VFixits)}});
 }
 
+/// CXDiagnosticSet ::= [CXDiagnostic]
+Value toDiagnosticsSetValue(CXDiagnosticSet DS,
+                            CXDiagnosticDisplayOptions DiagnosticOpts,
+                            LocTokenManager &LTM) {
+  auto VDiagnostics = Value::array({});
+  auto &ADiagnostics = VDiagnostics.getArray();
+  unsigned NumDiagnostics = clang_getNumDiagnosticsInSet(DS);
+  ADiagnostics.reserve(NumDiagnostics);
+  for (unsigned I = 0; I < NumDiagnostics; ++I) {
+    UniqueCXDiagnostic Diag{clang_getDiagnosticInSet(DS, I)};
+    ADiagnostics.push_back(toValue(Diag, DiagnosticOpts, LTM));
+  }
+  return VDiagnostics;
+}
+
+// FIXME: Turn the sub-chunks array into an array of tokens; ditto for the
+//        annotations array.
+//
 /// CXCompletionString ::= {
 ///   key.codecomplete.completion.str.kind: int64 (Optional),
 ///   key.codecomplete.completion.str.text: string (Optional),
@@ -378,6 +644,8 @@ Value toValue(CXCompletionResult *Completion, bool IncludeBrief) {
         toValue(Completion->CompletionString, IncludeBrief)}});
 }
 
+// FIXME: Turn the results array into an array of tokens; ditto for diagnostics.
+//
 /// CXCodeCompleteResults ::= {
 ///   key.token: int64,
 ///   key.codecomplete.results: [CXCompletionResult],
@@ -386,11 +654,11 @@ Value toValue(CXCompletionResult *Completion, bool IncludeBrief) {
 ///   key.codecomplete.container.incomplete: bool,
 ///   key.codecomplete.container.usr: string (Optional),
 ///   key.codecomplete.objc_selector: string (Optional),
-///   key.codecomplete.diagnostics: [CXDiagnostic] (Optional)
+///   key.diagnostics: [CXDiagnostic] (Optional)
 /// }
-Value toValue(CXCodeCompleteResults *Results, uint64_t Token, bool DoSort,
-              bool IncludeBrief, bool DoDiagnostics,
-              CXDiagnosticDisplayOptions DiagnosticOpts) {
+Value toValue(CXCodeCompleteResults *Results, bool DoSort, bool IncludeBrief,
+              bool DoDiagnostics, CXDiagnosticDisplayOptions DiagnosticOpts,
+              LocTokenManager &LTM) {
   if (DoSort)
     clang_sortCodeCompletionResults(Results->Results, Results->NumResults);
 
@@ -423,63 +691,150 @@ Value toValue(CXCodeCompleteResults *Results, uint64_t Token, bool DoSort,
     ADiagnostics.reserve(NumDiagnostics);
     for (unsigned I = 0; I < NumDiagnostics; ++I) {
       UniqueCXDiagnostic Diag{clang_codeCompleteGetDiagnostic(Results, I)};
-      ADiagnostics.push_back(toValue(Diag, DiagnosticOpts));
+      ADiagnostics.push_back(toValue(Diag, DiagnosticOpts, LTM));
     }
     Diagnostics = std::move(VDiagnostics);
   }
 
-  return Value::dict({{KeyToken, int64_t(Token)},
+  return Value::dict({{KeyToken, LTM.getManagerToken()},
                       {KeyCodeCompleteResults, std::move(VResults)},
                       {KeyCodeCompleteContexts, int64_t(Contexts)},
                       {KeyCodeCompleteContainerKind, int64_t(ContainerKind)},
                       {KeyCodeCompleteContainerIncomplete, bool(Incomplete)},
                       {KeyCodeCompleteContainerUSR, std::move(VUSR)},
                       {KeyCodeCompleteObjCSelector, std::move(VObjCSelector)},
-                      {KeyCodeCompleteDiagnostics, std::move(Diagnostics)}});
+                      {KeyDiagnostics, std::move(Diagnostics)}});
 }
 
 } // end anonymous namespace
 
 namespace {
 
+/// IndexingStatus ::= {
+///   key.token: int64,
+///   key.indexing.status: int64,
+///   key.error_code: int64 (Optional),
+///   key.diagnostics: [CXDiagnostic] (Optional),
+///   key.file: CXFile (Optional),
+///   key.indexing.included_file_info: CXIdxIncludedFileInfo (Optional),
+///   key.indexing.imported_ast_file_info: CXIdxImportedASTFileInfo (Optional),
+///   key.indexing.decl_info: CXIdxDeclInfo (Optional),
+///   key.indexing.entity_ref_info: CXIdxEntityRefInfo (Optional)
+/// }
+
 int handleIndexerAbortQueryEvent(CXClientData CD, void *) {
-  return -1 /* abort! */;
+  auto *Ctx = reinterpret_cast<IndexingContext *>(CD);
+  Ctx->WorkerResponse = Value::dict(
+      {{KeyIndexingStatus, int64_t(IndexingStatus::AbortQueryEvent)}});
+  Value ClientResp = Ctx->awaitManagerResponse();
+  bool AbortQuery = ClientResp.getBool();
+  return AbortQuery;
 }
 
 void handleIndexerDiagnosticEvent(CXClientData CD, CXDiagnosticSet DS, void *) {
+  auto *Ctx = reinterpret_cast<IndexingContext *>(CD);
+  if (!Ctx->DoDiagnostics) {
+    assert(Ctx->WorkerResponse.isNull() &&
+           "Indexing context has invalid response");
+    return;
+  }
+
+  auto Diagnostics = toDiagnosticsSetValue(DS, Ctx->DiagnosticOpts,
+                                           Ctx->getLocTokenManager());
+  Ctx->WorkerResponse = Value::dict(
+      {{KeyIndexingStatus, int64_t(IndexingStatus::DiagnosticsEvent)},
+       {KeyDiagnostics, std::move(Diagnostics)}});
+  Ctx->awaitManagerResponse();
 }
 
 CXIdxClientFile handleIndexerEnteredMainFileEvent(CXClientData CD,
                                                   CXFile MainFile, void *) {
-  return nullptr;
+  auto *Ctx = reinterpret_cast<IndexingContext *>(CD);
+  Ctx->WorkerResponse = Value::dict(
+      {{KeyIndexingStatus, int64_t(IndexingStatus::MainFileEvent)},
+       {KeyFile, toFileValue(MainFile, Ctx->getLocTokenManager())}});
+  Value ClientResp = Ctx->awaitManagerResponse();
+  int64_t ClientFile = ClientResp.getInt64();
+  return (void *)ClientFile;
 }
 
 CXIdxClientFile handleIndexerPPIncludeEvent(CXClientData CD,
                                             const CXIdxIncludedFileInfo *IFI) {
-  return nullptr;
+  auto *Ctx = reinterpret_cast<IndexingContext *>(CD);
+  Ctx->WorkerResponse =
+      Value::dict({{KeyIndexingStatus, int64_t(IndexingStatus::PPIncludeEvent)},
+                   {KeyIdxIncludedFileInfo,
+                    toIncludedFileInfoValue(IFI, Ctx->getLocTokenManager())}});
+  Value ClientResp = Ctx->awaitManagerResponse();
+  int64_t ClientFile = ClientResp.getInt64();
+  return (void *)ClientFile;
 }
 
 CXIdxClientASTFile
 handleIndexerImportedASTEvent(CXClientData CD,
                               const CXIdxImportedASTFileInfo *IAFI) {
-  return nullptr;
+  auto *Ctx = reinterpret_cast<IndexingContext *>(CD);
+  Ctx->WorkerResponse = Value::dict(
+      {{KeyIndexingStatus, int64_t(IndexingStatus::ImportedASTEvent)},
+       {KeyIdxImportedASTFileInfo,
+        toImportedASTFileInfoValue(IAFI, Ctx->getLocTokenManager())}});
+  Value ClientResp = Ctx->awaitManagerResponse();
+  int64_t ClientASTFile = ClientResp.getInt64();
+  return (void *)ClientASTFile;
 }
 
 CXIdxClientContainer handleIndexerStartedTUEvent(CXClientData CD, void *) {
-  return nullptr;
+  auto *Ctx = reinterpret_cast<IndexingContext *>(CD);
+  Ctx->WorkerResponse = Value::dict(
+      {{KeyIndexingStatus, int64_t(IndexingStatus::StartedTUEvent)}});
+  Value ClientResp = Ctx->awaitManagerResponse();
+  int64_t ClientContainer = ClientResp.getInt64();
+  return (void *)ClientContainer;
 }
 
-void handleIndexerDeclarationEvent(CXClientData CD, const CXIdxDeclInfo *IDI) {}
+void handleIndexerDeclarationEvent(CXClientData CD, const CXIdxDeclInfo *IDI) {
+  auto *Ctx = reinterpret_cast<IndexingContext *>(CD);
+  Ctx->WorkerResponse = Value::dict(
+      {{KeyIndexingStatus, int64_t(IndexingStatus::DeclarationEvent)},
+       {KeyIdxDeclInfo, toValue(IDI, Ctx->getLocTokenManager())}});
+  Ctx->awaitManagerResponse();
+}
 
 void handleIndexerEntityReferenceEvent(CXClientData CD,
-                                       const CXIdxEntityRefInfo *ERI) {}
+                                       const CXIdxEntityRefInfo *ERI) {
+  auto *Ctx = reinterpret_cast<IndexingContext *>(CD);
+  Ctx->WorkerResponse = Value::dict(
+      {{KeyIndexingStatus, int64_t(IndexingStatus::EntityReferenceEvent)},
+       {KeyIdxEntityRefInfo, toValue(ERI, Ctx->getLocTokenManager())}});
+  Ctx->awaitManagerResponse();
+}
+
+// Note: Every callback is required to clear Ctx->WorkerResponse.
+static IndexerCallbacks IndexerCBs = {
+    handleIndexerAbortQueryEvent,      handleIndexerDiagnosticEvent,
+    handleIndexerEnteredMainFileEvent, handleIndexerPPIncludeEvent,
+    handleIndexerImportedASTEvent,     handleIndexerStartedTUEvent,
+    handleIndexerDeclarationEvent,     handleIndexerEntityReferenceEvent};
+
+void driveIndexingSession(IndexingContext *Ctx, CXIndexAction Act,
+                          unsigned IndexingOpts) {
+  Ctx->WorkerGuard = LockGuard(Ctx->SessionLock);
+  auto Err = (CXErrorCode)clang_indexSourceFile(
+      Act, (CXClientData)Ctx, &IndexerCBs, sizeof(IndexerCBs), IndexingOpts,
+      nullptr, Ctx->CmdArgs.data(), Ctx->CmdArgs.size(),
+      Ctx->UnsavedFiles.data(), Ctx->UnsavedFiles.size(), /*OutTU=*/nullptr,
+      Ctx->ParseOpts);
+  Ctx->WorkerResponse =
+      Value::dict({{KeyIndexingStatus, int64_t(IndexingStatus::Done)},
+                   {KeyError, makeLibclangFailedError(Err)}});
+  Ctx->ContinueSessionCond.notify_one();
+  Ctx->WorkerGuard.unlock();
+}
 
 } // end anonymous namespace
 
 class ResponseBuilder {
-  /// State needed to handle requests.
   ServiceState *State;
-  LiveData &LD;
 
   /// State needed to describe a request.
   Value::Dict &ClientDict;
@@ -487,7 +842,10 @@ class ResponseBuilder {
   CSUID RequestUID;
 
   /// Parameters needed by various handlers.
-  uint64_t ReqToken;
+  int64_t ReqToken;
+  int64_t ReqManager;
+  int64_t ReqLHSToken;
+  int64_t ReqRHSToken;
   StringRef Filename;
   uint64_t LineOffset;
   uint64_t ColOffset;
@@ -498,7 +856,7 @@ class ResponseBuilder {
   CXGlobalOptFlags IndexOpts;
   unsigned IndexExcludeDeclsFromPCH;
   unsigned IndexDiagnostics;
-  CXIndexOptFlags IndexSourceOpts;
+  CXIndexOptFlags IndexingOpts;
   bool DoDiagnostics;
   CXDiagnosticDisplayOptions DiagnosticOpts;
   unsigned ParseOpts;
@@ -511,8 +869,32 @@ class ResponseBuilder {
   bool setKeyToken() {
     Value &ClientKeyToken = ClientDict[KeyToken];
     if (ClientKeyToken.isInt64())
-      ReqToken = (uint64_t)ClientKeyToken.getInt64();
+      ReqToken = ClientKeyToken.getInt64();
     return ClientKeyToken.isInt64();
+  }
+
+  /// Set ReqManager.
+  bool setKeyManager() {
+    Value &ClientKeyManager = ClientDict[KeyManager];
+    if (ClientKeyManager.isInt64())
+      ReqManager = ClientKeyManager.getInt64();
+    return ClientKeyManager.isInt64();
+  }
+
+  /// Set ReqLHSToken.
+  bool setKeyLHSToken() {
+    Value &ClientKeyLHSToken = ClientDict[KeyLHSToken];
+    if (ClientKeyLHSToken.isInt64())
+      ReqLHSToken = ClientKeyLHSToken.getInt64();
+    return ClientKeyLHSToken.isInt64();
+  }
+
+  /// Set ReqRHSToken.
+  bool setKeyRHSToken() {
+    Value &ClientKeyRHSToken = ClientDict[KeyRHSToken];
+    if (ClientKeyRHSToken.isInt64())
+      ReqRHSToken = ClientKeyRHSToken.getInt64();
+    return ClientKeyRHSToken.isInt64();
   }
 
   /// Set Filename.
@@ -578,12 +960,11 @@ class ResponseBuilder {
   }
 
   /// Set the parameters needed to control indexing options.
-  void setKeyIndexSourceOptions() {
-    Value &ClientKeyIndexSourceOptions = ClientDict[KeyIndexSourceOptions];
-    IndexSourceOpts =
-        ClientKeyIndexSourceOptions.isInt64()
-            ? (CXIndexOptFlags)ClientKeyIndexSourceOptions.getInt64()
-            : CXIndexOpt_None;
+  void setKeyIndexingOptions() {
+    Value &ClientKeyIndexingOptions = ClientDict[KeyIndexingOptions];
+    IndexingOpts = ClientKeyIndexingOptions.isInt64()
+                       ? (CXIndexOptFlags)ClientKeyIndexingOptions.getInt64()
+                       : CXIndexOpt_None;
   }
 
   /// Set the parameters needed to generate (or skip) diagnostics.
@@ -657,27 +1038,69 @@ class ResponseBuilder {
                         {KeyVersionMinor, int64_t(CINDEX_VERSION_MINOR)}});
   }
 
+  Value handleRequestFileComparison() {
+    /// RequestFileComparison ::= {
+    ///   key.lhs_token: int64,
+    ///   key.rhs_token: int64
+    /// }
+    if (!setKeyLHSToken() || !setKeyRHSToken())
+      return makeRequestInvalidError("Expected: two tokens");
+
+    CXFile LHS, RHS;
+    {
+      LockGuard Guard{State->LocTokensLock};
+      LHS = State->LocTokens[ReqLHSToken].File;
+      RHS = State->LocTokens[ReqRHSToken].File;
+    }
+
+    return {bool(clang_File_isEqual(LHS, RHS))};
+  }
+
+  Value handleRequestSourceLocationSpelling() {
+    /// RequestSourceLocationSpelling ::= {
+    ///   key.token: int64,
+    ///   key.manager: int64
+    /// }
+    if (!setKeyToken() || !setKeyManager())
+      return makeRequestInvalidError("Expected: token and manager");
+
+    CXSourceLocation Loc;
+    {
+      LockGuard Guard{State->LocTokensLock};
+      assert(State->LocTokens.count(ReqToken) && "Bad token");
+      Loc = State->LocTokens[ReqToken].SLoc;
+    }
+
+    LocTokenManager *LTM;
+    {
+      LockGuard Guard{State->CtxsLock};
+      assert(State->Ctxs.count(ReqManager) && "Bad manager");
+      LTM = &State->Ctxs[ReqManager]->getLocTokenManager();
+    }
+
+    return toSpellingLocationValue(Loc, *LTM);
+  }
+
   // FIXME: Add support for code completion with existing TU's. Do this by
   // requiring clients to pass in a TU token.
   Value handleRequestCodeComplete() {
     if (RequestUID == RequestCodeCompleteOpen) {
       if (!setKeyName() || !setKeyLineOffset() || !setKeyColOffset())
         return makeRequestInvalidError("Expected: CodeComplete init");
-    } else if (RequestUID == RequestCodeComplete ||
-               RequestUID == RequestCodeCompleteUpdate) {
+    } else if (RequestUID == RequestCodeCompleteUpdate) {
       if (!setKeyLineOffset() || !setKeyColOffset() || !setKeyToken())
         return makeRequestInvalidError("Expected: CodeComplete request");
-    } else if (RequestUID == RequestCodeCompleteClose) {
-      if (!setKeyToken())
-        return makeRequestInvalidError("Expected: CodeComplete token");
     }
 
     if (RequestUID == RequestCodeCompleteClose) {
       /// RequestCodeCompleteClose ::= { key.token: int64 }
+      if (!setKeyToken())
+        return makeRequestInvalidError("Expected: CodeComplete token");
+
       {
-        LockGuard Guard{State->CodeCompletionCtxsLock};
-        State->CodeCompletionCtxs.erase(ReqToken);
-        State->CodeCompletionTokenGen.recycleToken(ReqToken);
+        LockGuard Guard{State->CtxsLock};
+        State->Ctxs.erase(ReqToken);
+        State->CtxTokenGen.recycleToken(ReqToken);
       }
       return {};
     }
@@ -690,20 +1113,20 @@ class ResponseBuilder {
 
     CodeCompletionContext *Ctx;
     if (RequestUID != RequestCodeCompleteOpen) {
-      LockGuard Guard{State->CodeCompletionCtxsLock};
-      Ctx = State->CodeCompletionCtxs[ReqToken].get();
+      LockGuard Guard{State->CtxsLock};
+      Ctx = static_cast<CodeCompletionContext *>(State->Ctxs[ReqToken].get());
       if (!Ctx)
         return makeRequestInvalidError("No CodeCompletionContext");
     }
 
     if (RequestUID == RequestCodeCompleteOpen) {
       /// RequestCodeCompleteOpen ::= {
-      ///   key.name: string,
-      ///   key.line: int64,
-      ///   key.column: int64,
+      ///   key.loc.name: string,
+      ///   key.loc.line: int64,
+      ///   key.loc.column: int64,
       ///   key.sort: bool (Optional),
       ///   key.cmd.args: [string] (Optional),
-      ///   key.files: [{ key.name: string, key.buffer: data }] (Optional),
+      ///   key.files: [{ key.loc.name: string, key.buffer: data }] (Optional),
       ///   key.parse.options: int64 (Optional),
       ///   key.codecomplete.options: int64 (Optional),
       ///   key.index.options : int64 (Optional),
@@ -729,46 +1152,30 @@ class ResponseBuilder {
       if (Err != CXError_Success)
         return makeLibclangFailedError(Err);
 
-      LD.CodeCompleteResults = {clang_codeCompleteAt(
+      UniqueCXCodeCompleteResultsPtr Results{clang_codeCompleteAt(
           TU, Filename.data(), LineOffset, ColOffset, UnsavedFiles.data(),
           UnsavedFiles.size(), CodeCompleteOpts)};
 
-      auto NewCtx = make_unique<CodeCompletionContext>(std::move(Idx));
       {
-        LockGuard Guard{State->CodeCompletionCtxsLock};
-        ReqToken = State->CodeCompletionTokenGen.getUniqueToken();
-        State->CodeCompletionCtxs[ReqToken] = std::move(NewCtx);
+        LockGuard Guard{State->CtxsLock};
+        ReqToken = State->CtxTokenGen.getUniqueToken();
+        auto LTM = State->createLocTokenManager(ReqToken);
+        auto NewCtx = make_unique<CodeCompletionContext>(
+            std::move(LTM), std::move(Idx), std::move(Results));
+        Ctx = NewCtx.get();
+        State->Ctxs[ReqToken] = std::move(NewCtx);
       }
 
-      return toValue(LD.CodeCompleteResults, ReqToken, DoSort, IncludeBrief,
-                     DoDiagnostics, DiagnosticOpts);
-
-    } else if (RequestUID == RequestCodeComplete) {
-      /// RequestCodeComplete ::= {
-      ///   key.token: int64,
-      ///   key.line: int64,
-      ///   key.column: int64,
-      ///   key.sort: bool (Optional),
-      ///   key.files: [{ key.name: string, key.buffer: data }] (Optional),
-      ///   key.parse.options: int64 (Optional),
-      ///   key.codecomplete.options: int64 (Optional),
-      ///   key.diagnostics.enabled : bool (Optional),
-      ///   key.diagnostics.options : int64 (Optional)
-      /// }
-      LD.CodeCompleteResults = {clang_codeCompleteAt(
-          Ctx->Idx.getTU(), Filename.data(), LineOffset, ColOffset,
-          UnsavedFiles.data(), UnsavedFiles.size(), CodeCompleteOpts)};
-
-      return toValue(LD.CodeCompleteResults, ReqToken, DoSort, IncludeBrief,
-                     DoDiagnostics, DiagnosticOpts);
+      return toValue(Ctx->Results, DoSort, IncludeBrief, DoDiagnostics,
+                     DiagnosticOpts, Ctx->getLocTokenManager());
 
     } else if (RequestUID == RequestCodeCompleteUpdate) {
       /// RequestCodeCompleteUpdate ::= {
       ///   key.token: int64,
-      ///   key.line: int64,
-      ///   key.column: int64,
+      ///   key.loc.line: int64,
+      ///   key.loc.column: int64,
       ///   key.sort: bool (Optional),
-      ///   key.files: [{ key.name: string, key.buffer: data }] (Optional),
+      ///   key.files: [{ key.loc.name: string, key.buffer: data }] (Optional),
       ///   key.parse.options: int64 (Optional),
       ///   key.codecomplete.options: int64 (Optional),
       ///   key.diagnostics.enabled : bool (Optional),
@@ -781,104 +1188,149 @@ class ResponseBuilder {
       if (Err)
         return makeRequestFailedError("Couldn't reparse TU");
 
-      LD.CodeCompleteResults = {clang_codeCompleteAt(
+      UniqueCXCodeCompleteResultsPtr Results{clang_codeCompleteAt(
           Ctx->Idx.getTU(), Filename.data(), LineOffset, ColOffset,
           UnsavedFiles.data(), UnsavedFiles.size(), CodeCompleteOpts)};
 
-      return toValue(LD.CodeCompleteResults, ReqToken, DoSort, IncludeBrief,
-                     DoDiagnostics, DiagnosticOpts);
+      Ctx->Results = std::move(Results);
+
+      return toValue(Ctx->Results, DoSort, IncludeBrief, DoDiagnostics,
+                     DiagnosticOpts, Ctx->getLocTokenManager());
     }
 
     return makeRequestInvalidError("Unknown code complete request");
   }
 
-  Value handleRequestIndexSource() {
-    /// RequestIndexSource ::= {
-    ///   key.name: string,
-    ///   key.index.source.options: int64 (Optional),
-    ///   key.cmd.args: [string] (Optional),
-    ///   key.files: [{ key.name: string, key.buffer: data }] (Optional),
-    ///   key.parse.options: int64 (Optional),
-    ///   key.index.options : int64 (Optional),
-    ///   key.index.exclude_decls_pch : bool (Optional),
-    ///   key.index.diagnostics : bool (Optional),
-    /// }
-    if (!setKeyName())
-      return makeRequestInvalidError("Expected: IndexSource request");
+  Value handleRequestIndex() {
+    if (RequestUID == RequestIndex) {
+      /// RequestIndex ::= {
+      ///   key.loc.name: string,
+      ///   key.index.source.options: int64 (Optional),
+      ///   key.cmd.args: [string] (Optional),
+      ///   key.files: [{ key.loc.name: string, key.buffer: data }] (Optional),
+      ///   key.parse.options: int64 (Optional),
+      ///   key.index.options : int64 (Optional),
+      ///   key.index.exclude_decls_pch : bool (Optional),
+      ///   key.index.diagnostics : bool (Optional),
+      ///   key.diagnostics.enabled : bool (Optional),
+      ///   key.diagnostics.options : int64 (Optional)
+      /// }
+      if (!setKeyName())
+        return makeRequestInvalidError("Expected: Indexing request");
 
-    setKeyIndexSourceOptions();
-    setKeyCmdArgs();
-    setKeyFiles();
-    setParseParameters();
+      setKeyIndexingOptions();
+      setKeyCmdArgs();
+      setKeyFiles();
+      setParseParameters();
+      setDiagnosticsParameters();
 
-    SafeCXIndex Idx = createSafeCXIndex();
-    UniqueCXIndexAction &Act = Idx.createIndexAction();
+      SafeCXIndex Idx = createSafeCXIndex();
+      UniqueCXIndexAction &Act = Idx.createIndexAction();
 
-    auto NewCtx = make_unique<IndexingContext>(State, std::move(Idx));
-    {
-      LockGuard Guard{State->IndexingCtxsLock};
-      ReqToken = State->IndexingTokenGen.getUniqueToken();
-      State->IndexingCtxs[ReqToken] = std::move(NewCtx);
+      IndexingContext *Ctx;
+      {
+        LockGuard Guard{State->CtxsLock};
+        ReqToken = State->CtxTokenGen.getUniqueToken();
+        auto LTM = State->createLocTokenManager(ReqToken);
+        auto NewCtx = make_unique<IndexingContext>(
+            std::move(LTM), std::move(Idx), std::move(ClientDict[KeyFiles]),
+            std::move(CmdArgs), std::move(UnsavedFiles), DoDiagnostics,
+            DiagnosticOpts, ParseOpts);
+        Ctx = NewCtx.get();
+        State->Ctxs[ReqToken] = std::move(NewCtx);
+      }
+
+      LockGuard Guard{Ctx->SessionLock};
+      std::thread Worker{driveIndexingSession, Ctx, (CXIndexAction)Act,
+                         IndexingOpts};
+      Ctx->Worker = std::move(Worker);
+
+      return Ctx->awaitWorkerResponse(Guard);
+
+    } else if (RequestUID == RequestIndexContinue) {
+      /// RequestIndexContinue ::= {
+      ///   key.token: int64,
+      ///   key.indexing.do_abort: bool (Optional),
+      ///   key.indexing.client_file: int64 (Optional),
+      ///   key.indexing.client_ast_file: int64 (Optional),
+      ///   key.indexing.client_container: int64 (Optional)
+      /// }
+      if (!setKeyToken())
+        return makeRequestInvalidError("Expected: Indexing token");
+
+      IndexingContext *Ctx;
+      {
+        LockGuard Guard{State->CtxsLock};
+        Ctx = static_cast<IndexingContext *>(State->Ctxs[ReqToken].get());
+        if (!Ctx)
+          return makeRequestInvalidError("No indexing context");
+      }
+
+      if (ClientDict[KeyIndexingDoAbort].isBool())
+        Ctx->ManagerResponse = std::move(ClientDict[KeyIndexingDoAbort]);
+      else if (ClientDict[KeyIdxClientFile].isInt64())
+        Ctx->ManagerResponse = std::move(ClientDict[KeyIdxClientFile]);
+      else if (ClientDict[KeyIdxClientASTFile].isInt64())
+        Ctx->ManagerResponse = std::move(ClientDict[KeyIdxClientASTFile]);
+      else if (ClientDict[KeyIdxClientContainer].isInt64())
+        Ctx->ManagerResponse = std::move(ClientDict[KeyIdxClientContainer]);
+      else
+        Ctx->ManagerResponse = Value(true);
+
+      LockGuard Guard{Ctx->SessionLock};
+      return Ctx->awaitWorkerResponse(Guard);
+
+    } else if (RequestUID == RequestIndexClose) {
+      /// RequestIndexClose ::= {
+      ///   key.token: int64
+      /// }
+      if (!setKeyToken())
+        return makeRequestInvalidError("Expected: Indexing token");
+
+      {
+        LockGuard Guard{State->CtxsLock};
+        State->Ctxs.erase(ReqToken);
+        State->CtxTokenGen.recycleToken(ReqToken);
+      }
+      return {};
     }
 
-    static IndexerCallbacks IndexerCBs = {
-      // abortQuery
-      handleIndexerAbortQueryEvent,
-
-      // diagnostic
-      handleIndexerDiagnosticEvent,
-
-      // enteredMainFile
-      handleIndexerEnteredMainFileEvent,
-
-      // ppIncludedFile
-      handleIndexerPPIncludeEvent,
-
-      // importedASTFile
-      handleIndexerImportedASTEvent,
-
-      // startedTranslationUnit
-      handleIndexerStartedTUEvent,
-
-      // indexDeclaration
-      handleIndexerDeclarationEvent,
-
-      // indexEntityReference
-      handleIndexerEntityReferenceEvent
-    };
-
-    CXErrorCode Err;
-    Err = (CXErrorCode)clang_indexSourceFile(
-        Act, (CXClientData)NewCtx.get(), &IndexerCBs, sizeof(IndexerCBs),
-        IndexSourceOpts, Filename.data(), CmdArgs.data(), CmdArgs.size(),
-        UnsavedFiles.data(), UnsavedFiles.size(), nullptr, ParseOpts);
-    if (Err != CXError_Success)
-      return makeLibclangFailedError(Err);
-
-    return makeRequestFailedError("Indexing not supported");
+    return makeRequestInvalidError("Unknown indexing request");
   }
 
 public:
-  ResponseBuilder(ServiceState *State, LiveData &LD, Value::Dict &ClientDict,
+  ResponseBuilder(ServiceState *State, Value::Dict &ClientDict,
                   StringRef RequestStr, CSUID RequestUID)
-      : State(State), LD(LD), ClientDict(ClientDict), RequestStr(RequestStr),
+      : State(State), ClientDict(ClientDict), RequestStr(RequestStr),
         RequestUID(RequestUID) {}
 
   Value build() {
+    /// FIXME: Check the codegen for this switch; optimize it.
+
     if (RequestUID == RequestVersion)
       return handleRequestVersion();
 
-    if (RequestStr.startswith(RequestCodeComplete.getName()))
+    if (RequestUID == RequestFileComparison)
+      return handleRequestFileComparison();
+
+    if (RequestUID == RequestSourceLocationSpelling)
+      return handleRequestSourceLocationSpelling();
+
+    if (RequestUID == RequestCodeCompleteOpen ||
+        RequestUID == RequestCodeCompleteUpdate ||
+        RequestUID == RequestCodeCompleteClose)
       return handleRequestCodeComplete();
 
-    if (RequestUID == RequestIndexSource)
-      return handleRequestIndexSource();
+    if (RequestUID == RequestIndex ||
+        RequestUID == RequestIndexContinue ||
+        RequestUID == RequestIndexClose)
+      return handleRequestIndex();
 
     return makeRequestInvalidError("Unknown request");
   }
 };
 
-Value Service::handle(Value Request, LiveData &LD) {
+Value Service::handle(Value Request) {
   log("Handling incoming request:");
   log(Request);
 
@@ -896,27 +1348,8 @@ Value Service::handle(Value Request, LiveData &LD) {
 
   CSUID RequestUID{RequestStr};
 
-  ResponseBuilder RB{State, LD, ClientDict, RequestStr, RequestUID};
+  ResponseBuilder RB{State, ClientDict, RequestStr, RequestUID};
   return RB.build();
-}
-
-ErrorKind Service::getResponseErrorKind(Value &Response) {
-  if (!Response.isDataLike())
-    return ErrorKind::NoError;
-
-  auto EK = ErrorKind(Response.getData()[0]);
-  if (EK == ErrorKind::RequestInvalid) return EK;
-  if (EK == ErrorKind::RequestFailed) return EK;
-  if (EK == ErrorKind::RequestInterrupted) return EK;
-  if (EK == ErrorKind::RequestCancelled) return EK;
-  if (EK == ErrorKind::Fatal) return EK;
-  return ErrorKind::NoError;
-}
-
-StringRef Service::getResponseErrorString(Value &Response) {
-  if (getResponseErrorKind(Response) == ErrorKind::NoError)
-    return "NoError";
-  return Response.getDataRef().substr(1);
 }
 
 void Service::log(Value &V) {

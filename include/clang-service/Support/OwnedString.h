@@ -8,9 +8,11 @@ namespace ClangService {
 
 class OwnedString {
 public:
-  /// Create an owned string by assuming \p S points to live, null-terminated
-  /// data. N.b that this is fundamentally unsafe. InlineOwnedString should be
-  /// used if at all possible.
+  /// OwnedString guarantees that a pointer to stringy data is alive.
+  ///
+  /// Note: Using this container directly is unsafe. It's meant to be derived,
+  /// so that the owner of the stringy data can be specified explicitly.
+
   explicit OwnedString(llvm::StringRef S) : Str(S) {}
 
   virtual ~OwnedString() {}
@@ -34,6 +36,9 @@ protected:
 };
 
 class InlineOwnedString : public OwnedString {
+  /// An InlineOwnedString is formed by allocating space for stringy data along
+  /// with space for the OwnedString base.
+
   InlineOwnedString(llvm::StringRef S)
       : OwnedString({getInlineData(), S.size()}) {
     auto dropQualifiers = [](const char *P) {
@@ -53,7 +58,6 @@ class InlineOwnedString : public OwnedString {
   }
 
 public:
-  /// Create an owned string by copying \p S into a buffer.
   static std::unique_ptr<InlineOwnedString> create(llvm::StringRef S) {
     auto *Buf = ::operator new(sizeof(OwnedString) + S.size() + 1);
     new (Buf) InlineOwnedString(S);
@@ -61,7 +65,6 @@ public:
     return std::unique_ptr<InlineOwnedString>(OS);
   }
 
-  /// Create an empty owned string of length \p Length.
   static std::unique_ptr<InlineOwnedString> create(unsigned Length) {
     auto *Buf = ::operator new(sizeof(OwnedString) + Length + 1);
     new (Buf) InlineOwnedString(Length);
@@ -73,6 +76,8 @@ public:
 };
 
 class raw_inlinestring_ostream : public llvm::raw_ostream {
+  /// raw_inlinestring_ostream is a raw_ostream backed by an InlineOwnedString.
+
   InlineOwnedString &IOS;
 
   /// See raw_ostream::write_impl.

@@ -1,15 +1,12 @@
 #ifndef LLVM_CLANG_CLANGSERVICE_SERVICE_H
 #define LLVM_CLANG_CLANGSERVICE_SERVICE_H
 
-#include "clang-service/Messaging.h"
 #include "clang-service/Support/Value.h"
 
-#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 
 namespace ClangService {
 
-struct LiveData;
 struct ServiceState;
 
 class Service {
@@ -20,11 +17,7 @@ public:
 
   virtual void serve();
 
-  Value handle(Value Request, LiveData &LD);
-
-  static ErrorKind getResponseErrorKind(Value &Response);
-
-  static llvm::StringRef getResponseErrorString(Value &Response);
+  Value handle(Value Request);
 
 private:
   ServiceState *State;

@@ -10,30 +10,43 @@ namespace Libclang {
 
 template<typename T, void (*Destructor)(T)>
 class CXUnique {
+  /// CXUnique makes it easy to use RAII and ownership semantics with objects
+  /// acquired from libclang.
+
   T Obj;
+  bool Alive;
 
 public:
-  CXUnique(T Obj) : Obj(Obj) {}
+  CXUnique(T Obj) : Obj(Obj), Alive(true) {}
 
-  ~CXUnique() { Destructor(Obj); }
+  ~CXUnique() {
+    if (Alive)
+      Destructor(Obj);
+    Alive = false;
+  }
+
+  CXUnique(const CXUnique &) = delete;
+
+  CXUnique &operator=(const CXUnique &) = delete;
+
+  CXUnique(CXUnique &&Other) : Obj(Other.Obj), Alive(Other.Alive) {
+    Other.Alive = false;
+  }
+
+  CXUnique &operator=(CXUnique &&Other) {
+    if (Alive)
+      Destructor(Obj);
+    Obj = Other.Obj;
+    Alive = Other.Alive;
+    Other.Alive = false;
+    return *this;
+  }
 
   operator T() const { return Obj; }
 
   T operator->() const { return Obj; }
 
   T *storage() { return &Obj; }
-
-  CXUnique(const CXUnique &) = delete;
-
-  CXUnique &operator=(const CXUnique &) = delete;
-
-  CXUnique(CXUnique &&Other) { operator=(std::move(Other)); }
-
-  CXUnique &operator=(CXUnique &&Other) {
-    Obj = Other.Obj;
-    Other.Obj = {};
-    return *this;
-  }
 };
 
 using UniqueCXIndex = CXUnique<CXIndex, clang_disposeIndex>;
@@ -51,9 +64,12 @@ using UniqueCXString = CXUnique<CXString, clang_disposeString>;
 using UniqueCXDiagnostic = CXUnique<CXDiagnostic, clang_disposeDiagnostic>;
 
 class SafeCXIndex : public UniqueCXIndex {
-  /// A CXIndex object cannot be freed before all of its associated
-  /// objects are freed. Enforce this by storing these objects within
-  /// a container index.
+  /// SafeCXIndex manages translation units and indexing sessions.
+  ///
+  /// Objects associated with a CXIndex must be destroyed before the CXIndex
+  /// itself is destroyed. One simple way to guarantee this is to designate
+  /// SafeCXIndex as the unique owner of these objects.
+
   llvm::SmallVector<UniqueCXTranslationUnit, 4> TUs;
   llvm::SmallVector<UniqueCXIndexAction, 4> Actions;
 
@@ -96,7 +112,7 @@ class OwnedCXString : public ClangService::OwnedString {
   UniqueCXString Str;
 
 public:
-  // FIXME: libclang should provide an O(1) clang_getStringLength() API!
+  // FIXME: libclang should provide an O(1) clang_getStringLength() API.
   explicit OwnedCXString(UniqueCXString S)
       : ClangService::OwnedString({clang_getCString(S)}), Str(std::move(S)) {}
 

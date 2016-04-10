@@ -42,8 +42,8 @@ struct CodeCompletionTest : ::testing::Test {
     EXPECT_TRUE(D[KeyCodeCompleteContainerIncomplete].isBool());
     EXPECT_TRUE(isOptionalString(D[KeyCodeCompleteContainerUSR]));
     EXPECT_TRUE(isOptionalString(D[KeyCodeCompleteObjCSelector]));
-    if (D[KeyCodeCompleteDiagnostics].isArray())
-      for (auto &VDiagnostic : D[KeyCodeCompleteDiagnostics].getArray())
+    if (D[KeyDiagnostics].isArray())
+      for (auto &VDiagnostic : D[KeyDiagnostics].getArray())
         isCXDiagnostic(VDiagnostic);
   }
 
@@ -86,39 +86,37 @@ struct CodeCompletionTest : ::testing::Test {
 
   void isCXSourceLocation(Value &V) {
     auto &D = V.getDict();
-    EXPECT_TRUE(D[KeyLocationInSysHeader].isBool());
-    EXPECT_TRUE(D[KeyLocationFromMainFile].isBool());
-    isCXFile(D[KeyLocationExpansionFile]);
-    EXPECT_TRUE(D[KeyLocationExpansionLineOffset].isInt64());
-    EXPECT_TRUE(D[KeyLocationExpansionColOffset].isInt64());
-    EXPECT_TRUE(D[KeyLocationExpansionOffset].isInt64());
-    EXPECT_TRUE(D[KeyLocationPresumedFilename].isStringLike());
-    EXPECT_TRUE(D[KeyLocationPresumedLineOffset].isInt64());
-    EXPECT_TRUE(D[KeyLocationPresumedColOffset].isInt64());
-    isCXFile(D[KeyLocationInstantiationFile]);
-    EXPECT_TRUE(D[KeyLocationInstantiationLineOffset].isInt64());
-    EXPECT_TRUE(D[KeyLocationInstantiationColOffset].isInt64());
-    EXPECT_TRUE(D[KeyLocationInstantiationOffset].isInt64());
-    isCXFile(D[KeyLocationSpellingFile]);
-    EXPECT_TRUE(D[KeyLocationSpellingLineOffset].isInt64());
-    EXPECT_TRUE(D[KeyLocationSpellingColOffset].isInt64());
-    EXPECT_TRUE(D[KeyLocationSpellingOffset].isInt64());
-    isCXFile(D[KeyLocationFileFile]);
-    EXPECT_TRUE(D[KeyLocationFileLineOffset].isInt64());
-    EXPECT_TRUE(D[KeyLocationFileColOffset].isInt64());
-    EXPECT_TRUE(D[KeyLocationFileOffset].isInt64());
+    EXPECT_TRUE(D[KeyToken].isInt64());
+    EXPECT_TRUE(D[KeyManager].isInt64());
+
+    Value Spelling = C->request(
+        Value::dict({{KeyRequest, RequestSourceLocationSpelling.c_str()},
+                     {KeyToken, D[KeyToken].getInt64()},
+                     {KeyManager, D[KeyManager].getInt64()}}));
+
+    auto &SD = Spelling.getDict();
+    isCXFile(SD[KeyFile]);
+    EXPECT_TRUE(SD[KeyLineOffset].isInt64());
+    EXPECT_TRUE(SD[KeyColOffset].isInt64());
+    EXPECT_TRUE(SD[KeyOffset].isInt64());
+  }
+
+  void isCXFile(Value &V) {
+    auto &D = V.getDict();
+    EXPECT_TRUE(D[KeyToken].isInt64());
+    EXPECT_TRUE(D[KeyManager].isInt64());
+
+    Value Comparison =
+        C->request(Value::dict({{KeyRequest, RequestFileComparison.c_str()},
+                                {KeyLHSToken, D[KeyToken].getInt64()},
+                                {KeyRHSToken, D[KeyToken].getInt64()}}));
+    EXPECT_TRUE(Comparison.getBool());
   }
 
   void isCXSourceRange(Value &V) {
     auto &D = V.getDict();
     isCXSourceLocation(D[KeyRangeStart]);
     isCXSourceLocation(D[KeyRangeEnd]);
-  }
-
-  void isCXFile(Value &V) {
-    auto &D = V.getDict();
-    EXPECT_TRUE(D[KeyLocationFileName].isStringLike());
-    EXPECT_TRUE(D[KeyLocationFileUID].isDataLike());
   }
 };
 
@@ -186,7 +184,7 @@ TEST_F(CodeCompletionTest, Diagnostics) {
                               {KeyDiagnosticsEnabled, true}}));
 
   int64_t Token = OpenResp.getDict()[KeyToken].getInt64();
-  Value &Diagnostics = OpenResp.getDict()[KeyCodeCompleteDiagnostics];
+  Value &Diagnostics = OpenResp.getDict()[KeyDiagnostics];
   EXPECT_TRUE(Diagnostics.getArray().size() > 0);
 
   isCXCodeCompleteResults(OpenResp);
