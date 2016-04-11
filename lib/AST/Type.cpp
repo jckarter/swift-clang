@@ -2655,6 +2655,7 @@ StringRef FunctionType::getNameForCallConv(CallingConv CC) {
   case CC_IntelOclBicc: return "intel_ocl_bicc";
   case CC_SpirFunction: return "spir_function";
   case CC_SpirKernel: return "spir_kernel";
+  case CC_Swift: return "swiftcall";
   case CC_PreserveMost: return "preserve_most";
   case CC_PreserveAll: return "preserve_all";
   }
@@ -2673,7 +2674,7 @@ FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
       NumParams(params.size()),
       NumExceptions(epi.ExceptionSpec.Exceptions.size()),
       ExceptionSpecType(epi.ExceptionSpec.Type),
-      HasAnyConsumedParams(epi.ConsumedParameters != nullptr),
+      HasExtParameterInfos(epi.ExtParameterInfos != nullptr),
       Variadic(epi.Variadic), HasTrailingReturn(epi.HasTrailingReturn) {
   assert(NumParams == params.size() && "function has too many parameters");
 
@@ -2739,10 +2740,11 @@ FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
     slot[0] = epi.ExceptionSpec.SourceDecl;
   }
 
-  if (epi.ConsumedParameters) {
-    bool *consumedParams = const_cast<bool *>(getConsumedParamsBuffer());
+  if (epi.ExtParameterInfos) {
+    ExtParameterInfo *extParamInfos =
+      const_cast<ExtParameterInfo *>(getExtParameterInfosBuffer());
     for (unsigned i = 0; i != NumParams; ++i)
-      consumedParams[i] = epi.ConsumedParameters[i];
+      extParamInfos[i] = epi.ExtParameterInfos[i];
   }
 }
 
@@ -2862,9 +2864,9 @@ void FunctionProtoType::Profile(llvm::FoldingSetNodeID &ID, QualType Result,
              epi.ExceptionSpec.Type == EST_Unevaluated) {
     ID.AddPointer(epi.ExceptionSpec.SourceDecl->getCanonicalDecl());
   }
-  if (epi.ConsumedParameters) {
+  if (epi.ExtParameterInfos) {
     for (unsigned i = 0; i != NumParams; ++i)
-      ID.AddBoolean(epi.ConsumedParameters[i]);
+      ID.AddInteger(epi.ExtParameterInfos[i].getOpaqueValue());
   }
   epi.ExtInfo.Profile(ID);
   ID.AddBoolean(epi.HasTrailingReturn);
@@ -2996,6 +2998,7 @@ bool AttributedType::isQualifier() const {
   case AttributedType::attr_stdcall:
   case AttributedType::attr_thiscall:
   case AttributedType::attr_pascal:
+  case AttributedType::attr_swiftcall:
   case AttributedType::attr_vectorcall:
   case AttributedType::attr_inteloclbicc:
   case AttributedType::attr_preserve_most:
@@ -3051,6 +3054,7 @@ bool AttributedType::isCallingConv() const {
   case attr_fastcall:
   case attr_stdcall:
   case attr_thiscall:
+  case attr_swiftcall:
   case attr_vectorcall:
   case attr_pascal:
   case attr_ms_abi:
