@@ -3173,6 +3173,26 @@ bool Sema::MatchTwoMethodDeclarations(const ObjCMethodDecl *left,
   return true;
 }
 
+static bool isMethodContextSameForKindofLookup(ObjCMethodDecl *Method,
+                                               ObjCMethodDecl *MethodInList) {
+  auto *MethodProtocol = dyn_cast<ObjCProtocolDecl>(Method->getDeclContext());
+  auto *MethodInListProtocol =
+      dyn_cast<ObjCProtocolDecl>(MethodInList->getDeclContext());
+  // If this method belongs to a protocol but the method in list does not, or
+  // vice versa, we say the context is not the same.
+  if ((MethodProtocol && !MethodInListProtocol) ||
+      (!MethodProtocol && MethodInListProtocol))
+    return false;
+
+  if (MethodProtocol && MethodInListProtocol)
+    return true;
+
+  ObjCInterfaceDecl *MethodInterface = Method->getClassInterface();
+  ObjCInterfaceDecl *MethodInListInterface =
+      MethodInList->getClassInterface();
+  return MethodInterface == MethodInListInterface;
+}
+
 void Sema::addMethodToGlobalList(ObjCMethodList *List,
                                  ObjCMethodDecl *Method) {
   // Record at the head of the list whether there were 0, 1, or >= 2 methods
@@ -3191,13 +3211,17 @@ void Sema::addMethodToGlobalList(ObjCMethodList *List,
 
   // We've seen a method with this name, see if we have already seen this type
   // signature.
+  ObjCMethodList *Head = List;
   ObjCMethodList *Previous = List;
   for (; List; Previous = List, List = List->getNext()) {
     // If we are building a module, keep all of the methods.
     if (getLangOpts().CompilingModule)
       continue;
 
-    if (!MatchTwoMethodDeclarations(Method, List->getMethod())) {
+    // Looking for method with a type bound requires the correct context exists.
+    // We need to insert this method into the list if the context is different.
+    if (!MatchTwoMethodDeclarations(Method, List->getMethod()) ||
+        !isMethodContextSameForKindofLookup(Method, List->getMethod())) {
       // Even if two method types do not match, we would like to say
       // there is more than one declaration so unavailability/deprecated
       // warning is not too noisy.
@@ -3238,6 +3262,19 @@ void Sema::addMethodToGlobalList(ObjCMethodList *List,
   // We have a new signature for an existing method - add it.
   // This is extremely rare. Only 1% of Cocoa selectors are "overloaded".
   ObjCMethodList *Mem = BumpAlloc.Allocate<ObjCMethodList>();
+
+  // We tried to prioritize the list by putting deprecated and unavailable
+  // methods in the front.
+  if ((Method->isDeprecated() && !Head->getMethod()->isDeprecated()) ||
+      (Method->isUnavailable() &&
+       Head->getMethod()->getAvailability() < AR_Deprecated)) {
+    auto *List = new (Mem) ObjCMethodList(*Head);
+    // FIXME: should we clear the other bits in Head?
+    Head->setMethod(Method);
+    Head->setNext(List);
+    return;
+  }
+
   Previous->setNext(new (Mem) ObjCMethodList(Method));
 }
 
@@ -3287,25 +3324,95 @@ static bool isAcceptableMethodMismatch(ObjCMethodDecl *chosen,
   return (chosen->getReturnType()->isIntegerType());
 }
 
+/// Return true if the given method is wthin the type bound.
+static bool FilterMethodsByTypeBound(ObjCMethodDecl *Method,
+                                     const ObjCObjectType *TypeBound) {
+  if (!TypeBound)
+    return true;
+
+  if (TypeBound->isObjCId())
+    // FIXME: should we handle the case of bounding to id<A, B> differently?
+    return true;
+
+  auto *BoundInterface = TypeBound->getInterface();
+  assert(BoundInterface && "unexpected object type!");
+
+  // Check if the Method belongs to a protocol. We should allow any method
+  // defined in any protocol, because any subclass could adopt the protocol.
+  auto *MethodProtocol = dyn_cast<ObjCProtocolDecl>(Method->getDeclContext());
+  if (MethodProtocol) {
+    return true;
+  }
+
+  // If the Method belongs to a class, check if it belongs to the class
+  // hierarchy of the class bound.
+  if (ObjCInterfaceDecl *MethodInterface = Method->getClassInterface()) {
+    // We allow methods declared within classes that are part of the hierarchy
+    // of the class bound (superclass of, subclass of, or the same as the class
+    // bound).
+    return MethodInterface == BoundInterface ||
+           MethodInterface->isSuperClassOf(BoundInterface) ||
+           BoundInterface->isSuperClassOf(MethodInterface);
+  }
+  llvm_unreachable("unknow method context");
+}
+
+/// We first select the type of the method: Instance or Factory, then collect
+/// all methods with that type.
 bool Sema::CollectMultipleMethodsInGlobalPool(
-    Selector Sel, SmallVectorImpl<ObjCMethodDecl *> &Methods, bool instance) {
+    Selector Sel, SmallVectorImpl<ObjCMethodDecl *> &Methods,
+    bool InstanceFirst, bool CheckTheOther,
+    const ObjCObjectType *TypeBound) {
   if (ExternalSource)
     ReadMethodPool(Sel);
 
   GlobalMethodPool::iterator Pos = MethodPool.find(Sel);
   if (Pos == MethodPool.end())
     return false;
+
   // Gather the non-hidden methods.
-  ObjCMethodList &MethList = instance ? Pos->second.first : Pos->second.second;
+  ObjCMethodList &MethList = InstanceFirst ? Pos->second.first :
+                             Pos->second.second;
   for (ObjCMethodList *M = &MethList; M; M = M->getNext())
-    if (M->getMethod() && !M->getMethod()->isHidden())
-      Methods.push_back(M->getMethod());
+    if (M->getMethod() && !M->getMethod()->isHidden()) {
+      if (FilterMethodsByTypeBound(M->getMethod(), TypeBound))
+        Methods.push_back(M->getMethod());
+    }
+
+  // Return if we find any method with the desired kind.
+  if (!Methods.empty())
+    return Methods.size() > 1;
+
+  if (!CheckTheOther)
+    return false;
+
+  // Gather the other kind.
+  ObjCMethodList &MethList2 = InstanceFirst ? Pos->second.second :
+                              Pos->second.first;
+  for (ObjCMethodList *M = &MethList2; M; M = M->getNext())
+    if (M->getMethod() && !M->getMethod()->isHidden()) {
+      if (FilterMethodsByTypeBound(M->getMethod(), TypeBound))
+        Methods.push_back(M->getMethod());
+    }
+
   return Methods.size() > 1;
 }
 
-bool Sema::AreMultipleMethodsInGlobalPool(Selector Sel, ObjCMethodDecl *BestMethod,
-                                          SourceRange R,
-                                          bool receiverIdOrClass) {
+bool Sema::AreMultipleMethodsInGlobalPool(
+    Selector Sel, ObjCMethodDecl *BestMethod, SourceRange R,
+    bool receiverIdOrClass, SmallVectorImpl<ObjCMethodDecl *> &Methods) {
+  // Diagnose finding more than one method in global pool.
+  SmallVector<ObjCMethodDecl *, 4> FilteredMethods;
+  FilteredMethods.push_back(BestMethod);
+
+  for (auto *M : Methods)
+    if (M != BestMethod && !M->hasAttr<UnavailableAttr>())
+      FilteredMethods.push_back(M);
+
+  if (FilteredMethods.size() > 1)
+    DiagnoseMultipleMethodInGlobalPool(FilteredMethods, Sel, R,
+                                       receiverIdOrClass);
+
   GlobalMethodPool::iterator Pos = MethodPool.find(Sel);
   // Test for no method in the pool which should not trigger any warning by
   // caller.
@@ -3313,17 +3420,6 @@ bool Sema::AreMultipleMethodsInGlobalPool(Selector Sel, ObjCMethodDecl *BestMeth
     return true;
   ObjCMethodList &MethList =
     BestMethod->isInstanceMethod() ? Pos->second.first : Pos->second.second;
-  
-  // Diagnose finding more than one method in global pool
-  SmallVector<ObjCMethodDecl *, 4> Methods;
-  Methods.push_back(BestMethod);
-  for (ObjCMethodList *ML = &MethList; ML; ML = ML->getNext())
-    if (ObjCMethodDecl *M = ML->getMethod())
-      if (!M->isHidden() && M != BestMethod && !M->hasAttr<UnavailableAttr>())
-        Methods.push_back(M);
-  if (Methods.size() > 1)
-    DiagnoseMultipleMethodInGlobalPool(Methods, Sel, R, receiverIdOrClass);
-
   return MethList.hasMoreThanOneDecl();
 }
 
