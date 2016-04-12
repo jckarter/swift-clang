@@ -47,7 +47,7 @@ void Test2() {
   MyFStringCreateWithFormat("%s", "Hello");
   XMyOSLog(4, "%s\n", "Hello");
 
-  os_trace("testing %@, %s, %d, %@, %m", CFSTR("object"), "string", 3, "it"); // expected-error{{format specifies type 'id' but the argument has type 'char *'}}
+  os_trace("testing %@, %s, %d, %@, %m", CFSTR("object"), "string", 3, "it"); // expected-warning{{format specifies type 'id' but the argument has type 'char *'}}
 
   os_trace("testing %@, %s, %d, %@, %m", CFSTR("object"), "string", 3, @"ok");
 }

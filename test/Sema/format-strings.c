@@ -638,13 +638,13 @@ void test_format_security_pos(char* string) {
 
 void test_os_log_format(char c, const char *pc, int i, int *pi, void *p, void *buf) {
   __builtin_os_log_format(buf, "");
-  __builtin_os_log_format(buf, "%d"); // expected-error {{more '%' conversions than data arguments}}
+  __builtin_os_log_format(buf, "%d"); // expected-warning {{more '%' conversions than data arguments}}
   __builtin_os_log_format(buf, "%d", i);
-  __builtin_os_log_format(buf, "%P", p); // expected-error {{using '%P' format specifier without precision}}
+  __builtin_os_log_format(buf, "%P", p); // expected-warning {{using '%P' format specifier without precision}}
   __builtin_os_log_format(buf, "%.10P", p);
-  __builtin_os_log_format(buf, "%.*P", p); // expected-error {{field precision should have type 'int', but argument has type 'void *'}}
+  __builtin_os_log_format(buf, "%.*P", p); // expected-warning {{field precision should have type 'int', but argument has type 'void *'}}
   __builtin_os_log_format(buf, "%.*P", i, p);
-  __builtin_os_log_format(buf, "%.*P", i, i); // expected-error {{format specifies type 'void *' but the argument has type 'int'}}
+  __builtin_os_log_format(buf, "%.*P", i, i); // expected-warning {{format specifies type 'void *' but the argument has type 'int'}}
   __builtin_os_log_format(buf, pc); // expected-error {{os_log() format argument is not a string constant}}
 
   printf("%{private}s", pc); // expected-warning {{using 'private' format specifier annotation outside of os_log()/os_trace()}}
