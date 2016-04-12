@@ -3,7 +3,7 @@
 
 #include "clang-service/Client.h"
 #include "clang-service/Service.h"
-#include "clang-Service/Support/LiveData.h"
+#include "clang-service/Support/LiveData.h"
 
 namespace ClangService {
 
