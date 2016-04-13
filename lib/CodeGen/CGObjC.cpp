@@ -1501,6 +1501,8 @@ void CodeGenFunction::EmitObjCForCollectionStmt(const ObjCForCollectionStmt &S){
                                       ArrayType::Normal, 0);
   Address ItemsPtr = CreateMemTemp(ItemsTy, "items.ptr");
 
+  RunCleanupsScope ForScope(*this);
+
   // Emit the collection pointer.  In ARC, we do a retain.
   llvm::Value *Collection;
   if (getLangOpts().ObjCAutoRefCount) {
@@ -1741,10 +1743,7 @@ void CodeGenFunction::EmitObjCForCollectionStmt(const ObjCForCollectionStmt &S){
   if (DI)
     DI->EmitLexicalBlockEnd(Builder, S.getSourceRange().getEnd());
 
-  // Leave the cleanup we entered in ARC.
-  if (getLangOpts().ObjCAutoRefCount)
-    PopCleanupBlock();
-
+  ForScope.ForceCleanup();
   EmitBlock(LoopEnd.getBlock());
 }
 
