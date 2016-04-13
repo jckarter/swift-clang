@@ -10,6 +10,7 @@
 #include "clang/Index/IndexUnitReader.h"
 #include "IndexDataStoreUtils.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/FileSystem.h"
@@ -206,6 +207,23 @@ IndexUnitReader::createWithFilePath(StringRef FilePath, std::string &Error) {
   std::unique_ptr<IndexUnitReader> Reader;
   Reader.reset(new IndexUnitReader(Impl.release()));
   return Reader;
+}
+
+Optional<sys::TimeValue>
+IndexUnitReader::getModificationTimeForUnit(StringRef UnitFilename,
+                                            StringRef StorePath,
+                                            std::string &Error) {
+  SmallString<128> PathBuf = StorePath;
+  makeUnitSubDir(PathBuf);
+  sys::path::append(PathBuf, UnitFilename);
+
+  sys::fs::file_status FileStat;
+  std::error_code EC = sys::fs::status(PathBuf.str(), FileStat);
+  if (EC) {
+    Error = EC.message();
+    return sys::TimeValue();
+  }
+  return FileStat.getLastModificationTime();
 }
 
 #define IMPL static_cast<IndexUnitReaderImpl*>(Impl)

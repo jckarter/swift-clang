@@ -285,6 +285,14 @@ indexstore_record_reader_occurrences_of_symbols_apply(indexstore_record_reader_t
 #endif
 
 
+/// \returns true if an error occurred, false otherwise.
+INDEXSTORE_PUBLIC bool
+indexstore_store_get_unit_modification_time(indexstore_t store,
+                                            const char *unit_name,
+                                            int64_t *seconds,
+                                            int64_t *nanoseconds,
+                                            indexstore_error_t *error);
+
 typedef void *indexstore_unit_reader_t;
 
 INDEXSTORE_PUBLIC indexstore_unit_reader_t

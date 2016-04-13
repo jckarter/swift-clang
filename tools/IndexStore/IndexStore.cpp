@@ -16,6 +16,7 @@
 #include "clang/Index/IndexUnitReader.h"
 #include "clang/Index/IndexRecordReader.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/Support/TimeValue.h"
 #include <Block.h>
 
@@ -339,6 +340,28 @@ indexstore_record_reader_occurrences_of_symbols_apply(indexstore_record_reader_t
 }
 #endif
 
+bool
+indexstore_store_get_unit_modification_time(indexstore_t c_store,
+                                            const char *unit_name,
+                                            int64_t *seconds,
+                                            int64_t *nanoseconds,
+                                            indexstore_error_t *c_error) {
+  IndexDataStore *store = static_cast<IndexDataStore*>(c_store);
+  std::string error;
+  auto optModTime = IndexUnitReader::getModificationTimeForUnit(unit_name,
+                                              store->getFilePath(), error);
+  if (!optModTime) {
+    if (c_error)
+      *c_error = new IndexStoreError{ error };
+    return true;
+  }
+
+  if (seconds)
+    *seconds = optModTime->seconds();
+  if (nanoseconds)
+    *nanoseconds = optModTime->nanoseconds();
+  return false;
+}
 
 indexstore_unit_reader_t
 indexstore_unit_reader_create(indexstore_t c_store, const char *unit_name,
