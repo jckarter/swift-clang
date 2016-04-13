@@ -32,6 +32,10 @@ public:
   static std::unique_ptr<IndexUnitReader>
     createWithFilePath(StringRef FilePath, std::string &Error);
 
+  static Optional<llvm::sys::TimeValue>
+    getModificationTimeForUnit(StringRef UnitFilename, StringRef StorePath,
+                               std::string &Error);
+
   llvm::sys::TimeValue getModificationTime() const;
   StringRef getWorkingDirectory() const;
   StringRef getOutputFile() const;

@@ -16,6 +16,7 @@
 
 #include "indexstore/indexstore.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/TimeValue.h"
@@ -186,6 +187,20 @@ public:
   void discardUnit(StringRef UnitName) {
     llvm::SmallString<64> buf = UnitName;
     indexstore_store_discard_unit(obj, buf.c_str());
+  }
+
+  llvm::Optional<llvm::sys::TimeValue> getUnitModificationTime(StringRef unitName, std::string &error) {
+    llvm::SmallString<64> buf = unitName;
+    int64_t seconds, nanoseconds;
+    indexstore_error_t c_err = nullptr;
+    bool err = indexstore_store_get_unit_modification_time(obj, buf.c_str(),
+      &seconds, &nanoseconds, &c_err);
+    if (err && c_err) {
+      error = indexstore_error_get_description(c_err);
+      indexstore_error_dispose(c_err);
+      return llvm::None;
+    }
+    return llvm::sys::TimeValue(seconds, nanoseconds);
   }
 
   void purgeStaleRecords(ArrayRef<StringRef> activeRecords) {
