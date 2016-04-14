@@ -779,7 +779,6 @@ public:
 /// All configuration options are optional.
 ///   'case-sensitive': <boolean, default=true>
 ///   'use-external-names': <boolean, default=true>
-///   'overlay-relative': <boolean, default=false>
 ///
 /// Virtual directories are represented as
 /// \verbatim
@@ -819,10 +818,6 @@ class RedirectingFileSystem : public vfs::FileSystem {
   std::vector<std::unique_ptr<Entry>> Roots;
   /// \brief The file system to use for external references.
   IntrusiveRefCntPtr<FileSystem> ExternalFS;
-  /// If IsRelativeOverlay is set, this represents the directory
-  /// path that should be prefixed to each 'external-contents' entry
-  /// when reading from YAML files.
-  std::string ExternalContentsPrefixDir;
 
   /// @name Configuration
   /// @{
@@ -831,10 +826,6 @@ class RedirectingFileSystem : public vfs::FileSystem {
   ///
   /// Currently, case-insensitive matching only works correctly with ASCII.
   bool CaseSensitive;
-
-  /// IsRelativeOverlay marks whether a IsExternalContentsPrefixDir path must
-  /// be prefixed in every 'external-contents' when reading from YAML files.
-  bool IsRelativeOverlay = false;
 
   /// \brief Whether to use to use the value of 'external-contents' for the
   /// names of files.  This global value is overridable on a per-file basis.
@@ -863,8 +854,8 @@ public:
   /// returns a virtual file system representing its contents.
   static RedirectingFileSystem *
   create(std::unique_ptr<MemoryBuffer> Buffer,
-         SourceMgr::DiagHandlerTy DiagHandler, StringRef YAMLFilePath,
-         void *DiagContext, IntrusiveRefCntPtr<FileSystem> ExternalFS);
+         SourceMgr::DiagHandlerTy DiagHandler, void *DiagContext,
+         IntrusiveRefCntPtr<FileSystem> ExternalFS);
 
   ErrorOr<Status> status(const Twine &Path) override;
   ErrorOr<std::unique_ptr<File>> openFileForRead(const Twine &Path) override;
@@ -897,15 +888,6 @@ public:
     return directory_iterator(std::make_shared<VFSFromYamlDirIterImpl>(Dir,
         *this, D->contents_begin(), D->contents_end(), EC));
   }
-
-  void setExternalContentsPrefixDir(StringRef PrefixDir) {
-    ExternalContentsPrefixDir = PrefixDir.str();
-  }
-
-  StringRef getExternalContentsPrefixDir() const {
-    return ExternalContentsPrefixDir;
-  }
-
 };
 
 /// \brief A helper class to hold the common YAML parsing state.
@@ -985,7 +967,7 @@ class RedirectingFileSystemParser {
     return true;
   }
 
-  std::unique_ptr<Entry> parseEntry(yaml::Node *N, RedirectingFileSystem *FS) {
+  std::unique_ptr<Entry> parseEntry(yaml::Node *N) {
     yaml::MappingNode *M = dyn_cast<yaml::MappingNode>(N);
     if (!M) {
       error(N, "expected mapping node for file or directory entry");
@@ -1055,7 +1037,7 @@ class RedirectingFileSystemParser {
         for (yaml::SequenceNode::iterator I = Contents->begin(),
                                           E = Contents->end();
              I != E; ++I) {
-          if (std::unique_ptr<Entry> E = parseEntry(&*I, FS))
+          if (std::unique_ptr<Entry> E = parseEntry(&*I))
             EntryArrayContents.push_back(std::move(E));
           else
             return nullptr;
@@ -1069,16 +1051,7 @@ class RedirectingFileSystemParser {
         HasContents = true;
         if (!parseScalarString(I->getValue(), Value, Buffer))
           return nullptr;
-        if (FS->IsRelativeOverlay) {
-          StringRef PrefixDir = FS->getExternalContentsPrefixDir();
-          assert(!PrefixDir.empty() &&
-                 "External contents prefix directory must exist");
-          SmallString<128> RealPath(PrefixDir);
-          llvm::sys::path::append(RealPath, Value);
-          ExternalContentsPath = RealPath.str();
-        } else {
-          ExternalContentsPath = Value;
-        }
+        ExternalContentsPath = Value;
       } else if (Key == "use-external-name") {
         bool Val;
         if (!parseScalarBool(I->getValue(), Val))
@@ -1164,7 +1137,6 @@ public:
       KeyStatusPair("version", true),
       KeyStatusPair("case-sensitive", false),
       KeyStatusPair("use-external-names", false),
-      KeyStatusPair("overlay-relative", false),
       KeyStatusPair("roots", true),
     };
 
@@ -1190,7 +1162,7 @@ public:
 
         for (yaml::SequenceNode::iterator I = Roots->begin(), E = Roots->end();
              I != E; ++I) {
-          if (std::unique_ptr<Entry> E = parseEntry(&*I, FS))
+          if (std::unique_ptr<Entry> E = parseEntry(&*I))
             FS->Roots.push_back(std::move(E));
           else
             return false;
@@ -1216,9 +1188,6 @@ public:
       } else if (Key == "case-sensitive") {
         if (!parseScalarBool(I->getValue(), FS->CaseSensitive))
           return false;
-      } else if (Key == "overlay-relative") {
-        if (!parseScalarBool(I->getValue(), FS->IsRelativeOverlay))
-          return false;
       } else if (Key == "use-external-names") {
         if (!parseScalarBool(I->getValue(), FS->UseExternalNames))
           return false;
@@ -1239,11 +1208,9 @@ public:
 
 Entry::~Entry() = default;
 
-RedirectingFileSystem *
-RedirectingFileSystem::create(std::unique_ptr<MemoryBuffer> Buffer,
-                              SourceMgr::DiagHandlerTy DiagHandler,
-                              StringRef YAMLFilePath, void *DiagContext,
-                              IntrusiveRefCntPtr<FileSystem> ExternalFS) {
+RedirectingFileSystem *RedirectingFileSystem::create(
+    std::unique_ptr<MemoryBuffer> Buffer, SourceMgr::DiagHandlerTy DiagHandler,
+    void *DiagContext, IntrusiveRefCntPtr<FileSystem> ExternalFS) {
 
   SourceMgr SM;
   yaml::Stream Stream(Buffer->getMemBufferRef(), SM);
@@ -1260,23 +1227,6 @@ RedirectingFileSystem::create(std::unique_ptr<MemoryBuffer> Buffer,
 
   std::unique_ptr<RedirectingFileSystem> FS(
       new RedirectingFileSystem(ExternalFS));
-
-  if (!YAMLFilePath.empty()) {
-    // Use the YAML path from -ivfsoverlay to compute the dir to be prefixed
-    // to each 'external-contents' path.
-    //
-    // Example:
-    //    -ivfsoverlay dummy.cache/vfs/vfs.yaml
-    // yields:
-    //  FS->ExternalContentsPrefixDir => /<absolute_path_to>/dummy.cache/vfs
-    //
-    SmallString<256> OverlayAbsDir = sys::path::parent_path(YAMLFilePath);
-    std::error_code EC = llvm::sys::fs::make_absolute(OverlayAbsDir);
-    assert(!EC && "Overlay dir final path must be absolute");
-    (void)EC;
-    FS->setExternalContentsPrefixDir(OverlayAbsDir);
-  }
-
   if (!P.parse(Root, FS.get()))
     return nullptr;
 
@@ -1307,33 +1257,20 @@ ErrorOr<Entry *> RedirectingFileSystem::lookupPath(const Twine &Path_) {
 ErrorOr<Entry *>
 RedirectingFileSystem::lookupPath(sys::path::const_iterator Start,
                                   sys::path::const_iterator End, Entry *From) {
-  StringRef FromName = From->getName();
-
-  // Empty `From` means that the search should be forwarded to the next
-  // underlying directories in the overlay tree.
-  if (!FromName.empty()) {
-    // Skip intermediate "." directories. Note this isn't enough to catch the
-    // case where the last component is a ".", see below.
-    // e.g. /usr/include/./objc
-    if (Start->equals("."))
-      ++Start;
-
-    // FIXME: handle ..
-    if (CaseSensitive ? !Start->equals(FromName)
-                      : !Start->equals_lower(FromName))
-      // failure to match
-      return make_error_code(llvm::errc::no_such_file_or_directory);
-
+  if (Start->equals("."))
     ++Start;
-    // Catch the case where the last component is one "." or a series of those.
-    // e.g. "/usr/include/objc/."
-    while (Start->equals("."))
-      ++Start;
 
-    if (Start == End) {
-      // Match!
-      return From;
-    }
+  // FIXME: handle ..
+  if (CaseSensitive ? !Start->equals(From->getName())
+                    : !Start->equals_lower(From->getName()))
+    // failure to match
+    return make_error_code(llvm::errc::no_such_file_or_directory);
+
+  ++Start;
+
+  if (Start == End) {
+    // Match!
+    return From;
   }
 
   auto *DE = dyn_cast<RedirectingDirectoryEntry>(From);
@@ -1369,12 +1306,7 @@ ErrorOr<Status> RedirectingFileSystem::status(const Twine &Path, Entry *E) {
     return S;
   } else { // directory
     auto *DE = cast<RedirectingDirectoryEntry>(E);
-    Status S = Status::copyWithNewName(DE->getStatus(), Path.str());
-    // The semantics for directories is a different from files; there's no
-    // dir <-> dir mapping in VFS, but we need to keep track of whether we
-    // found a directory in the VFS context.
-    S.IsVFSMapped = true;
-    return S;
+    return Status::copyWithNewName(DE->getStatus(), Path.str());
   }
 }
 
@@ -1433,12 +1365,10 @@ RedirectingFileSystem::openFileForRead(const Twine &Path) {
 
 IntrusiveRefCntPtr<FileSystem>
 vfs::getVFSFromYAML(std::unique_ptr<MemoryBuffer> Buffer,
-                    SourceMgr::DiagHandlerTy DiagHandler,
-                    StringRef YAMLFilePath,
-                    void *DiagContext,
+                    SourceMgr::DiagHandlerTy DiagHandler, void *DiagContext,
                     IntrusiveRefCntPtr<FileSystem> ExternalFS) {
   return RedirectingFileSystem::create(std::move(Buffer), DiagHandler,
-                                       YAMLFilePath, DiagContext, ExternalFS);
+                                       DiagContext, ExternalFS);
 }
 
 UniqueID vfs::getNextVirtualUniqueID() {
@@ -1449,13 +1379,20 @@ UniqueID vfs::getNextVirtualUniqueID() {
   return UniqueID(std::numeric_limits<uint64_t>::max(), ID);
 }
 
+#ifndef NDEBUG
+static bool pathHasTraversal(StringRef Path) {
+  using namespace llvm::sys;
+  for (StringRef Comp : llvm::make_range(path::begin(Path), path::end(Path)))
+    if (Comp == "." || Comp == "..")
+      return true;
+  return false;
+}
+#endif
+
 void YAMLVFSWriter::addFileMapping(StringRef VirtualPath, StringRef RealPath) {
-  // TODO: Note that the path traversals "." or ".." aren't translated (removed)
-  // along the paths, but using the path string without translation is currently
-  // enough for VirtualPath and RealPath to work when reading out the YAML with
-  // the VFS description. Handling the traversal would be cleaner though.
   assert(sys::path::is_absolute(VirtualPath) && "virtual path not absolute");
   assert(sys::path::is_absolute(RealPath) && "real path not absolute");
+  assert(!pathHasTraversal(VirtualPath) && "path traversal is not supported");
   Mappings.emplace_back(VirtualPath, RealPath);
 }
 
@@ -1473,8 +1410,7 @@ class JSONWriter {
 
 public:
   JSONWriter(llvm::raw_ostream &OS) : OS(OS) {}
-  void write(ArrayRef<YAMLVFSEntry> Entries, Optional<bool> IsCaseSensitive,
-             Optional<bool> IsOverlayRelative, StringRef OverlayDir);
+  void write(ArrayRef<YAMLVFSEntry> Entries, Optional<bool> IsCaseSensitive);
 };
 }
 
@@ -1527,9 +1463,7 @@ void JSONWriter::writeEntry(StringRef VPath, StringRef RPath) {
 }
 
 void JSONWriter::write(ArrayRef<YAMLVFSEntry> Entries,
-                       Optional<bool> IsCaseSensitive,
-                       Optional<bool> IsOverlayRelative,
-                       StringRef OverlayDir) {
+                       Optional<bool> IsCaseSensitive) {
   using namespace llvm::sys;
 
   OS << "{\n"
@@ -1537,27 +1471,12 @@ void JSONWriter::write(ArrayRef<YAMLVFSEntry> Entries,
   if (IsCaseSensitive.hasValue())
     OS << "  'case-sensitive': '"
        << (IsCaseSensitive.getValue() ? "true" : "false") << "',\n";
-  bool UseOverlayRelative = false;
-  if (IsOverlayRelative.hasValue()) {
-    UseOverlayRelative = IsOverlayRelative.getValue();
-    OS << "  'overlay-relative': '"
-       << (UseOverlayRelative ? "true" : "false") << "',\n";
-  }
   OS << "  'roots': [\n";
 
   if (!Entries.empty()) {
     const YAMLVFSEntry &Entry = Entries.front();
     startDirectory(path::parent_path(Entry.VPath));
-
-    StringRef RPath = Entry.RPath;
-    if (UseOverlayRelative) {
-      unsigned OverlayDirLen = OverlayDir.size();
-      assert(RPath.substr(0, OverlayDirLen) == OverlayDir &&
-             "Overlay dir must be contained in RPath");
-      RPath = RPath.slice(OverlayDirLen, RPath.size());
-    }
-
-    writeEntry(path::filename(Entry.VPath), RPath);
+    writeEntry(path::filename(Entry.VPath), Entry.RPath);
 
     for (const auto &Entry : Entries.slice(1)) {
       StringRef Dir = path::parent_path(Entry.VPath);
@@ -1571,14 +1490,7 @@ void JSONWriter::write(ArrayRef<YAMLVFSEntry> Entries,
         OS << ",\n";
         startDirectory(Dir);
       }
-      StringRef RPath = Entry.RPath;
-      if (UseOverlayRelative) {
-        unsigned OverlayDirLen = OverlayDir.size();
-        assert(RPath.substr(0, OverlayDirLen) == OverlayDir &&
-               "Overlay dir must be contained in RPath");
-        RPath = RPath.slice(OverlayDirLen, RPath.size());
-      }
-      writeEntry(path::filename(Entry.VPath), RPath);
+      writeEntry(path::filename(Entry.VPath), Entry.RPath);
     }
 
     while (!DirStack.empty()) {
@@ -1598,8 +1510,7 @@ void YAMLVFSWriter::write(llvm::raw_ostream &OS) {
     return LHS.VPath < RHS.VPath;
   });
 
-  JSONWriter(OS).write(Mappings, IsCaseSensitive, IsOverlayRelative,
-                       OverlayDir);
+  JSONWriter(OS).write(Mappings, IsCaseSensitive);
 }
 
 VFSFromYamlDirIterImpl::VFSFromYamlDirIterImpl(
@@ -1666,69 +1577,4 @@ recursive_directory_iterator::increment(std::error_code &EC) {
     State.reset(); // end iterator
 
   return *this;
-}
-
-void ModuleDependencyCollector::writeFileMap() {
-  if (Seen.empty())
-    return;
-
-  SmallString<256> Dest = getDest();
-  llvm::sys::path::append(Dest, "vfs.yaml");
-
-  VFSWriter.setCaseSensitivity(IsCaseSensitive);
-
-  // Default to use relative overlay directories in the VFS yaml file. This
-  // handy for users to be able to reproduce crashes by copying the .cache dir
-  // to any place in the system and solely pointing to the YAML file via
-  // -ivfsovelay option.
-  VFSWriter.setOverlayDir(getDest());
-
-  std::error_code EC;
-  llvm::raw_fd_ostream OS(Dest, EC, llvm::sys::fs::F_Text);
-  if (EC) {
-    setHasErrors();
-    return;
-  }
-  VFSWriter.write(OS);
-}
-
-std::error_code ModuleDependencyCollector::copyToRoot(StringRef Src) {
-  using namespace llvm::sys;
-
-  // We need an absolute path to append to the root.
-  SmallString<256> AbsoluteSrc = Src;
-  fs::make_absolute(AbsoluteSrc);
-  // Canonicalize to a native path to avoid mixed separator styles.
-  path::native(AbsoluteSrc);
-  // TODO: We probably need to handle .. as well as . in order to have valid
-  // input to the YAMLVFSWriter.
-  path::remove_dots(AbsoluteSrc);
-
-  // Build the destination path.
-  SmallString<256> Dest = getDest();
-  // TODO: Symbolic links are currently duplicated through the copy operation,
-  // a better solution is to maintain the original path for the symbolic link
-  // in AbsoluteSrc, but make `Dest` be appended to the real/resolved path.
-  // This would allow a unique file and multiple YAML entries for it (one for
-  // each symbolic link).
-  path::append(Dest, path::relative_path(AbsoluteSrc));
-
-  // Copy the file into place.
-  if (std::error_code EC = fs::create_directories(path::parent_path(Dest),
-                                                   /*IgnoreExisting=*/true))
-    return EC;
-
-  if (std::error_code EC = fs::copy_file(AbsoluteSrc, Dest))
-    return EC;
-
-  // Use the absolute path under the root for the file mapping.
-  addFileMapping(AbsoluteSrc, Dest);
-  return std::error_code();
-}
-
-bool ModuleDependencyCollector::collectFile(StringRef Filename) {
-  if (insertSeen(Filename))
-    if (copyToRoot(Filename))
-      setHasErrors();
-  return true;
 }

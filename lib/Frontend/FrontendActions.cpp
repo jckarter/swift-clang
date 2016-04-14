@@ -215,9 +215,6 @@ collectModuleHeaderIncludes(const LangOptions &LangOpts, FileManager &FileMgr,
     std::error_code EC;
     SmallString<128> DirNative;
     llvm::sys::path::native(UmbrellaDir.Entry->getName(), DirNative);
-    // Canonicalize the directory name by removing and leading "." at the end.
-    if (llvm::sys::path::stem(DirNative).equals("."))
-      DirNative = llvm::sys::path::parent_path(DirNative);
     for (llvm::sys::fs::recursive_directory_iterator Dir(DirNative, EC), 
                                                      DirEnd;
          Dir != DirEnd && !EC; Dir.increment(EC)) {

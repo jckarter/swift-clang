@@ -23,7 +23,6 @@
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/Version.h"
-#include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Lex/ExternalPreprocessorSource.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/PreprocessingRecord.h"
@@ -2136,25 +2135,6 @@ private:
 inline void PCHValidator::Error(const char *Msg) {
   Reader.Error(Msg);
 }
-
-/// \brief Used in the ASTReader to collect header dependencies for all
-/// modules needed in order to reproduce a crash. The listener uses a
-/// ModuleDependencyCollector to finally output the collected files into
-/// a cache directory used by the crash reproducer.
-class ModuleDependencyListener : public ASTReaderListener {
-  ModuleDependencyCollector &Collector;
-
-public:
-  ModuleDependencyListener(ModuleDependencyCollector &Collector)
-      : Collector(Collector) {}
-  bool needsInputFileVisitation() override { return true; }
-  bool needsSystemInputFileVisitation() override { return true; }
-  bool visitInputFile(StringRef Filename, bool IsSystem, bool IsOverridden,
-                      bool IsExplicitModule) override;
-  static void
-  attachToASTReader(ASTReader &R,
-                    std::shared_ptr<ModuleDependencyCollector> Collector);
-};
 
 } // end namespace clang
 

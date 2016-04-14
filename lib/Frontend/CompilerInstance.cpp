@@ -17,7 +17,6 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/Version.h"
-#include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Config/config.h"
 #include "clang/Frontend/ChainedDiagnosticConsumer.h"
 #include "clang/Frontend/FrontendAction.h"
@@ -357,11 +356,9 @@ void CompilerInstance::createPreprocessor(TranslationUnitKind TUKind) {
 
   // If we don't have a collector, but we are collecting module dependencies,
   // then we're the top level compiler instance and need to create one.
-  // FIXME: come up with a reliable way to detect case sensitivity.
   if (!ModuleDepCollector && !DepOpts.ModuleDependencyOutputDir.empty())
     ModuleDepCollector = std::make_shared<ModuleDependencyCollector>(
-        DepOpts.ModuleDependencyOutputDir,
-        !getTarget().getTriple().isOSDarwin() /*CaseSensitive*/);
+        DepOpts.ModuleDependencyOutputDir);
 
   // Handle generating header include information, if requested.
   if (DepOpts.ShowHeaderIncludes)
@@ -994,10 +991,9 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
     FullSourceLoc(ImportLoc, ImportingInstance.getSourceManager()));
 
   // If we're collecting module dependencies, we need to share a collector
-  // between all of the module CompilerInstances and the ModuleMap.
+  // between all of the module CompilerInstances. Other than that, we don't
+  // want to produce any dependency output from the module build.
   Instance.setModuleDepCollector(ImportingInstance.getModuleDepCollector());
-  Instance.getFileManager().setModuleDepCollector(
-      ImportingInstance.getModuleDepCollector());
   Invocation->getDependencyOutputOpts() = DependencyOutputOptions();
 
   // Get or create the module map that we'll use to build this module.
@@ -1337,8 +1333,7 @@ void CompilerInstance::createModuleManager() {
     if (TheDependencyFileGenerator)
       TheDependencyFileGenerator->AttachToASTReader(*ModuleManager);
     if (ModuleDepCollector)
-      ModuleDependencyListener::attachToASTReader(*ModuleManager,
-                                                  ModuleDepCollector);
+      ModuleDepCollector->attachToASTReader(*ModuleManager);
     for (auto &Listener : DependencyCollectors)
       Listener->attachToASTReader(*ModuleManager);
   }

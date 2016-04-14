@@ -204,11 +204,6 @@ const DirectoryEntry *FileManager::getDirectory(StringRef DirName,
     // We don't have this directory yet, add it.  We use the string
     // key from the SeenDirEntries map as the string.
     UDE.Name  = InterndDirName;
-
-    // Track if the directory had an entry found in the VFS overlay.
-    // Since there's no dir <-> dir mapping in the VFS, track that
-    // there are entries matching this directory request.
-    UDE.HasVFSEntry = Data.IsVFSMapped;
   }
 
   return &UDE;
@@ -567,14 +562,4 @@ void FileManager::PrintStats() const {
                << NumFileCacheMisses << " file cache misses.\n";
 
   //llvm::errs() << PagesMapped << BytesOfPagesMapped << FSLookups;
-}
-
-std::shared_ptr<ModuleDependencyCollector>
-FileManager::getModuleDepCollector() const {
-  return ModuleDepCollector;
-}
-
-void FileManager::setModuleDepCollector(
-    std::shared_ptr<ModuleDependencyCollector> Collector) {
-  ModuleDepCollector = Collector;
 }
