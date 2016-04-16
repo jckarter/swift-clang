@@ -396,16 +396,27 @@ void CGDebugInfo::CreateCompileUnit() {
   if (LO.ObjC1)
     RuntimeVers = LO.ObjCRuntime.isNonFragile() ? 2 : 1;
 
+  llvm::DICompileUnit::DebugEmissionKind EmissionKind;
+  switch (DebugKind) {
+  case codegenoptions::NoDebugInfo:
+  case codegenoptions::LocTrackingOnly:
+    EmissionKind = llvm::DICompileUnit::NoDebug;
+    break;
+  case codegenoptions::DebugLineTablesOnly:
+    EmissionKind = llvm::DICompileUnit::LineTablesOnly;
+    break;
+  case codegenoptions::LimitedDebugInfo:
+  case codegenoptions::FullDebugInfo:
+    EmissionKind = llvm::DICompileUnit::FullDebug;
+    break;
+  }
+
   // Create new compile unit.
   // FIXME - Eliminate TheCU.
   TheCU = DBuilder.createCompileUnit(
       LangTag, remapDIPath(MainFileName), remapDIPath(getCurrentDirname()),
       Producer, LO.Optimize, CGM.getCodeGenOpts().DwarfDebugFlags, RuntimeVers,
-      CGM.getCodeGenOpts().SplitDwarfFile,
-      DebugKind <= codegenoptions::DebugLineTablesOnly
-          ? llvm::DICompileUnit::LineTablesOnly
-          : llvm::DICompileUnit::FullDebug,
-      0 /* DWOid */, DebugKind != codegenoptions::LocTrackingOnly);
+      CGM.getCodeGenOpts().SplitDwarfFile, EmissionKind, 0 /* DWOid */);
 }
 
 llvm::DIType *CGDebugInfo::CreateType(const BuiltinType *BT) {
@@ -2799,11 +2810,11 @@ void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
   unsigned LineNo = getLineNumber(Loc);
   unsigned ScopeLine = 0;
 
-  DBuilder.createFunction(FDContext, Name, LinkageName, Unit, LineNo,
-                          getOrCreateFunctionType(D, FnType, Unit),
-                          false /*internalLinkage*/, true /*definition*/,
-                          ScopeLine, Flags, CGM.getLangOpts().Optimize,
-                          TParamsArray.get(), getFunctionDeclaration(D));
+  DBuilder.retainType(DBuilder.createFunction(
+      FDContext, Name, LinkageName, Unit, LineNo,
+      getOrCreateFunctionType(D, FnType, Unit), false /*internalLinkage*/,
+      false /*definition*/, ScopeLine, Flags, CGM.getLangOpts().Optimize,
+      TParamsArray.get(), getFunctionDeclaration(D)));
 }
 
 void CGDebugInfo::EmitLocation(CGBuilderTy &Builder, SourceLocation Loc) {
