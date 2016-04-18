@@ -247,7 +247,7 @@ void message_kindof_object(__kindof NSString *kindof_NSString) {
   [kindof_NSString retain]; // in superclass
   [kindof_NSString stringByAppendingString:0]; // in class
   [kindof_NSString appendString:0]; // in subclass
-  [kindof_NSString numberByAddingNumber: 0]; // expected-warning{{instance method '-numberByAddingNumber:' not found (return type defaults to 'id')}}
+  [kindof_NSString numberByAddingNumber: 0]; // expected-warning{{method 'numberByAddingNumber:' on kindof returns a method that is outside of the class hierarchy}}
   [kindof_NSString randomMethod]; // in protocol
 }
 
@@ -281,7 +281,7 @@ typedef signed char BOOL;
 @interface A : NSObject
 @property (readonly, getter=isActive) BOOL active;
 @end
-@interface B : NSObject
+@interface B : NSObject // expected-note{{receiver is instance of class declared here}}
 @property (getter=isActive, readonly) BOOL active;
 @end
 void foo() {
@@ -300,6 +300,13 @@ typedef const struct CGPath *CGPathRef;
 // Make sure we choose "NSString *path" for [s1 path].
 void bar(id s1, id s2) {
   return [[s1 path] compare:[s2 path]];
+}
+
+@interface E : NSObject
+@property int here;
+@end
+void test2(__kindof B *Ptr) {
+  [Ptr here]; // expected-warning{{method 'here' on kindof returns a method that is outside of the class hierarchy}}
 }
 
 // ---------------------------------------------------------------------------

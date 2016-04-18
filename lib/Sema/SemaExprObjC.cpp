@@ -2633,6 +2633,25 @@ ExprResult Sema::BuildInstanceMessage(Expr *Receiver,
       // If we have a type bound, further filter the methods.
       CollectMultipleMethodsInGlobalPool(Sel, Methods, true/*InstanceFirst*/,
                                          true/*CheckTheOther*/, typeBound);
+      // FIXME: there are project issues that cause us to emit "method not
+      // found" error messages. For now, we emit a warning if we find a method
+      // without filtering.
+      if (Methods.empty() && typeBound) {
+        CollectMultipleMethodsInGlobalPool(Sel, Methods, true/*InstanceFirst*/,
+                                           true/*CheckTheOther*/);
+        if (!Methods.empty()) {
+          Diag(SelLoc, diag::warn_kindof_not_found)
+              << Sel << SourceRange(LBracLoc, RBracLoc);
+          // Find the class to which we are sending this message.
+          if (ReceiverType->isObjCObjectPointerType()) {
+            if (ObjCInterfaceDecl *ThisClass =
+                ReceiverType->getAs<ObjCObjectPointerType>()->getInterfaceDecl()) {
+              Diag(ThisClass->getLocation(), diag::note_receiver_class_declared);
+            }
+          }
+        }
+      }
+
       if (!Methods.empty()) {
         // We chose the first method as the initial condidate, then try to
         // select a better one.

@@ -5553,6 +5553,9 @@ def ext_freestanding_complex : Extension<
 def err_imaginary_not_supported : Error<"imaginary types are not supported">;
 
 // Obj-c expressions
+def warn_kindof_not_found : Warning<
+  "method %0 on kindof returns a method that is outside of the class hierarchy">,
+  InGroup<MethodAccess>;
 def warn_root_inst_method_not_found : Warning<
   "instance method %0 is being used on 'Class' which is not in the root class">,
   InGroup<MethodAccess>;
