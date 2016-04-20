@@ -39,6 +39,7 @@ public:
   int addFileDependency(const FileEntry *File);
   void addRecordFile(StringRef RecordFile, const FileEntry *File);
   void addASTFileDependency(const FileEntry *File);
+  void addUnitDependency(StringRef UnitFile, const FileEntry *File);
 
   bool write(std::string &Error);
 
