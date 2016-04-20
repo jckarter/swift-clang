@@ -221,7 +221,7 @@ IndexUnitReader::getModificationTimeForUnit(StringRef UnitFilename,
   std::error_code EC = sys::fs::status(PathBuf.str(), FileStat);
   if (EC) {
     Error = EC.message();
-    return sys::TimeValue();
+    return None;
   }
   return FileStat.getLastModificationTime();
 }

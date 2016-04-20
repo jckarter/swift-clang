@@ -14,9 +14,11 @@
 #include "indexstore/indexstore.h"
 #include "clang/Index/IndexDataStore.h"
 #include "clang/Index/IndexUnitReader.h"
+#include "clang/Index/IndexUnitWriter.h"
 #include "clang/Index/IndexRecordReader.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/Support/TimeValue.h"
 #include <Block.h>
 
@@ -339,6 +341,18 @@ indexstore_record_reader_occurrences_of_symbols_apply(indexstore_record_reader_t
                                    receiverFn);
 }
 #endif
+
+size_t
+indexstore_store_get_unit_name_from_output_path(indexstore_t store,
+                                                const char *output_path,
+                                                char *name_buf,
+                                                size_t buf_size) {
+  SmallString<256> unitName;
+  IndexUnitWriter::getUnitNameForOutputFile(output_path, unitName);
+  size_t nameLen = unitName.size();
+  strlcpy(name_buf, unitName.c_str(), buf_size);
+  return nameLen;
+}
 
 bool
 indexstore_store_get_unit_modification_time(indexstore_t c_store,

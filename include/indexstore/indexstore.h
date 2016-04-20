@@ -130,6 +130,24 @@ indexstore_store_purge_stale_records(indexstore_t,
                                      indexstore_string_ref_t *active_record_names,
                                      size_t active_record_count);
 
+/// Determines the unit name from the \c output_path and writes it out in the
+/// \c name_buf buffer. It doesn't write more than \c buf_length.
+/// \returns the length of the name. If this is larger than \c buf_length, the
+/// caller should call the function again with a buffer of the appropriate size.
+INDEXSTORE_PUBLIC size_t
+indexstore_store_get_unit_name_from_output_path(indexstore_t store,
+                                                const char *output_path,
+                                                char *name_buf,
+                                                size_t buf_size);
+
+/// \returns true if an error occurred, false otherwise.
+INDEXSTORE_PUBLIC bool
+indexstore_store_get_unit_modification_time(indexstore_t store,
+                                            const char *unit_name,
+                                            int64_t *seconds,
+                                            int64_t *nanoseconds,
+                                            indexstore_error_t *error);
+
 typedef void *indexstore_symbol_t;
 
 typedef enum {
@@ -285,14 +303,6 @@ indexstore_record_reader_occurrences_of_symbols_apply(indexstore_record_reader_t
         bool(^applier)(indexstore_occurrence_t occur));
 #endif
 
-
-/// \returns true if an error occurred, false otherwise.
-INDEXSTORE_PUBLIC bool
-indexstore_store_get_unit_modification_time(indexstore_t store,
-                                            const char *unit_name,
-                                            int64_t *seconds,
-                                            int64_t *nanoseconds,
-                                            indexstore_error_t *error);
 
 typedef void *indexstore_unit_reader_t;
 
