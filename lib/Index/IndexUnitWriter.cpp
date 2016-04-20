@@ -47,6 +47,9 @@ void IndexUnitWriter::addRecordFile(StringRef RecordFile, const FileEntry *File)
 
 void IndexUnitWriter::addASTFileDependency(const FileEntry *File) {
   assert(File);
+  if (!SeenASTFiles.insert(File).second)
+    return;
+
   SmallString<64> UnitName;
   getUnitNameForOutputFile(File->getName(), UnitName);
   addUnitDependency(UnitName.str(), File);

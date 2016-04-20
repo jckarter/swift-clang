@@ -11,7 +11,7 @@
 #define LLVM_CLANG_INDEX_INDEXUNITWRITER_H
 
 #include "clang/Basic/LLVM.h"
-#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SmallString.h"
 #include <string>
 #include <vector>
@@ -28,6 +28,7 @@ class IndexUnitWriter {
   std::string TargetTriple;
   std::vector<const FileEntry *> Files;
   llvm::DenseMap<const FileEntry *, int> IndexByFile;
+  llvm::DenseSet<const FileEntry *> SeenASTFiles;
   std::vector<std::pair<std::string, int>> Records;
   std::vector<std::pair<std::string, int>> ASTFileUnits;
 
