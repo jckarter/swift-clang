@@ -46,10 +46,16 @@ void IndexUnitWriter::addRecordFile(StringRef RecordFile, const FileEntry *File)
 }
 
 void IndexUnitWriter::addASTFileDependency(const FileEntry *File) {
-  int Dep = File ? addFileDependency(File) : -1;
+  assert(File);
   SmallString<64> UnitName;
   getUnitNameForOutputFile(File->getName(), UnitName);
-  ASTFileUnits.emplace_back(UnitName.str(), Dep);
+  addUnitDependency(UnitName.str(), File);
+}
+
+void IndexUnitWriter::addUnitDependency(StringRef UnitFile,
+                                        const FileEntry *File) {
+  int Dep = File ? addFileDependency(File) : -1;
+  ASTFileUnits.emplace_back(UnitFile, Dep);
 }
 
 void IndexUnitWriter::getUnitNameForOutputFile(StringRef FilePath,
