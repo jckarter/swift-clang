@@ -132,3 +132,27 @@ bool IndexUnitWriter::write(std::string &Error) {
 
   return false;
 }
+
+bool IndexUnitWriter::initIndexDirectory(StringRef StorePath,
+                                         std::string &Error) {
+  using namespace llvm::sys;
+  SmallString<128> SubPath = StorePath;
+  store::makeRecordSubDir(SubPath);
+  std::error_code EC = fs::create_directories(SubPath);
+  if (EC) {
+    llvm::raw_string_ostream Err(Error);
+    Err << "'" << SubPath << "': " << EC.message();
+    return true;
+  }
+
+  SubPath = StorePath;
+  store::makeUnitSubDir(SubPath);
+  EC = fs::create_directory(SubPath);
+  if (EC) {
+    llvm::raw_string_ostream Err(Error);
+    Err << "'" << SubPath << "': " << EC.message();
+    return true;
+  }
+
+  return false;
+}
