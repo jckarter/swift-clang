@@ -353,11 +353,22 @@ static int printStoreUnits(StringRef StorePath, raw_ostream &OS) {
   return !Success;
 }
 
+
+#else
+
+static int printUnit(StringRef Filename, raw_ostream &OS) {
+  return 1;
+}
+
+static int printStoreUnits(StringRef StorePath, raw_ostream &OS) {
+  return 1;
+}
+
+#endif
+
 //===----------------------------------------------------------------------===//
 // Helper Utils
 //===----------------------------------------------------------------------===//
-
-#endif
 
 static void printSymbolInfo(SymbolInfo SymInfo, raw_ostream &OS) {
   OS << getSymbolKindString(SymInfo.Kind);
