@@ -30,8 +30,10 @@ fi
 
 if [ "$ENABLE_LTO" = "1" ]; then
   LTO_OPTION="-DBOOTSTRAP_LLVM_ENABLE_LTO=On"
-else
+elif [ "$ENABLE_LTO" = "0" ]; then
   LTO_OPTION="-DBOOTSTRAP_LLVM_ENABLE_LTO=Off"
+else
+  LTO_OPTION="-DBOOTSTRAP_LLVM_ENABLE_LTO=$ENABLE_LTO"
 fi
 
 if [ "$LLVM_INCLUDE_TESTS" = "yes" ]; then
