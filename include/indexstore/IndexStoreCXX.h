@@ -189,6 +189,15 @@ public:
     indexstore_store_discard_unit(obj, buf.c_str());
   }
 
+  void getUnitNameFromOutputPath(StringRef outputPath, llvm::SmallVectorImpl<char> &nameBuf) {
+    llvm::SmallString<256> buf = outputPath;
+    size_t nameLen = indexstore_store_get_unit_name_from_output_path(obj, buf.c_str(), nameBuf.data(), nameBuf.size());
+    if (nameLen+1 > nameBuf.size()) {
+      nameBuf.resize(nameLen+1);
+      indexstore_store_get_unit_name_from_output_path(obj, buf.c_str(), nameBuf.data(), nameBuf.size());
+    }
+  }
+
   llvm::Optional<llvm::sys::TimeValue> getUnitModificationTime(StringRef unitName, std::string &error) {
     llvm::SmallString<64> buf = unitName;
     int64_t seconds, nanoseconds;
