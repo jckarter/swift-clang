@@ -182,6 +182,9 @@ public:
       indexstore_error_dispose(c_err);
     }
     return ret;
+#else
+    error = "unit event handler requires blocks";
+    return true;
 #endif
   }
 
