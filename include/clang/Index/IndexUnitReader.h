@@ -48,7 +48,7 @@ public:
   bool foreachDependency(llvm::function_ref<bool(bool IsUnit,
                                             StringRef UnitOrRecordName,
                                             StringRef Filename,
-                                            unsigned DepIndex)> Receiver);
+                                            int DepIndex)> Receiver);
 
 private:
   IndexUnitReader(void *Impl) : Impl(Impl) {}

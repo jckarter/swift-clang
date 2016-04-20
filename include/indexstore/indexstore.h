@@ -354,7 +354,7 @@ indexstore_unit_dependency_get_filepath(indexstore_unit_dependency_t);
 INDEXSTORE_PUBLIC indexstore_string_ref_t
 indexstore_unit_dependency_get_name(indexstore_unit_dependency_t);
 
-INDEXSTORE_PUBLIC size_t
+INDEXSTORE_PUBLIC int
 indexstore_unit_dependency_get_index(indexstore_unit_dependency_t);
 
 #if INDEXSTORE_HAS_BLOCKS

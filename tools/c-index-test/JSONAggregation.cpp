@@ -161,14 +161,29 @@ void Aggregator::processUnit(StringRef name, IndexUnitReader &UnitReader) {
   });
   UnitReader.foreachDependency([&](IndexUnitDependency dep) -> bool {
     switch (dep.getKind()) {
-      case IndexUnitDependency::DependencyKind::Unit:
-        Deps[dep.getIndex()].unitName = dep.getName();
+      case IndexUnitDependency::DependencyKind::Unit: {
+        auto Index = dep.getIndex();
+        if (Index.hasValue()) {
+          Deps[*Index].unitName = dep.getName();
+        } else {
+          Deps.emplace_back();
+          Deps.back().unitName = dep.getName();
+        }
         break;
-      case IndexUnitDependency::DependencyKind::Record:
-        UnitSourceInfo &source = Deps[dep.getIndex()].source;
+      }
+      case IndexUnitDependency::DependencyKind::Record: {
+        auto Index = dep.getIndex();
+
+        if (!Index.hasValue()) {
+          Index = Deps.size();
+          Deps.emplace_back();
+        }
+
+        UnitSourceInfo &source = Deps[*Index].source;
         RecordIndex recIndex = getRecordIndex(dep.getName());
         source.AssociatedRecords.push_back(recIndex);
         break;
+      }
     }
     return true;
   });

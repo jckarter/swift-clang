@@ -30,7 +30,7 @@ IndexUnitWriter::IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
 
 IndexUnitWriter::~IndexUnitWriter() {}
 
-unsigned IndexUnitWriter::addFileDependency(const FileEntry *File) {
+int IndexUnitWriter::addFileDependency(const FileEntry *File) {
   assert(File);
   auto Pair = IndexByFile.insert(std::make_pair(File, Files.size()));
   bool WasInserted = Pair.second;
@@ -41,15 +41,15 @@ unsigned IndexUnitWriter::addFileDependency(const FileEntry *File) {
 }
 
 void IndexUnitWriter::addRecordFile(StringRef RecordFile, const FileEntry *File) {
-  assert(File);
-  Records.emplace_back(RecordFile, addFileDependency(File));
+  int Dep = File ? addFileDependency(File) : -1;
+  Records.emplace_back(RecordFile, Dep);
 }
 
 void IndexUnitWriter::addASTFileDependency(const FileEntry *File) {
-  assert(File);
+  int Dep = File ? addFileDependency(File) : -1;
   SmallString<64> UnitName;
   getUnitNameForOutputFile(File->getName(), UnitName);
-  ASTFileUnits.emplace_back(UnitName.str(), addFileDependency(File));
+  ASTFileUnits.emplace_back(UnitName.str(), Dep);
 }
 
 void IndexUnitWriter::getUnitNameForOutputFile(StringRef FilePath,

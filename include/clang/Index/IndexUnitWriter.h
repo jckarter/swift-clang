@@ -27,16 +27,16 @@ class IndexUnitWriter {
   std::string OutputFile;
   std::string TargetTriple;
   std::vector<const FileEntry *> Files;
-  llvm::DenseMap<const FileEntry *, unsigned> IndexByFile;
-  std::vector<std::pair<std::string, unsigned>> Records;
-  std::vector<std::pair<std::string, unsigned>> ASTFileUnits;
+  llvm::DenseMap<const FileEntry *, int> IndexByFile;
+  std::vector<std::pair<std::string, int>> Records;
+  std::vector<std::pair<std::string, int>> ASTFileUnits;
 
 public:
   IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
                   StringRef TargetTriple);
   ~IndexUnitWriter();
 
-  unsigned addFileDependency(const FileEntry *File);
+  int addFileDependency(const FileEntry *File);
   void addRecordFile(StringRef RecordFile, const FileEntry *File);
   void addASTFileDependency(const FileEntry *File);
 

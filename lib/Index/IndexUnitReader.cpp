@@ -35,8 +35,8 @@ class IndexUnitReaderImpl {
   StringRef OutputFile;
   StringRef Target;
   SmallVector<StringRef, 16> Dependencies;
-  SmallVector<std::pair<StringRef, unsigned>, 6> ASTFileUnits;
-  SmallVector<std::pair<StringRef, unsigned>, 16> Records;
+  SmallVector<std::pair<StringRef, int>, 6> ASTFileUnits;
+  SmallVector<std::pair<StringRef, int>, 16> Records;
 
 public:
   bool init(std::unique_ptr<MemoryBuffer> Buf, sys::TimeValue ModTime,
@@ -54,7 +54,7 @@ public:
   bool foreachDependency(llvm::function_ref<bool(bool IsUnit,
                                             StringRef UnitOrRecordName,
                                             StringRef Filename,
-                                            unsigned DepIndex)> Receiver);
+                                            int DepIndex)> Receiver);
 };
 
 } // anonymous namespace
@@ -84,14 +84,14 @@ bool IndexUnitReaderImpl::init(std::unique_ptr<MemoryBuffer> Buf,
       continue;
     }
     std::tie(IndexStr, Buffer) = Buffer.split('\n');
-    unsigned Index;
+    int Index;
     bool Err = IndexStr.getAsInteger(10, Index);
     if (Err) {
       Error = "Error getting index for dependency: ";
       Error += UnitOrRecordName;
       return true;
     }
-    if (Index >= Dependencies.size()) {
+    if (Index >= 0 && unsigned(Index) >= Dependencies.size()) {
       Error = "Out of range index for dependency: ";
       Error += UnitOrRecordName;
       return true;
@@ -132,18 +132,18 @@ ArrayRef<StringRef> IndexUnitReaderImpl::getDependencyFiles() const {
 bool IndexUnitReaderImpl::foreachDependency(llvm::function_ref<bool(bool IsUnit,
                                             StringRef UnitOrRecordName,
                                             StringRef Filename,
-                                            unsigned DepIndex)> Receiver) {
+                                            int DepIndex)> Receiver) {
   for (auto &Pair : ASTFileUnits) {
-    unsigned Index = Pair.second;
-    bool Continue = Receiver(/*IsUnit=*/true, Pair.first,  Dependencies[Index],
-                             Index);
+    int Index = Pair.second;
+    StringRef Dep = Index < 0 ? "" : Dependencies[Index];
+    bool Continue = Receiver(/*IsUnit=*/true, Pair.first, Dep, Index);
     if (!Continue)
       return false;
   }
   for (auto &Pair : Records) {
-    unsigned Index = Pair.second;
-    bool Continue = Receiver(/*IsUnit=*/false, Pair.first,  Dependencies[Index],
-                             Index);
+    int Index = Pair.second;
+    StringRef Dep = Index < 0 ? "" : Dependencies[Index];
+    bool Continue = Receiver(/*IsUnit=*/false, Pair.first, Dep, Index);
     if (!Continue)
       return false;
   }
@@ -257,6 +257,6 @@ ArrayRef<StringRef> IndexUnitReader::getDependencyFiles() const {
 bool IndexUnitReader::foreachDependency(llvm::function_ref<bool(bool IsUnit,
                                             StringRef UnitOrRecordName,
                                             StringRef Filename,
-                                            unsigned DepIndex)> Receiver) {
+                                            int DepIndex)> Receiver) {
   return IMPL->foreachDependency(std::move(Receiver));
 }

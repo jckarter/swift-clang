@@ -461,7 +461,7 @@ struct DependencyInfo {
   bool IsUnit;
   StringRef FilePath;
   StringRef Name;
-  size_t Index;
+  int Index;
 };
 }
 
@@ -483,7 +483,7 @@ indexstore_unit_dependency_get_name(indexstore_unit_dependency_t c_dep) {
   return toIndexStoreString(dep->Name);
 }
 
-size_t
+int
 indexstore_unit_dependency_get_index(indexstore_unit_dependency_t c_dep) {
   auto dep = static_cast<DependencyInfo*>(c_dep);
   return dep->Index;
@@ -497,7 +497,7 @@ indexstore_unit_reader_dependencies_apply(indexstore_unit_reader_t rdr,
   return reader->foreachDependency([&](bool isUnit,
                                        StringRef unitOrRecordName,
                                        StringRef Filename,
-                                       unsigned depIndex) -> bool {
+                                       int depIndex) -> bool {
     DependencyInfo depInfo{isUnit, Filename, unitOrRecordName, depIndex};
     return applier(&depInfo);
   });
