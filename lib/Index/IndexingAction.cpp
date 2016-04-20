@@ -307,23 +307,11 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
   DiagnosticsEngine &Diag = CI.getDiagnostics();
   StringRef DataPath = RecordOpts.DataDirPath;
 
-  using namespace llvm::sys;
-  SmallString<128> SubPath = DataPath;
-  store::makeRecordSubDir(SubPath);
-  std::error_code EC = fs::create_directories(SubPath);
-  if (EC) {
-    unsigned DiagID = Diag.getCustomDiagID(DiagnosticsEngine::Error,
-                                          "failed creating directory '%0': %1");
-    Diag.Report(DiagID) << SubPath << EC.message();
-    return;
-  }
-  SubPath = DataPath;
-  store::makeUnitSubDir(SubPath);
-  EC = fs::create_directory(SubPath);
-  if (EC) {
-    unsigned DiagID = Diag.getCustomDiagID(DiagnosticsEngine::Error,
-                                           "failed creating directory '%0': %1");
-    Diag.Report(DiagID) << SubPath << EC.message();
+  std::string Error;
+  if (IndexUnitWriter::initIndexDirectory(DataPath, Error)) {
+    unsigned DiagID = Diag.getCustomDiagID(
+        DiagnosticsEngine::Error, "failed creating index directory %0");
+    Diag.Report(DiagID) << Error;
     return;
   }
 
@@ -365,7 +353,6 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
     UnitWriter.addRecordFile(RecordFile, FE);
   }
 
-  std::string Error;
   if (UnitWriter.write(Error)) {
     unsigned DiagID = Diag.getCustomDiagID(DiagnosticsEngine::Error,
                                            "failed writing unit data: %0");

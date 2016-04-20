@@ -44,6 +44,7 @@ public:
 
   static void getUnitNameForOutputFile(StringRef FilePath,
                                        SmallVectorImpl<char> &Str);
+  static bool initIndexDirectory(StringRef StorePath, std::string &Error);
 };
 
 } // end namespace index
