@@ -23,6 +23,7 @@
 
 namespace indexstore {
   using llvm::ArrayRef;
+  using llvm::Optional;
   using llvm::StringRef;
 
 static inline StringRef stringFromIndexStoreStringRef(indexstore_string_ref_t str) {
@@ -338,7 +339,10 @@ public:
   }
   StringRef getName() { return stringFromIndexStoreStringRef(indexstore_unit_dependency_get_name(obj)); }
   StringRef getFilePath() { return stringFromIndexStoreStringRef(indexstore_unit_dependency_get_filepath(obj)); }
-  size_t getIndex() { return indexstore_unit_dependency_get_index(obj); }
+  Optional<size_t> getIndex() {
+    auto I = indexstore_unit_dependency_get_index(obj);
+    return I < 0 ? llvm::None : Optional<size_t>(I);
+  }
 };
 
 class IndexUnitReader {
