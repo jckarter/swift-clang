@@ -84,8 +84,8 @@ bool IndexUnitWriter::write(std::string &Error) {
   TempPath += "-%%%%%%%%";
   int TempFD;
   if (llvm::sys::fs::createUniqueFile(TempPath.str(), TempFD, TempPath)) {
-    Error = "failed creating temporary file: ";
-    Error += TempPath.str();
+    llvm::raw_string_ostream Err(Error);
+    Err << "failed toe create temporary file: " << TempPath;
     return true;
   }
 
@@ -96,7 +96,8 @@ bool IndexUnitWriter::write(std::string &Error) {
   SmallString<128> CWDPath;
   std::error_code EC = fs::current_path(CWDPath);
   if (EC) {
-    Error = EC.message();
+    llvm::raw_string_ostream Err(Error);
+    Err << "failed to determine current working directory: " << EC.message();
     return true;
   }
   OS << CWDPath.str() << '\n';
@@ -135,7 +136,8 @@ bool IndexUnitWriter::write(std::string &Error) {
 
   EC = fs::rename(/*from=*/TempPath.c_str(), /*to=*/UnitPath.c_str());
   if (EC) {
-    Error = EC.message();
+    llvm::raw_string_ostream Err(Error);
+    Err << "failed to rename '" << TempPath << "' to '" << UnitPath << "': " << EC.message();
     return true;
   }
 
@@ -150,7 +152,7 @@ bool IndexUnitWriter::initIndexDirectory(StringRef StorePath,
   std::error_code EC = fs::create_directories(SubPath);
   if (EC) {
     llvm::raw_string_ostream Err(Error);
-    Err << "'" << SubPath << "': " << EC.message();
+    Err << "failed to create directory '" << SubPath << "': " << EC.message();
     return true;
   }
 
@@ -159,7 +161,7 @@ bool IndexUnitWriter::initIndexDirectory(StringRef StorePath,
   EC = fs::create_directory(SubPath);
   if (EC) {
     llvm::raw_string_ostream Err(Error);
-    Err << "'" << SubPath << "': " << EC.message();
+    Err << "failed to create directory '" << SubPath << "': " << EC.message();
     return true;
   }
 
