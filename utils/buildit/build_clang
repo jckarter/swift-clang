@@ -109,6 +109,10 @@ fi
 # calculate the link pool
 mem=`sysctl hw.memsize | cut -d: -f2-`
 link_threads=`expr $mem / 3500000000`
+# ThinLTO is parallel, limit to a maximum of 2 link jobs
+if [ "$ENABLE_LTO" = "THIN" ] && [ "$link_threads" != "1" ]; then
+ link_threads=2
+fi
 
 CMAKE=`xcrun -find cmake`
 NINJA=`xcrun -find ninja`
