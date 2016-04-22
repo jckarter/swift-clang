@@ -179,10 +179,13 @@ typedef enum {
 } indexstore_symbol_kind_t;
 
 typedef enum {
-  INDEXSTORE_SYMBOL_SUB_KIND_NONE = 0,
-  INDEXSTORE_SYMBOL_SUB_KIND_GENERIC = 1,
-  INDEXSTORE_SYMBOL_SUB_KIND_TEMPLATE_PARTIAL_SPECIALIZATION = 2,
-  INDEXSTORE_SYMBOL_SUB_KIND_TEMPLATE_SPECIALIZATION = 3,
+  INDEXSTORE_SYMBOL_SUB_KIND_GENERIC                          = 1 << 0,
+  INDEXSTORE_SYMBOL_SUB_KIND_TEMPLATE_PARTIAL_SPECIALIZATION  = 1 << 1,
+  INDEXSTORE_SYMBOL_SUB_KIND_TEMPLATE_SPECIALIZATION          = 1 << 2,
+  INDEXSTORE_SYMBOL_SUB_KIND_UNITTEST                         = 1 << 3,
+  INDEXSTORE_SYMBOL_SUB_KIND_IBANNOTATED                      = 1 << 4,
+  INDEXSTORE_SYMBOL_SUB_KIND_IBOUTLETCOLLECTION               = 1 << 5,
+  INDEXSTORE_SYMBOL_SUB_KIND_GKINSPECTABLE                    = 1 << 6,
 } indexstore_symbol_sub_kind_t;
 
 typedef enum {
@@ -216,8 +219,8 @@ indexstore_symbol_get_language(indexstore_symbol_t);
 INDEXSTORE_PUBLIC indexstore_symbol_kind_t
 indexstore_symbol_get_kind(indexstore_symbol_t);
 
-INDEXSTORE_PUBLIC indexstore_symbol_sub_kind_t
-indexstore_symbol_get_sub_kind(indexstore_symbol_t);
+INDEXSTORE_PUBLIC uint64_t
+indexstore_symbol_get_sub_kinds(indexstore_symbol_t);
 
 INDEXSTORE_PUBLIC uint64_t
 indexstore_symbol_get_roles(indexstore_symbol_t);

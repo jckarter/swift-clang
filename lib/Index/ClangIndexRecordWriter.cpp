@@ -106,18 +106,8 @@ static indexstore_symbol_kind_t getIndexStoreKind(SymbolKind K) {
 }
 
 static indexstore_symbol_sub_kind_t
-getIndexStoreSubKind(SymbolCXXTemplateKind K) {
-  switch (K) {
-  case SymbolCXXTemplateKind::NonTemplate:
-    return INDEXSTORE_SYMBOL_SUB_KIND_NONE;
-  case SymbolCXXTemplateKind::Template:
-    return INDEXSTORE_SYMBOL_SUB_KIND_GENERIC;
-  case SymbolCXXTemplateKind::TemplatePartialSpecialization:
-    return INDEXSTORE_SYMBOL_SUB_KIND_TEMPLATE_PARTIAL_SPECIALIZATION;
-  case SymbolCXXTemplateKind::TemplateSpecialization:
-    return INDEXSTORE_SYMBOL_SUB_KIND_TEMPLATE_SPECIALIZATION;
-  }
-  llvm_unreachable("unexpected symbol sub kind");
+getIndexStoreSubKinds(SymbolSubKindSet SubKinds) {
+  return (indexstore_symbol_sub_kind_t)SubKinds;
 }
 
 static indexstore_symbol_language_t getIndexStoreLang(SymbolLanguage L) {
@@ -179,7 +169,7 @@ bool ClangIndexRecordWriter::writeRecord(StringRef Filename,
     writer::Symbol Sym;
     Sym.Kind = getIndexStoreKind(Info.Kind);
     Sym.Lang = getIndexStoreLang(Info.Lang);
-    Sym.CXXTemplateKind = getIndexStoreSubKind(Info.TemplateKind);
+    Sym.SubKinds = getIndexStoreSubKinds(Info.SubKinds);
 
     auto *ND = dyn_cast<NamedDecl>(D);
     if (ND) {

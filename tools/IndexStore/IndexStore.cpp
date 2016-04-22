@@ -176,10 +176,10 @@ indexstore_symbol_get_language(indexstore_symbol_t sym) {
       ->Lang;
 }
 
-indexstore_symbol_sub_kind_t
-indexstore_symbol_get_sub_kind(indexstore_symbol_t sym) {
+uint64_t
+indexstore_symbol_get_sub_kinds(indexstore_symbol_t sym) {
   return (indexstore_symbol_sub_kind_t) static_cast<IndexRecordDecl *>(sym)
-      ->CXXTemplateKind;
+      ->SubKinds;
 }
 
 uint64_t

@@ -26,7 +26,7 @@ struct IndexRecordDecl {
   unsigned DeclID;
   SymbolKind Kind;
   SymbolLanguage Lang;
-  SymbolCXXTemplateKind CXXTemplateKind;
+  SymbolSubKindSet SubKinds;
   SymbolRoleSet Roles;
   SymbolRoleSet RelatedRoles;
   StringRef Name;

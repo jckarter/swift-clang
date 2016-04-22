@@ -398,7 +398,7 @@ static void printSymbolNameAndUSR(const Decl *D, ASTContext &Ctx,
 #if INDEXSTORE_HAS_BLOCKS
 
 static void printSymbol(const IndexRecordDecl &Rec, raw_ostream &OS) {
-  SymbolInfo SymInfo{ Rec.Kind, Rec.CXXTemplateKind, Rec.Lang };
+  SymbolInfo SymInfo{ Rec.Kind, Rec.SubKinds, Rec.Lang };
   printSymbolInfo(SymInfo, OS);
   OS << " | ";
 
@@ -428,7 +428,7 @@ static void printSymbol(const IndexRecordDecl &Rec, raw_ostream &OS) {
 
 static void printSymbol(const IndexRecordOccurrence &Rec, raw_ostream &OS) {
   OS << Rec.Line << ':' << Rec.Column << " | ";
-  SymbolInfo SymInfo{ Rec.Dcl->Kind, Rec.Dcl->CXXTemplateKind, Rec.Dcl->Lang };
+  SymbolInfo SymInfo{ Rec.Dcl->Kind, Rec.Dcl->SubKinds, Rec.Dcl->Lang };
   printSymbolInfo(SymInfo, OS);
   OS << " | ";
 
@@ -510,23 +510,6 @@ SymbolKind index::getSymbolKind(indexstore_symbol_kind_t K) {
   }
 }
 
-/// Map an indexstore_symbol_sub_kind_t to a SymbolSubKind, handling unknown
-/// values.
-SymbolCXXTemplateKind
-index::getSymbolCXXTemplateKind(indexstore_symbol_sub_kind_t K) {
-  switch ((uint64_t)K) {
-  default:
-  case INDEXSTORE_SYMBOL_SUB_KIND_NONE:
-    return SymbolCXXTemplateKind::NonTemplate;
-  case INDEXSTORE_SYMBOL_SUB_KIND_GENERIC:
-    return SymbolCXXTemplateKind::Template;
-  case INDEXSTORE_SYMBOL_SUB_KIND_TEMPLATE_PARTIAL_SPECIALIZATION:
-    return SymbolCXXTemplateKind::TemplatePartialSpecialization;
-  case INDEXSTORE_SYMBOL_SUB_KIND_TEMPLATE_SPECIALIZATION:
-    return SymbolCXXTemplateKind::TemplateSpecialization;
-  }
-}
-
 /// Map an indexstore_symbol_language_t to a SymbolLanguage, handling unknown
 /// values.
 SymbolLanguage index::getSymbolLanguage(indexstore_symbol_language_t L) {
@@ -543,7 +526,7 @@ SymbolLanguage index::getSymbolLanguage(indexstore_symbol_language_t L) {
 
 static void printSymbol(indexstore::IndexRecordSymbol Sym, raw_ostream &OS) {
   SymbolInfo SymInfo{getSymbolKind(Sym.getKind()),
-                     getSymbolCXXTemplateKind(Sym.getSubKind()),
+                     SymbolSubKindSet(Sym.getSubKinds()),
                      getSymbolLanguage(Sym.getLanguage())};
 
   printSymbolInfo(SymInfo, OS);
@@ -577,7 +560,7 @@ static void printSymbol(indexstore::IndexRecordOccurrence Occur, raw_ostream &OS
   OS << Occur.getLineCol().first << ':' << Occur.getLineCol().second << " | ";
   auto Sym = Occur.getSymbol();
   SymbolInfo SymInfo{getSymbolKind(Sym.getKind()),
-                     getSymbolCXXTemplateKind(Sym.getSubKind()),
+                     SymbolSubKindSet(Sym.getSubKinds()),
                      getSymbolLanguage(Sym.getLanguage())};
 
   printSymbolInfo(SymInfo, OS);

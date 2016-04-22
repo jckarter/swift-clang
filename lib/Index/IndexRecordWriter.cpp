@@ -150,7 +150,7 @@ static void writeDecls(BitstreamWriter &Stream, ArrayRef<DeclInfo> Decls,
   Abbrev->Add(BitCodeAbbrevOp(REC_DECLINFO));
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 5)); // Kind
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 2)); // Language
-  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 2)); // C++ template kind
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, SymbolSubKindBitNum)); // SubKinds
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, SymbolRoleBitNum)); // Roles
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, SymbolRoleBitNum)); // Related Roles
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Length of name in block
@@ -190,7 +190,7 @@ static void writeDecls(BitstreamWriter &Stream, ArrayRef<DeclInfo> Decls,
     Record.push_back(REC_DECLINFO);
     Record.push_back((int)SymInfo.Kind);
     Record.push_back((int)SymInfo.Lang);
-    Record.push_back((int)SymInfo.CXXTemplateKind);
+    Record.push_back(SymInfo.SubKinds);
     Record.push_back(Info.Roles);
     Record.push_back(Info.RelatedRoles);
     Record.push_back(SymInfo.Name.size());
