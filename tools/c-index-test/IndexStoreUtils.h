@@ -20,10 +20,6 @@ namespace index {
 /// Map an indexstore_symbol_kind_t to a SymbolKind, handling unknown values.
 SymbolKind getSymbolKind(indexstore_symbol_kind_t K);
 
-/// Map an indexstore_symbol_sub_kind_t to a SymbolCXXTemplateKind, handling
-/// unknown values.
-SymbolCXXTemplateKind getSymbolCXXTemplateKind(indexstore_symbol_sub_kind_t K);
-
 /// Map an indexstore_symbol_language_t to a SymbolLanguage, handling unknown
 /// values.
 SymbolLanguage getSymbolLanguage(indexstore_symbol_language_t L);

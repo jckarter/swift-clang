@@ -34,7 +34,7 @@ typedef const void *OpaqueDecl;
 struct Symbol {
   indexstore_symbol_kind_t Kind;
   indexstore_symbol_language_t Lang;
-  indexstore_symbol_sub_kind_t CXXTemplateKind;
+  indexstore_symbol_sub_kind_t SubKinds;
   StringRef Name;
   StringRef USR;
   StringRef CodeGenName;

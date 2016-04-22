@@ -238,7 +238,7 @@ struct IndexRecordReader::Implementation {
     RecD.DeclID = Index+1;
     RecD.Kind = (SymbolKind)read(Record, I);
     RecD.Lang = (SymbolLanguage)read(Record, I);
-    RecD.CXXTemplateKind = (SymbolCXXTemplateKind)read(Record, I);
+    RecD.SubKinds = read(Record, I);
     RecD.Roles = read(Record, I);
     RecD.RelatedRoles = read(Record, I);
     size_t NameLen = read(Record, I);
