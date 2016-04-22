@@ -373,8 +373,10 @@ static int printStoreUnits(StringRef StorePath, raw_ostream &OS) {
 
 static void printSymbolInfo(SymbolInfo SymInfo, raw_ostream &OS) {
   OS << getSymbolKindString(SymInfo.Kind);
-  if (SymInfo.TemplateKind != SymbolCXXTemplateKind::NonTemplate) {
-    OS << '-' << getTemplateKindStr(SymInfo.TemplateKind);
+  if (SymInfo.SubKinds) {
+    OS << '(';
+    printSymbolSubKinds(SymInfo.SubKinds, OS);
+    OS << ')';
   }
   OS << '/' << getSymbolLanguageString(SymInfo.Lang);
 }
