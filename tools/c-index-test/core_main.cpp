@@ -254,7 +254,7 @@ static int printStoreRecords(StringRef StorePath, raw_ostream &OS) {
     return 1;
   }
 
-  bool Success = Store.foreachUnit([&](StringRef UnitName) -> bool {
+  bool Success = Store.foreachUnit(/*sorted=*/true, [&](StringRef UnitName) -> bool {
     indexstore::IndexUnitReader Reader(Store, UnitName, Error);
     if (!Reader) {
       errs() << "error loading unit: " << Error << "\n";
@@ -342,7 +342,7 @@ static int printStoreUnits(StringRef StorePath, raw_ostream &OS) {
     return 1;
   }
 
-  bool Success = Store.foreachUnit([&](StringRef UnitName) -> bool {
+  bool Success = Store.foreachUnit(/*sorted=*/true, [&](StringRef UnitName) -> bool {
     OS << UnitName << '\n';
     OS << "--------\n";
     bool err = printStoreUnit(Store, UnitName, OS);

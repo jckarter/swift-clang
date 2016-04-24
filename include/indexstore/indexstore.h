@@ -96,7 +96,7 @@ indexstore_store_dispose(indexstore_t);
 
 #if INDEXSTORE_HAS_BLOCKS
 INDEXSTORE_PUBLIC bool
-indexstore_store_units_apply(indexstore_t,
+indexstore_store_units_apply(indexstore_t, unsigned sorted,
                              bool(^applier)(indexstore_string_ref_t unit_name));
 #endif
 

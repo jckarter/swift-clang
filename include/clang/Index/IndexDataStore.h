@@ -12,6 +12,7 @@
 
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/STLExtras.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -27,7 +28,8 @@ public:
     create(StringRef IndexStorePath, std::string &Error);
 
   StringRef getFilePath() const;
-  std::vector<std::string> getAllUnitFilenames() const;
+  bool foreachUnitName(bool sorted,
+                       llvm::function_ref<bool(StringRef unitName)> receiver);
 
   static unsigned getFormatVersion();
 
