@@ -125,9 +125,9 @@ public:
   bool isInvalid() const { return !isValid(); }
   explicit operator bool() const { return isValid(); }
 
-  bool foreachUnit(llvm::function_ref<bool(StringRef unitName)> receiver) {
+  bool foreachUnit(bool sorted, llvm::function_ref<bool(StringRef unitName)> receiver) {
 #if INDEXSTORE_HAS_BLOCKS
-    return indexstore_store_units_apply(obj, ^bool(indexstore_string_ref_t unit_name) {
+    return indexstore_store_units_apply(obj, sorted, ^bool(indexstore_string_ref_t unit_name) {
       return receiver(stringFromIndexStoreStringRef(unit_name));
     });
 #else

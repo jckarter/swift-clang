@@ -71,7 +71,8 @@ public:
   }
 
   StringRef getFilePath() const { return FilePath; }
-  std::vector<std::string> getAllUnitFilenames() const;
+  bool foreachUnitName(bool sorted,
+                       llvm::function_ref<bool(StringRef unitName)> receiver);
   bool setUnitEventHandler(IndexDataStore::UnitEventHandler Handler,
                            std::string &Error);
   void discardUnit(StringRef UnitName);
@@ -80,7 +81,8 @@ public:
 
 } // anonymous namespace
 
-std::vector<std::string> IndexDataStoreImpl::getAllUnitFilenames() const {
+bool IndexDataStoreImpl::foreachUnitName(bool sorted,
+                        llvm::function_ref<bool(StringRef unitName)> receiver) {
   SmallString<128> UnitPath;
   UnitPath = FilePath;
   makeUnitSubDir(UnitPath);
@@ -91,11 +93,22 @@ std::vector<std::string> IndexDataStoreImpl::getAllUnitFilenames() const {
   for (auto It = sys::fs::directory_iterator(UnitPath, EC),
            End = sys::fs::directory_iterator();
        !EC && It != End; It.increment(EC)) {
-    filenames.push_back(sys::path::filename(It->path()));
+    StringRef unitName = sys::path::filename(It->path());
+    if (!sorted) {
+      if (!receiver(unitName))
+        return false;
+    } else {
+      filenames.push_back(unitName);
+    }
   }
 
-  llvm::array_pod_sort(filenames.begin(), filenames.end());
-  return filenames;
+  if (sorted) {
+    llvm::array_pod_sort(filenames.begin(), filenames.end());
+    for (auto &fname : filenames)
+      if (!receiver(fname))
+        return false;
+  }
+  return true;
 }
 
 bool IndexDataStoreImpl::setUnitEventHandler(IndexDataStore::UnitEventHandler handler,
@@ -229,8 +242,9 @@ StringRef IndexDataStore::getFilePath() const {
   return IMPL->getFilePath();
 }
 
-std::vector<std::string> IndexDataStore::getAllUnitFilenames() const {
-  return IMPL->getAllUnitFilenames();
+bool IndexDataStore::foreachUnitName(bool sorted,
+                     llvm::function_ref<bool(StringRef unitName)> receiver) {
+  return IMPL->foreachUnitName(sorted, std::move(receiver));
 }
 
 unsigned IndexDataStore::getFormatVersion() {

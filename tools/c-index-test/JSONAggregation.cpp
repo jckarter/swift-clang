@@ -121,23 +121,19 @@ private:
 } // anonymous namespace
 
 bool Aggregator::process() {
-  std::vector<std::string> unitFilenames;
-  Store.foreachUnit([&](StringRef name) -> bool {
-    unitFilenames.push_back(name);
+  bool succ = Store.foreachUnit(/*sorted=*/true, [&](StringRef unitName) -> bool {
+    std::string error;
+    auto unitReader = IndexUnitReader(Store, unitName, error);
+    if (!unitReader) {
+      errs() << "error opening unit file '" << unitName << "': " << error << '\n';
+      return false;
+    }
+
+    processUnit(unitName, unitReader);
     return true;
   });
 
-  for (auto &unitFname : unitFilenames) {
-    std::string error;
-    auto unitReader = IndexUnitReader(Store, unitFname, error);
-    if (!unitReader) {
-      errs() << "error opening unit file '" << unitFname << "': " << error << '\n';
-      return true;
-    }
-
-    processUnit(unitFname, unitReader);
-  }
-  return false;
+  return !succ;
 }
 
 void Aggregator::processUnit(StringRef name, IndexUnitReader &UnitReader) {

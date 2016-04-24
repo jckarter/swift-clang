@@ -73,16 +73,12 @@ indexstore_store_dispose(indexstore_t store) {
 
 #if INDEXSTORE_HAS_BLOCKS
 bool
-indexstore_store_units_apply(indexstore_t c_store,
+indexstore_store_units_apply(indexstore_t c_store, unsigned sorted,
                             bool(^applier)(indexstore_string_ref_t unit_name)) {
   IndexDataStore *store = static_cast<IndexDataStore*>(c_store);
-  std::vector<std::string> unitNames = store->getAllUnitFilenames();
-  for (const auto &name : unitNames) {
-    bool cont = applier(toIndexStoreString(name));
-    if (!cont)
-      return false;
-  }
-  return true;
+  return store->foreachUnitName(sorted, [&](StringRef unitName) -> bool {
+    return applier(toIndexStoreString(unitName));
+  });
 }
 
 bool
