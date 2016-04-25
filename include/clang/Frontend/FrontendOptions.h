@@ -212,7 +212,6 @@ public:
   std::string IndexStorePath;
   unsigned IndexIgnoreSystemSymbols : 1;
   unsigned IndexRecordCodegenName : 1;
-  unsigned IndexRecordSystemDependencies : 1;
 
   /// The input files and their types.
   std::vector<FrontendInputFile> Inputs;
@@ -285,7 +284,6 @@ public:
     BuildingImplicitModule(false), ModulesEmbedAllFiles(false),
     ARCMTAction(ARCMT_None), ObjCMTAction(ObjCMT_None), XCTMigrate(false),
     IndexIgnoreSystemSymbols(false), IndexRecordCodegenName(false),
-    IndexRecordSystemDependencies(false),
     ProgramAction(frontend::ParseSyntaxOnly)
   {}
 

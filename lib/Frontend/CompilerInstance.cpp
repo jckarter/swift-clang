@@ -1042,8 +1042,6 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
         index::IndexingOptions::SystemSymbolFilterKind::None;
     }
     RecordOpts.RecordSymbolCodeGenName = FrontendOpts.IndexRecordCodegenName;
-    RecordOpts.RecordSystemDependencies =
-      FrontendOpts.IndexRecordSystemDependencies;
     CreateModuleAction = index::createIndexDataRecordingAction(IndexOpts,
                                      RecordOpts, std::move(CreateModuleAction));
   }

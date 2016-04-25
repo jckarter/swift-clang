@@ -1183,7 +1183,6 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   Opts.IndexStorePath = Args.getLastArgValue(OPT_index_store_path);
   Opts.IndexIgnoreSystemSymbols = Args.hasArg(OPT_index_ignore_system_symbols);
   Opts.IndexRecordCodegenName = Args.hasArg(OPT_index_record_codegen_name);
-  Opts.IndexRecordSystemDependencies = Args.hasArg(OPT_index_record_system_dependencies);
 
   InputKind DashX = IK_None;
   if (const Arg *A = Args.getLastArg(OPT_x)) {
