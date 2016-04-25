@@ -290,17 +290,24 @@ static int printUnit(StringRef Filename, raw_ostream &OS) {
   OS << "work-dir: " << Reader->getWorkingDirectory() << '\n';
   OS << "out-file: " << Reader->getOutputFile() << '\n';
   OS << "target: " << Reader->getTarget() << '\n';
-  OS << "DEPEND START: " << Reader->getDependencyFiles().size() << '\n';
-  Reader->foreachDependency([&](bool isUnit, StringRef unitOrRecordName,
-                                StringRef Filename, unsigned depIndex) -> bool {
-    if (isUnit)
-      OS << "Unit | ";
-    else
-      OS << "Record | ";
-    OS << Filename << " | " << unitOrRecordName << '\n';
+  OS << "DEPEND START\n";
+  unsigned NumDepends = 0;
+  Reader->foreachDependency([&](IndexUnitReader::DependencyKind Kind,
+                                StringRef unitOrRecordName,
+                                StringRef FilePath) -> bool {
+    switch (Kind) {
+    case IndexUnitReader::DependencyKind::Unit:
+      OS << "Unit | "; break;
+    case IndexUnitReader::DependencyKind::Record:
+      OS << "Record | "; break;
+    case IndexUnitReader::DependencyKind::File:
+      OS << "File | "; break;
+    }
+    OS << FilePath << " | " << unitOrRecordName << '\n';
+    ++NumDepends;
     return true;
   });
-  OS << "DEPEND END\n";
+  OS << "DEPEND END (" << NumDepends << ")\n";
 
   return false;
 };
@@ -321,16 +328,22 @@ static bool printStoreUnit(indexstore::IndexStore &Store, StringRef UnitName,
   OS << "work-dir: " << Reader.getWorkingDirectory() << '\n';
   OS << "out-file: " << Reader.getOutputFile() << '\n';
   OS << "target: " << Reader.getTarget() << '\n';
-  OS << "DEPEND START: " << Reader.getDependenciesCount() << '\n';
+  OS << "DEPEND START\n";
+  unsigned NumDepends = 0;
   Reader.foreachDependency([&](indexstore::IndexUnitDependency Dep) -> bool {
-    if (Dep.getKind() == indexstore::IndexUnitDependency::DependencyKind::Unit)
-      OS << "Unit | ";
-    else
-      OS << "Record | ";
+    switch (Dep.getKind()) {
+    case indexstore::IndexUnitDependency::DependencyKind::Unit:
+      OS << "Unit | "; break;
+    case indexstore::IndexUnitDependency::DependencyKind::Record:
+      OS << "Record | "; break;
+    case indexstore::IndexUnitDependency::DependencyKind::File:
+      OS << "File | "; break;
+    }
     OS << Dep.getFilePath() << " | " << Dep.getName() << '\n';
+    ++NumDepends;
     return true;
   });
-  OS << "DEPEND END\n";
+  OS << "DEPEND END (" << NumDepends << ")\n";
 
   return false;
 }

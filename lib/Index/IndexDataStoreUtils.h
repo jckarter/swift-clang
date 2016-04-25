@@ -11,32 +11,64 @@
 #define LLVM_CLANG_LIB_INDEX_INDEXDATASTOREUTILS_H
 
 #include "llvm/Bitcode/BitCodes.h"
+#include "clang/Basic/LLVM.h"
+
+namespace llvm {
+  class BitstreamWriter;
+}
 
 namespace clang {
 namespace index {
 namespace store {
 
-static const unsigned STORE_FORMAT_VERSION = 1;
+static const unsigned STORE_FORMAT_VERSION = 2;
 
 void makeUnitSubDir(SmallVectorImpl<char> &StorePathBuf);
 void makeRecordSubDir(SmallVectorImpl<char> &StorePathBuf);
 
-enum BitRecord {
+enum RecordBitRecord {
   REC_VERSION,
   REC_DECLINFO,
   REC_DECLOFFSETS,
   REC_DECLOCCURRENCE,
 };
 
-enum BitBlock {
-  VERSION_BLOCK_ID = llvm::bitc::FIRST_APPLICATION_BLOCKID,
-  DECLS_BLOCK_ID,
-  DECLOFFSETS_BLOCK_ID,
-  DECLOCCURRENCES_BLOCK_ID,
+enum RecordBitBlock {
+  REC_VERSION_BLOCK_ID = llvm::bitc::FIRST_APPLICATION_BLOCKID,
+  REC_DECLS_BLOCK_ID,
+  REC_DECLOFFSETS_BLOCK_ID,
+  REC_DECLOCCURRENCES_BLOCK_ID,
 };
+
+enum UnitBitRecord {
+  UNIT_VERSION,
+  UNIT_INFO,
+  UNIT_PATHS,
+  UNIT_DEPENDENCY,
+};
+
+enum UnitBitBlock {
+  UNIT_VERSION_BLOCK_ID = llvm::bitc::FIRST_APPLICATION_BLOCKID,
+  UNIT_INFO_BLOCK_ID,
+  UNIT_DEPENDENCIES_BLOCK_ID,
+  UNIT_PATHS_BLOCK_ID,
+};
+
+enum UnitDependencyKind {
+  UNIT_DEPEND_KIND_FILE = 0,
+  UNIT_DEPEND_KIND_RECORD = 1,
+  UNIT_DEPEND_KIND_UNIT = 2,
+};
+static const unsigned UnitDependencyKindBitNum = 2;
 
 typedef SmallVector<uint64_t, 64> RecordData;
 typedef SmallVectorImpl<uint64_t> RecordDataImpl;
+
+void emitBlockID(unsigned ID, const char *Name,
+                 llvm::BitstreamWriter &Stream, RecordDataImpl &Record);
+
+void emitRecordID(unsigned ID, const char *Name,
+                  llvm::BitstreamWriter &Stream, RecordDataImpl &Record);
 
 } // end namespace store
 } // end namespace index
