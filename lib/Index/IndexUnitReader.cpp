@@ -43,6 +43,7 @@ public:
   llvm::BitstreamCursor DependCursor;
   StringRef WorkingDir;
   StringRef OutputFile;
+  StringRef SysrootPath;
   StringRef Target;
   StringRef PathsBuffer;
 
@@ -52,6 +53,7 @@ public:
   llvm::sys::TimeValue getModificationTime() const { return ModTime; }
   StringRef getWorkingDirectory() const { return WorkingDir; }
   StringRef getOutputFile() const { return OutputFile; }
+  StringRef getSysrootPath() const { return SysrootPath; }
   StringRef getTarget() const { return Target; }
 
   /// Unit dependencies are provided ahead of record ones, record ones
@@ -69,6 +71,8 @@ class IndexUnitBitstreamVisitor : public BitstreamVisitor<IndexUnitBitstreamVisi
   size_t WorkDirSize;
   size_t OutputFileOffset;
   size_t OutputFileSize;
+  size_t SysrootOffset;
+  size_t SysrootSize;
 
 public:
   IndexUnitBitstreamVisitor(llvm::BitstreamCursor &Stream,
@@ -119,6 +123,8 @@ public:
       WorkDirSize = Record[I++];
       OutputFileOffset = Record[I++];
       OutputFileSize = Record[I++];
+      SysrootOffset = Record[I++];
+      SysrootSize = Record[I++];
       Reader.Target = Blob;
       break;
     }
@@ -128,6 +134,7 @@ public:
       Reader.PathsBuffer = Blob;
       Reader.WorkingDir = Reader.getPathFromBuffer(WorkDirOffset, WorkDirSize);
       Reader.OutputFile = Reader.getPathFromBuffer(OutputFileOffset, OutputFileSize);
+      Reader.SysrootPath = Reader.getPathFromBuffer(SysrootOffset, SysrootSize);
       break;
 
     case UNIT_DEPENDENCIES_BLOCK_ID:
@@ -183,13 +190,16 @@ bool IndexUnitReaderImpl::foreachDependency(DependencyReceiver Receiver) {
                             RecordDataImpl &Record, StringRef Blob) {
       assert(RecID == UNIT_DEPENDENCY);
       unsigned I = 0;
-      UnitDependencyKind K = (UnitDependencyKind)Record[I++];
-      size_t pathOffset = Record[I++];
-      size_t pathSize = Record[I++];
+      UnitDependencyKind DK = (UnitDependencyKind)Record[I++];
+      UnitFilePathPrefixKind prefixKind = (UnitFilePathPrefixKind)Record[I++];
+      size_t dirPathOffset = Record[I++];
+      size_t dirPathSize = Record[I++];
+      size_t fnameOffset = Record[I++];
+      size_t fnameSize = Record[I++];
       StringRef name = Blob;
 
       IndexUnitReader::DependencyKind DepKind;
-      switch (K) {
+      switch (DK) {
       case UNIT_DEPEND_KIND_UNIT:
         DepKind = IndexUnitReader::DependencyKind::Unit; break;
       case UNIT_DEPEND_KIND_RECORD:
@@ -197,8 +207,22 @@ bool IndexUnitReaderImpl::foreachDependency(DependencyReceiver Receiver) {
       case UNIT_DEPEND_KIND_FILE:
         DepKind = IndexUnitReader::DependencyKind::File; break;
       }
-      StringRef filePath = Reader.getPathFromBuffer(pathOffset, pathSize);
-      if (!Receiver(DepKind, name, filePath))
+
+      SmallString<512> pathBuf;
+      switch (prefixKind) {
+      case UNIT_PATH_PREFIX_NONE:
+        break;
+      case UNIT_PATH_PREFIX_WORKDIR:
+        pathBuf = Reader.getWorkingDirectory();
+        break;
+      case UNIT_PATH_PREFIX_SYSROOT:
+        pathBuf = Reader.getSysrootPath();
+        break;
+      }
+      sys::path::append(pathBuf,
+                        Reader.getPathFromBuffer(dirPathOffset, dirPathSize),
+                        Reader.getPathFromBuffer(fnameOffset, fnameSize));
+      if (!Receiver(DepKind, name, pathBuf.str()))
         return StreamVisit::Abort;
       return StreamVisit::Continue;
     }
