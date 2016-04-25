@@ -16,6 +16,10 @@
 #include <string>
 #include <vector>
 
+namespace llvm {
+  class BitstreamWriter;
+}
+
 namespace clang {
   class Decl;
   class FileEntry;
@@ -47,6 +51,12 @@ public:
   static void getUnitNameForOutputFile(StringRef FilePath,
                                        SmallVectorImpl<char> &Str);
   static bool initIndexDirectory(StringRef StorePath, std::string &Error);
+
+private:
+  bool writeUnitInfo(llvm::BitstreamWriter &Stream, SmallString<512> &PathsBuf,
+                     std::string &Error);
+  void writeDependencies(llvm::BitstreamWriter &Stream, SmallString<512> &PathsBuf);
+  void writePaths(llvm::BitstreamWriter &Stream, SmallString<512> &PathsBuf);
 };
 
 } // end namespace index

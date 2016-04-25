@@ -24,6 +24,12 @@ namespace index {
 
 class IndexUnitReader {
 public:
+  enum class DependencyKind {
+    Unit,
+    Record,
+    File,
+  };
+
   ~IndexUnitReader();
 
   static std::unique_ptr<IndexUnitReader>
@@ -41,14 +47,11 @@ public:
   StringRef getOutputFile() const;
   StringRef getTarget() const;
 
-  ArrayRef<StringRef> getDependencyFiles() const;
-
-  /// \c DepIndex is the index in the \c getDependencyFiles array.
-  /// Unit dependencies are provided ahead of record ones.
-  bool foreachDependency(llvm::function_ref<bool(bool IsUnit,
+  /// Unit dependencies are provided ahead of record ones, record ones
+  /// ahead of the file ones.
+  bool foreachDependency(llvm::function_ref<bool(DependencyKind Kind,
                                             StringRef UnitOrRecordName,
-                                            StringRef Filename,
-                                            int DepIndex)> Receiver);
+                                            StringRef FilePath)> Receiver);
 
 private:
   IndexUnitReader(void *Impl) : Impl(Impl) {}

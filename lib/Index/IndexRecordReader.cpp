@@ -9,6 +9,7 @@
 
 #include "clang/Index/IndexRecordReader.h"
 #include "IndexDataStoreUtils.h"
+#include "BitstreamVisitor.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Bitcode/BitstreamReader.h"
 #include "llvm/Support/FileSystem.h"
@@ -20,144 +21,6 @@ using namespace clang;
 using namespace clang::index;
 using namespace clang::index::store;
 using namespace llvm;
-
-namespace {
-
-/// Helper class that saves the current stream position and
-/// then restores it when destroyed.
-struct SavedStreamPosition {
-  explicit SavedStreamPosition(llvm::BitstreamCursor &Cursor)
-    : Cursor(Cursor), Offset(Cursor.GetCurrentBitNo()) { }
-
-  ~SavedStreamPosition() {
-    Cursor.JumpToBit(Offset);
-  }
-
-private:
-  llvm::BitstreamCursor &Cursor;
-  uint64_t Offset;
-};
-
-enum class StreamVisit {
-  Continue,
-  Skip,
-  Abort
-};
-
-template <typename ImplClass>
-class BitstreamVisitor {
-  SmallVector<unsigned, 4> BlockStack;
-
-protected:
-  BitstreamCursor &Stream;
-  std::string *Error;
-
-public:
-  BitstreamVisitor(BitstreamCursor &Stream)
-    : Stream(Stream) {}
-
-  StreamVisit visitBlock(unsigned ID) {
-    return StreamVisit::Continue;
-  }
-
-  bool visit(std::string &Error) {
-    this->Error = &Error;
-
-    RecordData Record;
-    while (1) {
-      llvm::BitstreamEntry Entry = Stream.advance(BitstreamCursor::AF_DontPopBlockAtEnd);
-
-      switch (Entry.Kind) {
-      case llvm::BitstreamEntry::Error:
-        Error = "malformed serialization";
-        return false;
-
-      case llvm::BitstreamEntry::EndBlock:
-        if (BlockStack.empty())
-          return true;
-        BlockStack.pop_back();
-        if (Stream.ReadBlockEnd()) {
-          Error = "malformed serialization";
-          return false;
-        }
-        if (Stream.AtEndOfStream())
-          return true;
-        break;
-
-      case llvm::BitstreamEntry::SubBlock: {
-        if (Entry.ID == llvm::bitc::BLOCKINFO_BLOCK_ID) {
-          if (Stream.ReadBlockInfoBlock()) {
-            Error = "malformed BlockInfoBlock";
-            return false;
-          }
-          break;
-        }
-
-        StreamVisit Ret = static_cast<ImplClass*>(this)->visitBlock(Entry.ID);
-        switch (Ret) {
-        case StreamVisit::Continue:
-          if (Stream.EnterSubBlock(Entry.ID)) {
-            Error = "malformed block record";
-            return false;
-          }
-          readBlockAbbrevs(Stream);
-          BlockStack.push_back(Entry.ID);
-          break;
-
-        case StreamVisit::Skip: 
-          if (Stream.SkipBlock()) {
-            Error = "malformed serialization";
-            return false;
-          }
-          if (Stream.AtEndOfStream())
-            return true;
-          break;
-
-        case StreamVisit::Abort:
-          return false;
-        }
-        break;
-      }
-
-      case llvm::BitstreamEntry::Record: {
-        Record.clear();
-        StringRef Blob;
-        unsigned RecID = Stream.readRecord(Entry.ID, Record, &Blob);
-        unsigned BlockID = BlockStack.empty() ? 0 : BlockStack.back();
-        StreamVisit Ret = static_cast<ImplClass*>(this)->visitRecord(BlockID, RecID, Record, Blob);
-        switch (Ret) {
-        case StreamVisit::Continue:
-          break;
-
-        case StreamVisit::Skip: 
-          Stream.skipRecord(Entry.ID);
-          break;
-
-        case StreamVisit::Abort:
-          return false;
-        }
-        break;
-      }
-      }
-    }
-  }
-
-  static void readBlockAbbrevs(llvm::BitstreamCursor &Cursor) {
-    while (true) {
-      uint64_t Offset = Cursor.GetCurrentBitNo();
-      unsigned Code = Cursor.ReadCode();
-
-      // We expect all abbrevs to be at the start of the block.
-      if (Code != llvm::bitc::DEFINE_ABBREV) {
-        Cursor.JumpToBit(Offset);
-        return;
-      }
-      Cursor.ReadAbbrevRecord();
-    }
-  }
-};
-
-} // anonymous namespace
 
 struct IndexRecordReader::Implementation {
   BumpPtrAllocator Allocator;
@@ -382,12 +245,12 @@ public:
     : BitstreamVisitor(Stream), Reader(Reader) {}
 
   StreamVisit visitBlock(unsigned ID) {
-    switch ((BitBlock)ID) {
-    case VERSION_BLOCK_ID:
-    case DECLOFFSETS_BLOCK_ID:
+    switch ((RecordBitBlock)ID) {
+    case REC_VERSION_BLOCK_ID:
+    case REC_DECLOFFSETS_BLOCK_ID:
       return StreamVisit::Continue;
 
-    case DECLS_BLOCK_ID:
+    case REC_DECLS_BLOCK_ID:
       Reader.DeclCursor = Stream;
       if (Reader.DeclCursor.EnterSubBlock(ID)) {
         *Error = "malformed block record";
@@ -396,7 +259,7 @@ public:
       readBlockAbbrevs(Reader.DeclCursor);
       return StreamVisit::Skip;
 
-    case DECLOCCURRENCES_BLOCK_ID:
+    case REC_DECLOCCURRENCES_BLOCK_ID:
       Reader.OccurCursor = Stream;
       if (Reader.OccurCursor.EnterSubBlock(ID)) {
         *Error = "malformed block record";
@@ -414,7 +277,7 @@ public:
   StreamVisit visitRecord(unsigned BlockID, unsigned RecID,
                           RecordDataImpl &Record, StringRef Blob) {
     switch (BlockID) {
-    case VERSION_BLOCK_ID: {
+    case REC_VERSION_BLOCK_ID: {
       unsigned StoreFormatVersion = Record[0];
       if (StoreFormatVersion != STORE_FORMAT_VERSION) {
         llvm::raw_string_ostream OS(*Error);
@@ -424,13 +287,13 @@ public:
       }
       break;
     }
-    case DECLOFFSETS_BLOCK_ID:
+    case REC_DECLOFFSETS_BLOCK_ID:
       assert(RecID == REC_DECLOFFSETS);
       Reader.setDeclOffsets(makeArrayRef((uint32_t*)Blob.data(), Record[0]));
       break;
 
-    case DECLS_BLOCK_ID:
-    case DECLOCCURRENCES_BLOCK_ID:
+    case REC_DECLS_BLOCK_ID:
+    case REC_DECLOCCURRENCES_BLOCK_ID:
       llvm_unreachable("shouldn't visit this block'");
     }
     return StreamVisit::Continue;
@@ -478,8 +341,8 @@ IndexRecordReader::createWithBuffer(std::unique_ptr<llvm::MemoryBuffer> Buffer,
   if (Stream.Read(8) != 'I' ||
       Stream.Read(8) != 'D' ||
       Stream.Read(8) != 'X' ||
-      Stream.Read(8) != 'S') {
-    Error = "not a serialized clang index record file";
+      Stream.Read(8) != 'R') {
+    Error = "not a serialized index record file";
     return nullptr;
   }
 

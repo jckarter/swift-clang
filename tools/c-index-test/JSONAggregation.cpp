@@ -148,38 +148,25 @@ void Aggregator::processUnit(StringRef name, IndexUnitReader &UnitReader) {
     std::string unitName;
   };
   SmallVector<DepInfo, 32> Deps;
-  Deps.reserve(UnitReader.getDependenciesCount());
-  UnitReader.foreachDependencyFilePath([&](StringRef dependFilename) -> bool {
-    Deps.resize(Deps.size()+1);
-    UnitSourceInfo &source = Deps.back().source;
-    source.FilePath = getFilePathIndex(dependFilename, workDir);
-    return true;
-  });
   UnitReader.foreachDependency([&](IndexUnitDependency dep) -> bool {
+    Deps.resize(Deps.size()+1);
+    auto &depInfo = Deps.back();
     switch (dep.getKind()) {
       case IndexUnitDependency::DependencyKind::Unit: {
-        auto Index = dep.getIndex();
-        if (Index.hasValue()) {
-          Deps[*Index].unitName = dep.getName();
-        } else {
-          Deps.emplace_back();
-          Deps.back().unitName = dep.getName();
-        }
+        depInfo.unitName = dep.getName();
+        StringRef filePath = dep.getFilePath();
+        if (!filePath.empty())
+          depInfo.source.FilePath = getFilePathIndex(filePath, workDir);
         break;
       }
       case IndexUnitDependency::DependencyKind::Record: {
-        auto Index = dep.getIndex();
-
-        if (!Index.hasValue()) {
-          Index = Deps.size();
-          Deps.emplace_back();
-        }
-
-        UnitSourceInfo &source = Deps[*Index].source;
+        depInfo.source.FilePath = getFilePathIndex(dep.getFilePath(), workDir);
         RecordIndex recIndex = getRecordIndex(dep.getName());
-        source.AssociatedRecords.push_back(recIndex);
+        depInfo.source.AssociatedRecords.push_back(recIndex);
         break;
       }
+      case IndexUnitDependency::DependencyKind::File:
+        depInfo.source.FilePath = getFilePathIndex(dep.getFilePath(), workDir);
     }
     return true;
   });

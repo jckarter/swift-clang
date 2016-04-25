@@ -425,46 +425,22 @@ indexstore_unit_reader_get_target(indexstore_unit_reader_t rdr) {
   return toIndexStoreString(reader->getTarget());
 }
 
-size_t
-indexstore_unit_reader_dependencies_count(indexstore_unit_reader_t rdr) {
-  auto reader = static_cast<IndexUnitReader*>(rdr);
-  return reader->getDependencyFiles().size();
-}
-
-indexstore_string_ref_t
-indexstore_unit_reader_get_dependency_filepath(indexstore_unit_reader_t rdr,
-                                               size_t index) {
-  auto reader = static_cast<IndexUnitReader*>(rdr);
-  return toIndexStoreString(reader->getDependencyFiles()[index]);
-}
-
-#if INDEXSTORE_HAS_BLOCKS
-bool
-indexstore_unit_reader_dependencies_filepaths_apply(indexstore_unit_reader_t rdr,
-                                  bool(^applier)(indexstore_string_ref_t path)) {
-  auto reader = static_cast<IndexUnitReader*>(rdr);
-  for (StringRef depend : reader->getDependencyFiles()) {
-    bool shouldContinue = applier(toIndexStoreString(depend));
-    if (!shouldContinue)
-      return false;
-  }
-  return true;
-}
-#endif
-
 namespace {
 struct DependencyInfo {
-  bool IsUnit;
+  IndexUnitReader::DependencyKind Kind;
   StringRef FilePath;
   StringRef Name;
-  int Index;
 };
 }
 
 indexstore_unit_dependency_kind_t
 indexstore_unit_dependency_get_kind(indexstore_unit_dependency_t c_dep) {
   auto dep = static_cast<DependencyInfo*>(c_dep);
-  return dep->IsUnit ? INDEXSTORE_UNIT_DEPENDENCY_UNIT : INDEXSTORE_UNIT_DEPENDENCY_RECORD;
+  switch (dep->Kind) {
+  case IndexUnitReader::DependencyKind::Unit: return INDEXSTORE_UNIT_DEPENDENCY_UNIT;
+  case IndexUnitReader::DependencyKind::Record: return INDEXSTORE_UNIT_DEPENDENCY_RECORD;
+  case IndexUnitReader::DependencyKind::File: return INDEXSTORE_UNIT_DEPENDENCY_FILE;
+  }
 }
 
 indexstore_string_ref_t
@@ -479,22 +455,15 @@ indexstore_unit_dependency_get_name(indexstore_unit_dependency_t c_dep) {
   return toIndexStoreString(dep->Name);
 }
 
-int
-indexstore_unit_dependency_get_index(indexstore_unit_dependency_t c_dep) {
-  auto dep = static_cast<DependencyInfo*>(c_dep);
-  return dep->Index;
-}
-
 #if INDEXSTORE_HAS_BLOCKS
 bool
 indexstore_unit_reader_dependencies_apply(indexstore_unit_reader_t rdr,
                              bool(^applier)(indexstore_unit_dependency_t)) {
   auto reader = static_cast<IndexUnitReader*>(rdr);
-  return reader->foreachDependency([&](bool isUnit,
+  return reader->foreachDependency([&](IndexUnitReader::DependencyKind Kind,
                                        StringRef unitOrRecordName,
-                                       StringRef Filename,
-                                       int depIndex) -> bool {
-    DependencyInfo depInfo{isUnit, Filename, unitOrRecordName, depIndex};
+                                       StringRef FilePath) -> bool {
+    DependencyInfo depInfo{Kind, FilePath, unitOrRecordName};
     return applier(&depInfo);
   });
 }

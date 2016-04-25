@@ -55,48 +55,23 @@ struct RecordState {
 };
 } // end anonymous namespace
 
-static void EmitBlockID(unsigned ID, const char *Name,
-                        llvm::BitstreamWriter &Stream, RecordDataImpl &Record) {
-  Record.clear();
-  Record.push_back(ID);
-  Stream.EmitRecord(llvm::bitc::BLOCKINFO_CODE_SETBID, Record);
-
-  // Emit the block name if present.
-  if (!Name || Name[0] == 0)
-    return;
-  Record.clear();
-  while (*Name)
-    Record.push_back(*Name++);
-  Stream.EmitRecord(llvm::bitc::BLOCKINFO_CODE_BLOCKNAME, Record);
-}
-
-static void EmitRecordID(unsigned ID, const char *Name,
-                         llvm::BitstreamWriter &Stream,
-                         RecordDataImpl &Record) {
-  Record.clear();
-  Record.push_back(ID);
-  while (*Name)
-    Record.push_back(*Name++);
-  Stream.EmitRecord(llvm::bitc::BLOCKINFO_CODE_SETRECORDNAME, Record);
-}
-
 static void writeBlockInfo(BitstreamWriter &Stream) {
   RecordData Record;
 
   Stream.EnterBlockInfoBlock(3);
-#define BLOCK(X) EmitBlockID(X ## _ID, #X, Stream, Record)
-#define RECORD(X) EmitRecordID(X, #X, Stream, Record)
+#define BLOCK(X) emitBlockID(X ## _ID, #X, Stream, Record)
+#define RECORD(X) emitRecordID(X, #X, Stream, Record)
 
-  BLOCK(VERSION_BLOCK);
+  BLOCK(REC_VERSION_BLOCK);
   RECORD(REC_VERSION);
 
-  BLOCK(DECLS_BLOCK);
+  BLOCK(REC_DECLS_BLOCK);
   RECORD(REC_DECLINFO);
 
-  BLOCK(DECLOFFSETS_BLOCK);
+  BLOCK(REC_DECLOFFSETS_BLOCK);
   RECORD(REC_DECLOFFSETS);
 
-  BLOCK(DECLOCCURRENCES_BLOCK);
+  BLOCK(REC_DECLOCCURRENCES_BLOCK);
   RECORD(REC_DECLOCCURRENCE);
 
 #undef RECORD
@@ -107,7 +82,7 @@ static void writeBlockInfo(BitstreamWriter &Stream) {
 static void writeVersionInfo(BitstreamWriter &Stream) {
   using namespace llvm::sys;
 
-  Stream.EnterSubblock(VERSION_BLOCK_ID, 3);
+  Stream.EnterSubblock(REC_VERSION_BLOCK_ID, 3);
 
   BitCodeAbbrev *Abbrev = new BitCodeAbbrev();
   Abbrev->Add(BitCodeAbbrevOp(REC_VERSION));
@@ -144,7 +119,7 @@ static void writeDecls(BitstreamWriter &Stream, ArrayRef<DeclInfo> Decls,
   // DECLS_BLOCK_ID
   //===--------------------------------------------------------------------===//
 
-  Stream.EnterSubblock(DECLS_BLOCK_ID, 3);
+  Stream.EnterSubblock(REC_DECLS_BLOCK_ID, 3);
 
   BitCodeAbbrev *Abbrev = new BitCodeAbbrev();
   Abbrev->Add(BitCodeAbbrevOp(REC_DECLINFO));
@@ -204,7 +179,7 @@ static void writeDecls(BitstreamWriter &Stream, ArrayRef<DeclInfo> Decls,
   // DECLOFFSETS_BLOCK_ID
   //===--------------------------------------------------------------------===//
 
-  Stream.EnterSubblock(DECLOFFSETS_BLOCK_ID, 3);
+  Stream.EnterSubblock(REC_DECLOFFSETS_BLOCK_ID, 3);
 
   Abbrev = new BitCodeAbbrev();
   Abbrev->Add(BitCodeAbbrevOp(REC_DECLOFFSETS));
@@ -223,7 +198,7 @@ static void writeDecls(BitstreamWriter &Stream, ArrayRef<DeclInfo> Decls,
   // DECLOCCURRENCES_BLOCK_ID
   //===--------------------------------------------------------------------===//
 
-  Stream.EnterSubblock(DECLOCCURRENCES_BLOCK_ID, 3);
+  Stream.EnterSubblock(REC_DECLOCCURRENCES_BLOCK_ID, 3);
 
   Abbrev = new BitCodeAbbrev();
   Abbrev->Add(BitCodeAbbrevOp(REC_DECLOCCURRENCE));
@@ -291,7 +266,7 @@ IndexRecordWriter::beginRecord(StringRef Filename, hash_code RecordHash,
   Stream.Emit('I', 8);
   Stream.Emit('D', 8);
   Stream.Emit('X', 8);
-  Stream.Emit('S', 8);
+  Stream.Emit('R', 8);
 
   writeBlockInfo(Stream);
   writeVersionInfo(Stream);

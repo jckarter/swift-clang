@@ -333,19 +333,17 @@ public:
   enum class DependencyKind {
     Unit,
     Record,
+    File,
   };
   DependencyKind getKind() {
     switch (indexstore_unit_dependency_get_kind(obj)) {
     case INDEXSTORE_UNIT_DEPENDENCY_UNIT: return DependencyKind::Unit;
     case INDEXSTORE_UNIT_DEPENDENCY_RECORD: return DependencyKind::Record;
+    case INDEXSTORE_UNIT_DEPENDENCY_FILE: return DependencyKind::File;
     }
   }
   StringRef getName() { return stringFromIndexStoreStringRef(indexstore_unit_dependency_get_name(obj)); }
   StringRef getFilePath() { return stringFromIndexStoreStringRef(indexstore_unit_dependency_get_filepath(obj)); }
-  Optional<size_t> getIndex() {
-    auto I = indexstore_unit_dependency_get_index(obj);
-    return I < 0 ? llvm::None : Optional<size_t>(I);
-  }
 };
 
 class IndexUnitReader {
@@ -388,22 +386,6 @@ public:
   }
   StringRef getTarget() {
     return stringFromIndexStoreStringRef(indexstore_unit_reader_get_target(obj));
-  }
-
-  size_t getDependenciesCount() { return indexstore_unit_reader_dependencies_count(obj); }
-
-  StringRef getDependencyFilePath(size_t index) {
-    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_dependency_filepath(obj, index));
-  }
-
-  bool foreachDependencyFilePath(llvm::function_ref<bool(StringRef filename)> receiver) {
-#if INDEXSTORE_HAS_BLOCKS
-    return indexstore_unit_reader_dependencies_filepaths_apply(obj, ^bool(indexstore_string_ref_t path) {
-      return receiver(stringFromIndexStoreStringRef(path));
-    });
-#else
-    return false;
-#endif
   }
 
   bool foreachDependency(llvm::function_ref<bool(IndexUnitDependency)> receiver) {

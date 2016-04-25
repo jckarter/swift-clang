@@ -330,23 +330,12 @@ indexstore_unit_reader_get_output_file(indexstore_unit_reader_t);
 INDEXSTORE_PUBLIC indexstore_string_ref_t
 indexstore_unit_reader_get_target(indexstore_unit_reader_t);
 
-INDEXSTORE_PUBLIC size_t
-indexstore_unit_reader_dependencies_count(indexstore_unit_reader_t);
-
-INDEXSTORE_PUBLIC indexstore_string_ref_t
-indexstore_unit_reader_get_dependency_filepath(indexstore_unit_reader_t, size_t index);
-
-#if INDEXSTORE_HAS_BLOCKS
-INDEXSTORE_PUBLIC bool
-indexstore_unit_reader_dependencies_filepaths_apply(indexstore_unit_reader_t,
-                                  bool(^applier)(indexstore_string_ref_t path));
-#endif
-
 typedef void *indexstore_unit_dependency_t;
 
 typedef enum {
   INDEXSTORE_UNIT_DEPENDENCY_UNIT = 1,
   INDEXSTORE_UNIT_DEPENDENCY_RECORD = 2,
+  INDEXSTORE_UNIT_DEPENDENCY_FILE = 3,
 } indexstore_unit_dependency_kind_t;
 
 INDEXSTORE_PUBLIC indexstore_unit_dependency_kind_t
@@ -357,9 +346,6 @@ indexstore_unit_dependency_get_filepath(indexstore_unit_dependency_t);
 
 INDEXSTORE_PUBLIC indexstore_string_ref_t
 indexstore_unit_dependency_get_name(indexstore_unit_dependency_t);
-
-INDEXSTORE_PUBLIC int
-indexstore_unit_dependency_get_index(indexstore_unit_dependency_t);
 
 #if INDEXSTORE_HAS_BLOCKS
 INDEXSTORE_PUBLIC bool

@@ -9,10 +9,12 @@
 
 #include "clang/Index/IndexUnitReader.h"
 #include "IndexDataStoreUtils.h"
+#include "BitstreamVisitor.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Bitcode/BitstreamReader.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
@@ -28,33 +30,111 @@ using namespace llvm;
 
 namespace {
 
+typedef llvm::function_ref<bool(IndexUnitReader::DependencyKind Kind,
+                                StringRef UnitOrRecordName,
+                                StringRef FilePath)> DependencyReceiver;
+
 class IndexUnitReaderImpl {
-  std::unique_ptr<MemoryBuffer> MemBuf;
   sys::TimeValue ModTime;
+  std::unique_ptr<MemoryBuffer> MemBuf;
+  llvm::BitstreamReader BitReader;
+
+public:
+  llvm::BitstreamCursor DependCursor;
   StringRef WorkingDir;
   StringRef OutputFile;
   StringRef Target;
-  SmallVector<StringRef, 16> Dependencies;
-  SmallVector<std::pair<StringRef, int>, 6> ASTFileUnits;
-  SmallVector<std::pair<StringRef, int>, 16> Records;
+  StringRef PathsBuffer;
 
-public:
   bool init(std::unique_ptr<MemoryBuffer> Buf, sys::TimeValue ModTime,
             std::string &Error);
 
-  llvm::sys::TimeValue getModificationTime() const;
-  StringRef getWorkingDirectory() const;
-  StringRef getOutputFile() const;
-  StringRef getTarget() const;
+  llvm::sys::TimeValue getModificationTime() const { return ModTime; }
+  StringRef getWorkingDirectory() const { return WorkingDir; }
+  StringRef getOutputFile() const { return OutputFile; }
+  StringRef getTarget() const { return Target; }
 
-  ArrayRef<StringRef> getDependencyFiles() const;
+  /// Unit dependencies are provided ahead of record ones, record ones
+  /// ahead of the file ones.
+  bool foreachDependency(DependencyReceiver Receiver);
 
-  /// \c Index is the index in the \c getDependencies array.
-  /// Unit dependencies are provided ahead of record ones.
-  bool foreachDependency(llvm::function_ref<bool(bool IsUnit,
-                                            StringRef UnitOrRecordName,
-                                            StringRef Filename,
-                                            int DepIndex)> Receiver);
+  StringRef getPathFromBuffer(size_t Offset, size_t Size) {
+    return PathsBuffer.substr(Offset, Size);
+  }
+};
+
+class IndexUnitBitstreamVisitor : public BitstreamVisitor<IndexUnitBitstreamVisitor> {
+  IndexUnitReaderImpl &Reader;
+  size_t WorkDirOffset;
+  size_t WorkDirSize;
+  size_t OutputFileOffset;
+  size_t OutputFileSize;
+
+public:
+  IndexUnitBitstreamVisitor(llvm::BitstreamCursor &Stream,
+                            IndexUnitReaderImpl &Reader)
+    : BitstreamVisitor(Stream), Reader(Reader) {}
+
+  StreamVisit visitBlock(unsigned ID) {
+    switch ((UnitBitBlock)ID) {
+    case UNIT_VERSION_BLOCK_ID:
+    case UNIT_INFO_BLOCK_ID:
+    case UNIT_PATHS_BLOCK_ID:
+      return StreamVisit::Continue;
+
+    case UNIT_DEPENDENCIES_BLOCK_ID:
+      Reader.DependCursor = Stream;
+      if (Reader.DependCursor.EnterSubBlock(ID)) {
+        *Error = "malformed block record";
+        return StreamVisit::Abort;
+      }
+      readBlockAbbrevs(Reader.DependCursor);
+      return StreamVisit::Skip;
+    }
+
+    // Some newly introduced block in a minor version update that we cannot
+    // handle.
+    return StreamVisit::Skip;
+  }
+
+  StreamVisit visitRecord(unsigned BlockID, unsigned RecID,
+                          RecordDataImpl &Record, StringRef Blob) {
+    switch (BlockID) {
+    case UNIT_VERSION_BLOCK_ID: {
+      unsigned StoreFormatVersion = Record[0];
+      if (StoreFormatVersion != STORE_FORMAT_VERSION) {
+        llvm::raw_string_ostream OS(*Error);
+        OS << "Store format version mismatch: " << StoreFormatVersion;
+        OS << " , expected: " << STORE_FORMAT_VERSION;
+        return StreamVisit::Abort;
+      }
+      break;
+    }
+
+    case UNIT_INFO_BLOCK_ID: {
+      assert(RecID == UNIT_INFO);
+      unsigned I = 0;
+      // Save these to lookup them up after we get the paths buffer.
+      WorkDirOffset = Record[I++];
+      WorkDirSize = Record[I++];
+      OutputFileOffset = Record[I++];
+      OutputFileSize = Record[I++];
+      Reader.Target = Blob;
+      break;
+    }
+
+    case UNIT_PATHS_BLOCK_ID:
+      assert(RecID == UNIT_PATHS);
+      Reader.PathsBuffer = Blob;
+      Reader.WorkingDir = Reader.getPathFromBuffer(WorkDirOffset, WorkDirSize);
+      Reader.OutputFile = Reader.getPathFromBuffer(OutputFileOffset, OutputFileSize);
+      break;
+
+    case UNIT_DEPENDENCIES_BLOCK_ID:
+      llvm_unreachable("shouldn't visit this block'");
+    }
+    return StreamVisit::Continue;
+  }
 };
 
 } // anonymous namespace
@@ -62,92 +142,72 @@ public:
 bool IndexUnitReaderImpl::init(std::unique_ptr<MemoryBuffer> Buf,
                                sys::TimeValue ModTime, std::string &Error) {
   this->ModTime = ModTime;
-  StringRef Buffer = Buf->getBuffer();
-  std::tie(WorkingDir, Buffer) = Buffer.split('\n');
-  std::tie(OutputFile, Buffer) = Buffer.split('\n');
-  std::tie(Target, Buffer) = Buffer.split('\n');
+  this->MemBuf = std::move(Buf);
+  this->BitReader.init((const unsigned char *)MemBuf->getBufferStart(),
+                       (const unsigned char *)MemBuf->getBufferEnd());
 
-  while (!Buffer.empty()) {
-    StringRef Dep;
-    std::tie(Dep, Buffer) = Buffer.split('\n');
-    if (Dep == "===")
-      break;
-    Dependencies.push_back(Dep);
+  llvm::BitstreamCursor Stream(BitReader);
+
+  // Sniff for the signature.
+  if (Stream.Read(8) != 'I' ||
+      Stream.Read(8) != 'D' ||
+      Stream.Read(8) != 'X' ||
+      Stream.Read(8) != 'U') {
+    Error = "not a serialized index unit file";
+    return true;
   }
 
-  bool InUnitSection = true;
-  while (!Buffer.empty()) {
-    StringRef UnitOrRecordName, IndexStr;
-    std::tie(UnitOrRecordName, Buffer) = Buffer.split('\n');
-    if (UnitOrRecordName == "===") {
-      InUnitSection = false;
-      continue;
-    }
-    std::tie(IndexStr, Buffer) = Buffer.split('\n');
-    int Index;
-    bool Err = IndexStr.getAsInteger(10, Index);
-    if (Err) {
-      Error = "Error getting index for dependency: ";
-      Error += UnitOrRecordName;
-      return true;
-    }
-    if (Index >= 0 && unsigned(Index) >= Dependencies.size()) {
-      Error = "Out of range index for dependency: ";
-      Error += UnitOrRecordName;
-      return true;
-    }
-    if (InUnitSection)
-      ASTFileUnits.push_back(std::make_pair(UnitOrRecordName, Index));
-    else
-      Records.push_back(std::make_pair(UnitOrRecordName, Index));
-  }
-
-  MemBuf = std::move(Buf);
+  IndexUnitBitstreamVisitor BitVisitor(Stream, *this);
+  if (!BitVisitor.visit(Error))
+    return true;
 
   return false;
 }
 
-llvm::sys::TimeValue IndexUnitReaderImpl::getModificationTime() const {
-  return ModTime;
-}
+/// Unit dependencies are provided ahead of record ones, record ones
+/// ahead of the file ones.
+bool IndexUnitReaderImpl::foreachDependency(DependencyReceiver Receiver) {
+  class DependBitVisitor : public BitstreamVisitor<DependBitVisitor> {
+    IndexUnitReaderImpl &Reader;
+    DependencyReceiver Receiver;
 
-StringRef IndexUnitReaderImpl::getWorkingDirectory() const {
-  return WorkingDir;
-}
+  public:
+    DependBitVisitor(llvm::BitstreamCursor &Stream,
+                     IndexUnitReaderImpl &Reader,
+                     DependencyReceiver Receiver)
+      : BitstreamVisitor(Stream),
+        Reader(Reader),
+        Receiver(std::move(Receiver)) {}
 
-StringRef IndexUnitReaderImpl::getOutputFile() const {
-  return OutputFile;
-}
+    StreamVisit visitRecord(unsigned BlockID, unsigned RecID,
+                            RecordDataImpl &Record, StringRef Blob) {
+      assert(RecID == UNIT_DEPENDENCY);
+      unsigned I = 0;
+      UnitDependencyKind K = (UnitDependencyKind)Record[I++];
+      size_t pathOffset = Record[I++];
+      size_t pathSize = Record[I++];
+      StringRef name = Blob;
 
-StringRef IndexUnitReaderImpl::getTarget() const {
-  return Target;
-}
+      IndexUnitReader::DependencyKind DepKind;
+      switch (K) {
+      case UNIT_DEPEND_KIND_UNIT:
+        DepKind = IndexUnitReader::DependencyKind::Unit; break;
+      case UNIT_DEPEND_KIND_RECORD:
+        DepKind = IndexUnitReader::DependencyKind::Record; break;
+      case UNIT_DEPEND_KIND_FILE:
+        DepKind = IndexUnitReader::DependencyKind::File; break;
+      }
+      StringRef filePath = Reader.getPathFromBuffer(pathOffset, pathSize);
+      if (!Receiver(DepKind, name, filePath))
+        return StreamVisit::Abort;
+      return StreamVisit::Continue;
+    }
+  };
 
-ArrayRef<StringRef> IndexUnitReaderImpl::getDependencyFiles() const {
-  return Dependencies;
-}
-
-/// \c Index is the index in the \c getDependencies array.
-/// Unit dependencies are provided ahead of record ones.
-bool IndexUnitReaderImpl::foreachDependency(llvm::function_ref<bool(bool IsUnit,
-                                            StringRef UnitOrRecordName,
-                                            StringRef Filename,
-                                            int DepIndex)> Receiver) {
-  for (auto &Pair : ASTFileUnits) {
-    int Index = Pair.second;
-    StringRef Dep = Index < 0 ? "" : Dependencies[Index];
-    bool Continue = Receiver(/*IsUnit=*/true, Pair.first, Dep, Index);
-    if (!Continue)
-      return false;
-  }
-  for (auto &Pair : Records) {
-    int Index = Pair.second;
-    StringRef Dep = Index < 0 ? "" : Dependencies[Index];
-    bool Continue = Receiver(/*IsUnit=*/false, Pair.first, Dep, Index);
-    if (!Continue)
-      return false;
-  }
-  return true;
+  SavedStreamPosition SavedPosition(DependCursor);
+  DependBitVisitor Visitor(DependCursor, *this, Receiver);
+  std::string Error;
+  return Visitor.visit(Error);
 }
 
 //===----------------------------------------------------------------------===//
@@ -248,15 +308,10 @@ StringRef IndexUnitReader::getTarget() const {
   return IMPL->getTarget();
 }
 
-ArrayRef<StringRef> IndexUnitReader::getDependencyFiles() const {
-  return IMPL->getDependencyFiles();
-}
-
 /// \c Index is the index in the \c getDependencies array.
 /// Unit dependencies are provided ahead of record ones.
-bool IndexUnitReader::foreachDependency(llvm::function_ref<bool(bool IsUnit,
+bool IndexUnitReader::foreachDependency(llvm::function_ref<bool(DependencyKind Kind,
                                             StringRef UnitOrRecordName,
-                                            StringRef Filename,
-                                            int DepIndex)> Receiver) {
+                                            StringRef FilePath)> Receiver) {
   return IMPL->foreachDependency(std::move(Receiver));
 }
