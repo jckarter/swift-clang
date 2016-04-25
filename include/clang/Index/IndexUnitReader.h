@@ -45,6 +45,7 @@ public:
   llvm::sys::TimeValue getModificationTime() const;
   StringRef getWorkingDirectory() const;
   StringRef getOutputFile() const;
+  StringRef getSysrootPath() const;
   StringRef getTarget() const;
 
   /// Unit dependencies are provided ahead of record ones, record ones

@@ -328,6 +328,9 @@ INDEXSTORE_PUBLIC indexstore_string_ref_t
 indexstore_unit_reader_get_output_file(indexstore_unit_reader_t);
 
 INDEXSTORE_PUBLIC indexstore_string_ref_t
+indexstore_unit_reader_get_sysroot_path(indexstore_unit_reader_t);
+
+INDEXSTORE_PUBLIC indexstore_string_ref_t
 indexstore_unit_reader_get_target(indexstore_unit_reader_t);
 
 typedef void *indexstore_unit_dependency_t;

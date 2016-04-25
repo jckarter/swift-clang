@@ -420,6 +420,12 @@ indexstore_unit_reader_get_output_file(indexstore_unit_reader_t rdr) {
 }
 
 indexstore_string_ref_t
+indexstore_unit_reader_get_sysroot_path(indexstore_unit_reader_t rdr) {
+  auto reader = static_cast<IndexUnitReader*>(rdr);
+  return toIndexStoreString(reader->getSysrootPath());
+}
+
+indexstore_string_ref_t
 indexstore_unit_reader_get_target(indexstore_unit_reader_t rdr) {
   auto reader = static_cast<IndexUnitReader*>(rdr);
   return toIndexStoreString(reader->getTarget());
