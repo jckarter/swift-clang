@@ -26,7 +26,7 @@
 // CHECK: Record | system | {{.*}}/Inputs/module/ModSystem.h | ModSystem.h
 // CHECK: DEPEND END (1)
 
-// CHECK: ModTop.pcm-2OKBTVDGJI2CK
+// CHECK: ModTop.pcm
 // CHECK: is-system: 0
 // CHECK: has-main: 0
 // CHECK: main-path: {{$}}
