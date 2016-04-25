@@ -11,6 +11,7 @@
 #define LLVM_CLANG_INDEX_INDEXUNITREADER_H
 
 #include "clang/Basic/LLVM.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/STLExtras.h"
 
 namespace llvm {
@@ -46,13 +47,20 @@ public:
   StringRef getWorkingDirectory() const;
   StringRef getOutputFile() const;
   StringRef getSysrootPath() const;
+  StringRef getMainFilePath() const;
   StringRef getTarget() const;
+  bool hasMainFile() const;
+  bool isSystemUnit() const;
 
+  struct DependencyInfo {
+    DependencyKind Kind;
+    bool IsSystem;
+    StringRef UnitOrRecordName;
+    StringRef FilePath;
+  };
   /// Unit dependencies are provided ahead of record ones, record ones
   /// ahead of the file ones.
-  bool foreachDependency(llvm::function_ref<bool(DependencyKind Kind,
-                                            StringRef UnitOrRecordName,
-                                            StringRef FilePath)> Receiver);
+  bool foreachDependency(llvm::function_ref<bool(const DependencyInfo &Info)> Receiver);
 
 private:
   IndexUnitReader(void *Impl) : Impl(Impl) {}

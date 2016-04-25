@@ -57,6 +57,8 @@ public:
   StringRef getPathsBuffer() const { return PathsBuf.str(); }
 
   FileBitPath getBitPath(const FileEntry *FE) {
+    if (!FE)
+      return FileBitPath();
     auto pair = Files.insert(std::make_pair(FE, FileBitPath()));
     bool isNew = pair.second;
     auto &path = pair.first->second;
@@ -105,46 +107,50 @@ private:
 };
 
 IndexUnitWriter::IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
+                                 const FileEntry *MainFile, bool IsSystem,
                                  StringRef TargetTriple,
                                  StringRef SysrootPath) {
   this->UnitsPath = StorePath;
   store::makeUnitSubDir(this->UnitsPath);
   this->OutputFile = OutputFile;
+  this->MainFile = MainFile;
+  this->IsSystemUnit = IsSystem;
   this->TargetTriple = TargetTriple;
   this->SysrootPath = SysrootPath;
 }
 
 IndexUnitWriter::~IndexUnitWriter() {}
 
-int IndexUnitWriter::addFileDependency(const FileEntry *File) {
+int IndexUnitWriter::addFileDependency(const FileEntry *File, bool IsSystem) {
   assert(File);
   auto Pair = IndexByFile.insert(std::make_pair(File, Files.size()));
   bool WasInserted = Pair.second;
   if (WasInserted) {
-    Files.emplace_back(File);
+    Files.push_back(FileEntryData{File, IsSystem});
   }
   return Pair.first->second;
 }
 
-void IndexUnitWriter::addRecordFile(StringRef RecordFile, const FileEntry *File) {
-  int Dep = File ? addFileDependency(File) : -1;
-  Records.emplace_back(RecordFile, Dep);
+void IndexUnitWriter::addRecordFile(StringRef RecordFile, const FileEntry *File,
+                                    bool IsSystem) {
+  int Dep = File ? addFileDependency(File, IsSystem) : -1;
+  Records.push_back(RecordOrUnitData{RecordFile, Dep, IsSystem});
 }
 
-void IndexUnitWriter::addASTFileDependency(const FileEntry *File) {
+void IndexUnitWriter::addASTFileDependency(const FileEntry *File, bool IsSystem) {
   assert(File);
   if (!SeenASTFiles.insert(File).second)
     return;
 
   SmallString<64> UnitName;
   getUnitNameForOutputFile(File->getName(), UnitName);
-  addUnitDependency(UnitName.str(), File);
+  addUnitDependency(UnitName.str(), File, IsSystem);
 }
 
 void IndexUnitWriter::addUnitDependency(StringRef UnitFile,
-                                        const FileEntry *File) {
-  int Dep = File ? addFileDependency(File) : -1;
-  ASTFileUnits.emplace_back(UnitFile, Dep);
+                                        const FileEntry *File, bool IsSystem) {
+  int Dep = File ? addFileDependency(File, IsSystem) : -1;
+  ASTFileUnits.emplace_back(RecordOrUnitData{UnitFile, Dep, IsSystem});
 }
 
 void IndexUnitWriter::getUnitNameForOutputFile(StringRef FilePath,
@@ -255,29 +261,48 @@ bool IndexUnitWriter::write(std::string &Error) {
   return false;
 }
 
+static void addFilePathToRecord(const FileBitPath &path, RecordData &Record) {
+  Record.push_back(path.Dir.PrefixKind);
+  Record.push_back(path.Dir.Dir.Offset);
+  Record.push_back(path.Dir.Dir.Size);
+  Record.push_back(path.Filename.Offset);
+  Record.push_back(path.Filename.Size);
+}
+
 void IndexUnitWriter::writeUnitInfo(llvm::BitstreamWriter &Stream,
                                     PathStorage &PathStore) {
   Stream.EnterSubblock(UNIT_INFO_BLOCK_ID, 3);
 
   BitCodeAbbrev *Abbrev = new BitCodeAbbrev();
   Abbrev->Add(BitCodeAbbrevOp(UNIT_INFO));
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // IsSystemUnit
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 10)); // WorkDir offset
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8)); // WorkDir size
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 10)); // OutputFile offset
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8)); // OutputFile size
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 10)); // Sysroot offset
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8)); // Sysroot size
+
+  // For the main file we can use a FileBitPath reference to share path components.
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, UnitFilePathPrefixKindBitNum)); // Path prefix kind
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 10)); // DirPath offset
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8)); // DirPath size
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 10)); // Filename offset
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Filename size
+
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // target triple
   unsigned AbbrevCode = Stream.EmitAbbrev(Abbrev);
 
   RecordData Record;
   Record.push_back(UNIT_INFO);
+  Record.push_back(IsSystemUnit);
   Record.push_back(PathStore.getPathOffset(WorkDir));
   Record.push_back(WorkDir.size());
   Record.push_back(PathStore.getPathOffset(OutputFile));
   Record.push_back(OutputFile.size());
   Record.push_back(PathStore.getPathOffset(SysrootPath));
   Record.push_back(SysrootPath.size());
+  addFilePathToRecord(PathStore.getBitPath(MainFile), Record);
   Stream.EmitRecordWithBlob(AbbrevCode, Record, TargetTriple);
 
   Stream.ExitBlock();
@@ -287,12 +312,13 @@ void IndexUnitWriter::writeDependencies(llvm::BitstreamWriter &Stream,
                                         PathStorage &PathStore) {
   struct PathData {
     FileBitPath BitPath;
+    bool IsSystem;
     bool UsedForRecordOrUnit;
   };
   SmallVector<PathData, 32> PathDataEntries;
   PathDataEntries.reserve(Files.size());
-  for (auto *FE : Files) {
-    PathData Entry{PathStore.getBitPath(FE), false};
+  for (auto &FileData : Files) {
+    PathData Entry{PathStore.getBitPath(FileData.File), FileData.IsSystem, false};
     PathDataEntries.push_back(Entry);
   }
 
@@ -301,6 +327,7 @@ void IndexUnitWriter::writeDependencies(llvm::BitstreamWriter &Stream,
   BitCodeAbbrev *Abbrev = new BitCodeAbbrev();
   Abbrev->Add(BitCodeAbbrevOp(UNIT_DEPENDENCY));
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, UnitDependencyKindBitNum)); // Dependency kind
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // IsSystem
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, UnitFilePathPrefixKindBitNum)); // Path prefix kind
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 10)); // DirPath offset
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 8)); // DirPath size
@@ -310,35 +337,28 @@ void IndexUnitWriter::writeDependencies(llvm::BitstreamWriter &Stream,
   unsigned AbbrevCode = Stream.EmitAbbrev(Abbrev);
 
   RecordData Record;
-  auto addPath = [&](const FileBitPath &path) {
-    Record.push_back(path.Dir.PrefixKind);
-    Record.push_back(path.Dir.Dir.Offset);
-    Record.push_back(path.Dir.Dir.Size);
-    Record.push_back(path.Filename.Offset);
-    Record.push_back(path.Filename.Size);
-  };
 
-  for (auto &pair : ASTFileUnits) {
-    Record.clear();
+  auto addRecordOrUnitData = [&](UnitDependencyKind K, const RecordOrUnitData &Data) {
     Record.push_back(UNIT_DEPENDENCY);
-    Record.push_back(UNIT_DEPEND_KIND_UNIT);
-    if (pair.second != -1) {
-      PathData &pathEntry = PathDataEntries[pair.second];
-      addPath(pathEntry.BitPath);
+    Record.push_back(K);
+    Record.push_back(Data.IsSystem);
+    if (Data.FileIndex != -1) {
+      PathData &pathEntry = PathDataEntries[Data.FileIndex];
+      addFilePathToRecord(pathEntry.BitPath, Record);
       pathEntry.UsedForRecordOrUnit = true;
     } else {
-      addPath(FileBitPath());
+      addFilePathToRecord(FileBitPath(), Record);
     }
-    Stream.EmitRecordWithBlob(AbbrevCode, Record, pair.first);
-  }
-  for (auto &pair : Records) {
+    Stream.EmitRecordWithBlob(AbbrevCode, Record, Data.Name);
+  };
+
+  for (auto &ASTData : ASTFileUnits) {
     Record.clear();
-    Record.push_back(UNIT_DEPENDENCY);
-    Record.push_back(UNIT_DEPEND_KIND_RECORD);
-    PathData &pathEntry = PathDataEntries[pair.second];
-    addPath(pathEntry.BitPath);
-    pathEntry.UsedForRecordOrUnit = true;
-    Stream.EmitRecordWithBlob(AbbrevCode, Record, pair.first);
+    addRecordOrUnitData(UNIT_DEPEND_KIND_UNIT, ASTData);
+  }
+  for (auto &recordData : Records) {
+    Record.clear();
+    addRecordOrUnitData(UNIT_DEPEND_KIND_RECORD, recordData);
   }
   for (auto &pathEntry : PathDataEntries) {
     if (pathEntry.UsedForRecordOrUnit)
@@ -346,7 +366,8 @@ void IndexUnitWriter::writeDependencies(llvm::BitstreamWriter &Stream,
     Record.clear();
     Record.push_back(UNIT_DEPENDENCY);
     Record.push_back(UNIT_DEPEND_KIND_FILE);
-    addPath(pathEntry.BitPath);
+    Record.push_back(pathEntry.IsSystem);
+    addFilePathToRecord(pathEntry.BitPath, Record);
     Stream.EmitRecordWithBlob(AbbrevCode, Record, StringRef());
   }
   Stream.ExitBlock();

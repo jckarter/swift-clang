@@ -30,9 +30,7 @@ using namespace llvm;
 
 namespace {
 
-typedef llvm::function_ref<bool(IndexUnitReader::DependencyKind Kind,
-                                StringRef UnitOrRecordName,
-                                StringRef FilePath)> DependencyReceiver;
+typedef function_ref<bool(const IndexUnitReader::DependencyInfo &)> DependencyReceiver;
 
 class IndexUnitReaderImpl {
   sys::TimeValue ModTime;
@@ -41,9 +39,11 @@ class IndexUnitReaderImpl {
 
 public:
   llvm::BitstreamCursor DependCursor;
+  bool IsSystemUnit;
   StringRef WorkingDir;
   StringRef OutputFile;
   StringRef SysrootPath;
+  SmallString<128> MainFilePath;
   StringRef Target;
   StringRef PathsBuffer;
 
@@ -56,6 +56,10 @@ public:
   StringRef getSysrootPath() const { return SysrootPath; }
   StringRef getTarget() const { return Target; }
 
+  StringRef getMainFilePath() const { return MainFilePath.str(); }
+  bool hasMainFile() const { return !MainFilePath.empty(); }
+  bool isSystemUnit() const { return IsSystemUnit; }
+
   /// Unit dependencies are provided ahead of record ones, record ones
   /// ahead of the file ones.
   bool foreachDependency(DependencyReceiver Receiver);
@@ -63,6 +67,11 @@ public:
   StringRef getPathFromBuffer(size_t Offset, size_t Size) {
     return PathsBuffer.substr(Offset, Size);
   }
+
+  void constructFilePath(SmallVectorImpl<char> &path,
+                         UnitFilePathPrefixKind prefixKind,
+                         size_t dirOffset, size_t dirSize,
+                         size_t filenameOffset, size_t filenameSize);
 };
 
 class IndexUnitBitstreamVisitor : public BitstreamVisitor<IndexUnitBitstreamVisitor> {
@@ -73,6 +82,12 @@ class IndexUnitBitstreamVisitor : public BitstreamVisitor<IndexUnitBitstreamVisi
   size_t OutputFileSize;
   size_t SysrootOffset;
   size_t SysrootSize;
+
+  UnitFilePathPrefixKind MainPrefixKind;
+  size_t MainDirOffset;
+  size_t MainDirSize;
+  size_t MainFilenameOffset;
+  size_t MainFilenameSize;
 
 public:
   IndexUnitBitstreamVisitor(llvm::BitstreamCursor &Stream,
@@ -118,6 +133,8 @@ public:
     case UNIT_INFO_BLOCK_ID: {
       assert(RecID == UNIT_INFO);
       unsigned I = 0;
+      Reader.IsSystemUnit = Record[I++];
+
       // Save these to lookup them up after we get the paths buffer.
       WorkDirOffset = Record[I++];
       WorkDirSize = Record[I++];
@@ -125,6 +142,12 @@ public:
       OutputFileSize = Record[I++];
       SysrootOffset = Record[I++];
       SysrootSize = Record[I++];
+      MainPrefixKind = (UnitFilePathPrefixKind)Record[I++];
+      MainDirOffset = Record[I++];
+      MainDirSize = Record[I++];
+      MainFilenameOffset = Record[I++];
+      MainFilenameSize = Record[I++];
+
       Reader.Target = Blob;
       break;
     }
@@ -135,6 +158,9 @@ public:
       Reader.WorkingDir = Reader.getPathFromBuffer(WorkDirOffset, WorkDirSize);
       Reader.OutputFile = Reader.getPathFromBuffer(OutputFileOffset, OutputFileSize);
       Reader.SysrootPath = Reader.getPathFromBuffer(SysrootOffset, SysrootSize);
+      Reader.constructFilePath(Reader.MainFilePath, MainPrefixKind,
+                               MainDirOffset, MainDirSize,
+                               MainFilenameOffset, MainFilenameSize);
       break;
 
     case UNIT_DEPENDENCIES_BLOCK_ID:
@@ -191,6 +217,7 @@ bool IndexUnitReaderImpl::foreachDependency(DependencyReceiver Receiver) {
       assert(RecID == UNIT_DEPENDENCY);
       unsigned I = 0;
       UnitDependencyKind DK = (UnitDependencyKind)Record[I++];
+      bool isSystem = Record[I++];
       UnitFilePathPrefixKind prefixKind = (UnitFilePathPrefixKind)Record[I++];
       size_t dirPathOffset = Record[I++];
       size_t dirPathSize = Record[I++];
@@ -209,20 +236,9 @@ bool IndexUnitReaderImpl::foreachDependency(DependencyReceiver Receiver) {
       }
 
       SmallString<512> pathBuf;
-      switch (prefixKind) {
-      case UNIT_PATH_PREFIX_NONE:
-        break;
-      case UNIT_PATH_PREFIX_WORKDIR:
-        pathBuf = Reader.getWorkingDirectory();
-        break;
-      case UNIT_PATH_PREFIX_SYSROOT:
-        pathBuf = Reader.getSysrootPath();
-        break;
-      }
-      sys::path::append(pathBuf,
-                        Reader.getPathFromBuffer(dirPathOffset, dirPathSize),
-                        Reader.getPathFromBuffer(fnameOffset, fnameSize));
-      if (!Receiver(DepKind, name, pathBuf.str()))
+      Reader.constructFilePath(pathBuf, prefixKind, dirPathOffset, dirPathSize,
+                               fnameOffset, fnameSize);
+      if (!Receiver(IndexUnitReader::DependencyInfo{DepKind, isSystem, name, pathBuf.str()}))
         return StreamVisit::Abort;
       return StreamVisit::Continue;
     }
@@ -233,6 +249,28 @@ bool IndexUnitReaderImpl::foreachDependency(DependencyReceiver Receiver) {
   std::string Error;
   return Visitor.visit(Error);
 }
+
+void IndexUnitReaderImpl::constructFilePath(SmallVectorImpl<char> &path,
+                       UnitFilePathPrefixKind prefixKind,
+                       size_t dirPathOffset, size_t dirPathSize,
+                       size_t filenameOffset, size_t filenameSize) {
+  StringRef prefix;
+  switch (prefixKind) {
+  case UNIT_PATH_PREFIX_NONE:
+    break;
+  case UNIT_PATH_PREFIX_WORKDIR:
+    prefix = getWorkingDirectory();
+    break;
+  case UNIT_PATH_PREFIX_SYSROOT:
+    prefix = getSysrootPath();
+    break;
+  }
+  path.append(prefix.begin(), prefix.end());
+  sys::path::append(path,
+                    getPathFromBuffer(dirPathOffset, dirPathSize),
+                    getPathFromBuffer(filenameOffset, filenameSize));
+}
+
 
 //===----------------------------------------------------------------------===//
 // IndexUnitReader
@@ -332,14 +370,24 @@ StringRef IndexUnitReader::getSysrootPath() const {
   return IMPL->getSysrootPath();
 }
 
+StringRef IndexUnitReader::getMainFilePath() const {
+  return IMPL->getMainFilePath();
+}
+
 StringRef IndexUnitReader::getTarget() const {
   return IMPL->getTarget();
 }
 
+bool IndexUnitReader::hasMainFile() const {
+  return IMPL->hasMainFile();
+}
+
+bool IndexUnitReader::isSystemUnit() const {
+  return IMPL->isSystemUnit();
+}
+
 /// \c Index is the index in the \c getDependencies array.
 /// Unit dependencies are provided ahead of record ones.
-bool IndexUnitReader::foreachDependency(llvm::function_ref<bool(DependencyKind Kind,
-                                            StringRef UnitOrRecordName,
-                                            StringRef FilePath)> Receiver) {
+bool IndexUnitReader::foreachDependency(DependencyReceiver Receiver) {
   return IMPL->foreachDependency(std::move(Receiver));
 }
