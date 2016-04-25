@@ -363,7 +363,7 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
 
   const FileEntry *RootFile = nullptr;
   bool IsSystemUnit = false;
-  bool isModuleGeneration = CI.getLangOpts().CompilingModule;
+  bool isModuleGeneration = !CI.getLangOpts().CurrentModule.empty();
   if (!isModuleGeneration &&
       CI.getFrontendOpts().ProgramAction != frontend::GeneratePCH) {
     RootFile = SM.getFileEntryForID(SM.getMainFileID());
