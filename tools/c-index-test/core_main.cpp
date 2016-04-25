@@ -287,15 +287,16 @@ static int printUnit(StringRef Filename, raw_ostream &OS) {
     return true;
   }
 
+  OS << "is-system: " << Reader->isSystemUnit() << '\n';
+  OS << "has-main: " << Reader->hasMainFile() << '\n';
+  OS << "main-path: " << Reader->getMainFilePath() << '\n';
   OS << "work-dir: " << Reader->getWorkingDirectory() << '\n';
   OS << "out-file: " << Reader->getOutputFile() << '\n';
   OS << "target: " << Reader->getTarget() << '\n';
   OS << "DEPEND START\n";
   unsigned NumDepends = 0;
-  Reader->foreachDependency([&](IndexUnitReader::DependencyKind Kind,
-                                StringRef unitOrRecordName,
-                                StringRef FilePath) -> bool {
-    switch (Kind) {
+  Reader->foreachDependency([&](const IndexUnitReader::DependencyInfo &Dep) -> bool {
+    switch (Dep.Kind) {
     case IndexUnitReader::DependencyKind::Unit:
       OS << "Unit | "; break;
     case IndexUnitReader::DependencyKind::Record:
@@ -303,7 +304,9 @@ static int printUnit(StringRef Filename, raw_ostream &OS) {
     case IndexUnitReader::DependencyKind::File:
       OS << "File | "; break;
     }
-    OS << FilePath << " | " << unitOrRecordName << '\n';
+    OS << (Dep.IsSystem ? "system" : "user");
+    OS << " | ";
+    OS << Dep.FilePath << " | " << Dep.UnitOrRecordName << '\n';
     ++NumDepends;
     return true;
   });
@@ -325,6 +328,9 @@ static bool printStoreUnit(indexstore::IndexStore &Store, StringRef UnitName,
     return true;
   }
 
+  OS << "is-system: " << Reader.isSystemUnit() << '\n';
+  OS << "has-main: " << Reader.hasMainFile() << '\n';
+  OS << "main-path: " << Reader.getMainFilePath() << '\n';
   OS << "work-dir: " << Reader.getWorkingDirectory() << '\n';
   OS << "out-file: " << Reader.getOutputFile() << '\n';
   OS << "target: " << Reader.getTarget() << '\n';
@@ -339,6 +345,8 @@ static bool printStoreUnit(indexstore::IndexStore &Store, StringRef UnitName,
     case indexstore::IndexUnitDependency::DependencyKind::File:
       OS << "File | "; break;
     }
+    OS << (Dep.isSystem() ? "system" : "user");
+    OS << " | ";
     OS << Dep.getFilePath() << " | " << Dep.getName() << '\n';
     ++NumDepends;
     return true;

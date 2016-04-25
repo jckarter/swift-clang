@@ -21,7 +21,6 @@ namespace llvm {
 }
 
 namespace clang {
-  class Decl;
   class FileEntry;
 
 namespace index {
@@ -29,25 +28,40 @@ namespace index {
 class IndexUnitWriter {
   SmallString<64> UnitsPath;
   std::string OutputFile;
+  const FileEntry *MainFile;
+  bool IsSystemUnit;
   std::string TargetTriple;
   std::string WorkDir;
   std::string SysrootPath;
-  std::vector<const FileEntry *> Files;
+  struct FileEntryData {
+    const FileEntry *File;
+    bool IsSystem;
+  };
+  std::vector<FileEntryData> Files;
   llvm::DenseMap<const FileEntry *, int> IndexByFile;
   llvm::DenseSet<const FileEntry *> SeenASTFiles;
-  std::vector<std::pair<std::string, int>> Records;
-  std::vector<std::pair<std::string, int>> ASTFileUnits;
+  struct RecordOrUnitData {
+    std::string Name;
+    int FileIndex;
+    bool IsSystem;
+  };
+  std::vector<RecordOrUnitData> Records;
+  std::vector<RecordOrUnitData> ASTFileUnits;
 
 public:
+  /// \param MainFile the main file for a compiled source file. This should be
+  /// null for PCH and module units.
+  /// \param IsSystem true for system module units, false otherwise.
   IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
+                  const FileEntry *MainFile, bool IsSystem,
                   StringRef TargetTriple,
                   StringRef SysrootPath);
   ~IndexUnitWriter();
 
-  int addFileDependency(const FileEntry *File);
-  void addRecordFile(StringRef RecordFile, const FileEntry *File);
-  void addASTFileDependency(const FileEntry *File);
-  void addUnitDependency(StringRef UnitFile, const FileEntry *File);
+  int addFileDependency(const FileEntry *File, bool IsSystem);
+  void addRecordFile(StringRef RecordFile, const FileEntry *File, bool IsSystem);
+  void addASTFileDependency(const FileEntry *File, bool IsSystem);
+  void addUnitDependency(StringRef UnitFile, const FileEntry *File, bool IsSystem);
 
   bool write(std::string &Error);
 

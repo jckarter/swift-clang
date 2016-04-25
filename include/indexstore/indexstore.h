@@ -320,6 +320,15 @@ indexstore_unit_reader_get_modification_time(indexstore_unit_reader_t,
                                              int64_t *seconds,
                                              int64_t *nanoseconds);
 
+INDEXSTORE_PUBLIC bool
+indexstore_unit_reader_is_system_unit(indexstore_unit_reader_t);
+
+INDEXSTORE_PUBLIC bool
+indexstore_unit_reader_has_main_file(indexstore_unit_reader_t);
+
+INDEXSTORE_PUBLIC indexstore_string_ref_t
+indexstore_unit_reader_get_main_file(indexstore_unit_reader_t);
+
 INDEXSTORE_PUBLIC indexstore_string_ref_t
 indexstore_unit_reader_get_working_dir(indexstore_unit_reader_t);
 
@@ -342,6 +351,9 @@ typedef enum {
 
 INDEXSTORE_PUBLIC indexstore_unit_dependency_kind_t
 indexstore_unit_dependency_get_kind(indexstore_unit_dependency_t);
+
+INDEXSTORE_PUBLIC bool
+indexstore_unit_dependency_is_system(indexstore_unit_dependency_t);
 
 INDEXSTORE_PUBLIC indexstore_string_ref_t
 indexstore_unit_dependency_get_filepath(indexstore_unit_dependency_t);

@@ -218,12 +218,49 @@ private:
 
 class IndexDependencyCollector : public DependencyCollector {
   bool NeedsSystemDependencies;
+  llvm::SetVector<const FileEntry *> Entries;
+  llvm::BitVector IsSystemByUID;
+  FileManager *FileMgr = nullptr;
+  std::string SysrootPath;
 
 public:
   explicit IndexDependencyCollector(bool NeedsSystemDependencies)
     : NeedsSystemDependencies(NeedsSystemDependencies) {}
 
+  void setFileManager(FileManager *fileMgr) { FileMgr = fileMgr; }
+  void setSysrootPath(StringRef sysroot) { SysrootPath = sysroot; }
+
+  bool isSystemFile(const FileEntry *FE) {
+    auto UID = FE->getUID();
+    return IsSystemByUID.size() > UID && IsSystemByUID[UID];
+  }
+
+  ArrayRef<const FileEntry *> getEntries() const {
+    return Entries.getArrayRef();
+  }
+
+private:
   bool needSystemDependencies() override { return NeedsSystemDependencies; }
+
+  bool sawDependency(StringRef Filename, bool FromModule,
+                     bool IsSystem, bool IsModuleFile, bool IsMissing) override {
+    bool sawIt = DependencyCollector::sawDependency(Filename, FromModule,
+                                                    IsSystem, IsModuleFile,
+                                                    IsMissing);
+    if (auto *FE = FileMgr->getFile(Filename)) {
+      if (sawIt)
+        Entries.insert(FE);
+      // Record system-ness for all files that we pass through.
+      if (IsSystemByUID.size() < FE->getUID()+1)
+        IsSystemByUID.resize(FE->getUID()+1);
+        IsSystemByUID[FE->getUID()] = IsSystem || isInSysroot(Filename);
+    }
+    return sawIt;
+  }
+
+  bool isInSysroot(StringRef Filename) {
+    return !SysrootPath.empty() && Filename.startswith(SysrootPath);
+  }
 };
 
 class IndexRecordActionBase {
@@ -244,6 +281,8 @@ protected:
 
     Preprocessor &PP = CI.getPreprocessor();
     DepCollector.attachToPreprocessor(PP);
+    DepCollector.setFileManager(&CI.getFileManager());
+    DepCollector.setSysrootPath(IndexCtx.getSysrootPath());
 
     return llvm::make_unique<IndexASTConsumer>(IndexCtx);
   }
@@ -305,6 +344,7 @@ protected:
 void IndexRecordActionBase::finish(CompilerInstance &CI) {
   SourceManager &SM = CI.getSourceManager();
   DiagnosticsEngine &Diag = CI.getDiagnostics();
+  HeaderSearch &HS = CI.getPreprocessor().getHeaderSearchInfo();
   StringRef DataPath = RecordOpts.DataDirPath;
 
   std::string Error;
@@ -321,18 +361,38 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
     OutputFile += ".o";
   }
 
-  IndexUnitWriter UnitWriter(DataPath, OutputFile, CI.getTargetOpts().Triple,
+  const FileEntry *RootFile = nullptr;
+  bool IsSystemUnit = false;
+  bool isModuleGeneration = CI.getLangOpts().CompilingModule;
+  if (!isModuleGeneration &&
+      CI.getFrontendOpts().ProgramAction != frontend::GeneratePCH) {
+    RootFile = SM.getFileEntryForID(SM.getMainFileID());
+  }
+  if (isModuleGeneration) {
+    if (auto *Mod = HS.lookupModule(CI.getLangOpts().CurrentModule,
+                                    /*AllowSearch=*/false))
+      IsSystemUnit = Mod->IsSystem;
+  }
+
+  IndexUnitWriter UnitWriter(DataPath, OutputFile,
+                             RootFile, IsSystemUnit,
+                             CI.getTargetOpts().Triple,
                              IndexCtx.getSysrootPath());
 
   FileManager &FileMgr = SM.getFileManager();
-  for (auto &Dep : DepCollector.getDependencies()) {
-    if (const FileEntry *FE = FileMgr.getFile(Dep))
-      UnitWriter.addFileDependency(FE);
+  for (auto *FE : DepCollector.getEntries()) {
+    UnitWriter.addFileDependency(FE, DepCollector.isSystemFile(FE));
   }
+
   if (auto Reader = CI.getModuleManager()) {
     Reader->getModuleManager().visit([&](serialization::ModuleFile &Mod) -> bool {
+      bool isSystemMod = false;
+      if (Mod.isModule()) {
+        if (auto *M = HS.lookupModule(Mod.ModuleName, /*AllowSearch=*/false))
+          isSystemMod = M->IsSystem;
+      }
       if (const FileEntry *FE = FileMgr.getFile(Mod.FileName))
-        UnitWriter.addASTFileDependency(FE);
+        UnitWriter.addASTFileDependency(FE, isSystemMod);
       return true; // skip module dependencies.
     });
   }
@@ -351,7 +411,7 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
       Diag.Report(DiagID) << RecordFile << Error;
       return;
     }
-    UnitWriter.addRecordFile(RecordFile, FE);
+    UnitWriter.addRecordFile(RecordFile, FE, DepCollector.isSystemFile(FE));
   }
 
   if (UnitWriter.write(Error)) {

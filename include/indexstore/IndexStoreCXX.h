@@ -342,6 +342,7 @@ public:
     case INDEXSTORE_UNIT_DEPENDENCY_FILE: return DependencyKind::File;
     }
   }
+  bool isSystem() { return indexstore_unit_dependency_is_system(obj); }
   StringRef getName() { return stringFromIndexStoreStringRef(indexstore_unit_dependency_get_name(obj)); }
   StringRef getFilePath() { return stringFromIndexStoreStringRef(indexstore_unit_dependency_get_filepath(obj)); }
 };
@@ -378,6 +379,12 @@ public:
     return llvm::sys::TimeValue(seconds, nanoseconds);
   }
 
+  bool isSystemUnit() { return indexstore_unit_reader_is_system_unit(obj); }
+  bool hasMainFile() { return indexstore_unit_reader_has_main_file(obj); }
+
+  StringRef getMainFilePath() {
+    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_main_file(obj));
+  }
   StringRef getWorkingDirectory() {
     return stringFromIndexStoreStringRef(indexstore_unit_reader_get_working_dir(obj));
   }

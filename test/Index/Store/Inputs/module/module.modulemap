@@ -1,2 +1,3 @@
 module ModTop { header "ModTop.h" export * }
 module ModDep { header "ModDep.h" export * }
+module ModSystem [system] { header "ModSystem.h" export * }
