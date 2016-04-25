@@ -157,7 +157,6 @@
 // RUN: FileCheck -check-prefix=LINK_IOSSIM_PROFILE %s < %t.log
 // LINK_IOSSIM_PROFILE: {{ld(.exe)?"}}
 // LINK_IOSSIM_PROFILE: libclang_rt.profile_iossim.a
-// LINK_IOSSIM_PROFILE: libclang_rt.ios.a
 
 // RUN: %clang -target arm64-apple-tvos8.3 -mtvos-version-min=8.3 -### %t.o 2> %t.log
 // RUN: FileCheck -check-prefix=LINK_TVOS_ARM64 %s < %t.log
