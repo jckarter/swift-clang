@@ -230,8 +230,6 @@ def index_ignore_system_symbols : Flag<["-"], "index-ignore-system-symbols">, Fl
   HelpText<"Ignore symbols from system headers">;
 def index_record_codegen_name : Flag<["-"], "index-record-codegen-name">, Flags<[CC1Option]>,
   HelpText<"Record the codegen name for symbols">;
-def index_record_system_dependencies : Flag<["-"], "index-record-system-dependencies">, Flags<[CC1Option]>,
-  HelpText<"Record the system header includes">;
 
 // Make sure all other -ccc- options are rejected.
 def ccc_ : Joined<["-"], "ccc-">, Group<internal_Group>, Flags<[Unsupported]>;

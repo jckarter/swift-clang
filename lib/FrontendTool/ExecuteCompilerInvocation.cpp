@@ -168,8 +168,6 @@ CreateFrontendAction(CompilerInstance &CI) {
         index::IndexingOptions::SystemSymbolFilterKind::None;
     }
     RecordOpts.RecordSymbolCodeGenName = FEOpts.IndexRecordCodegenName;
-    RecordOpts.RecordSystemDependencies =
-      FEOpts.IndexRecordSystemDependencies;
     Act = index::createIndexDataRecordingAction(IndexOpts, RecordOpts,
                                                 std::move(Act));
 #endif

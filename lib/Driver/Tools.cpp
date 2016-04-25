@@ -4616,7 +4616,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     Args.AddLastArg(CmdArgs, options::OPT_index_store_path);
     Args.AddLastArg(CmdArgs, options::OPT_index_ignore_system_symbols);
     Args.AddLastArg(CmdArgs, options::OPT_index_record_codegen_name);
-    Args.AddLastArg(CmdArgs, options::OPT_index_record_system_dependencies);
 
     // If '-o' is passed along with '-fsyntax-only' pass it along the cc1
     // invocation so that the index action knows what the out file is.
@@ -4630,7 +4629,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(IdxStorePath);
     CmdArgs.push_back("-index-ignore-system-symbols");
     CmdArgs.push_back("-index-record-codegen-name");
-    CmdArgs.push_back("-index-record-system-dependencies");
   }
 
   // Add preprocessing options like -I, -D, etc. if we are using the
@@ -7626,7 +7624,6 @@ void darwin::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   Args.ClaimAllArgs(options::OPT_index_store_path);
   Args.ClaimAllArgs(options::OPT_index_ignore_system_symbols);
   Args.ClaimAllArgs(options::OPT_index_record_codegen_name);
-  Args.ClaimAllArgs(options::OPT_index_record_system_dependencies);
 
   /// Hack(tm) to ignore linking errors when we are doing ARC migration.
   if (Args.hasArg(options::OPT_ccc_arcmt_check,

@@ -36,7 +36,7 @@ struct IndexingOptions {
 struct RecordingOptions {
   std::string DataDirPath;
   bool RecordSymbolCodeGenName = false;
-  bool RecordSystemDependencies = false;
+  bool RecordSystemDependencies = true;
 };
 
 /// \param WrappedAction another frontend action to wrap over or null.
