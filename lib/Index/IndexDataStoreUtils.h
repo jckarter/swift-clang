@@ -61,6 +61,13 @@ enum UnitDependencyKind {
 };
 static const unsigned UnitDependencyKindBitNum = 2;
 
+enum UnitFilePathPrefixKind {
+  UNIT_PATH_PREFIX_NONE = 0,
+  UNIT_PATH_PREFIX_WORKDIR = 1,
+  UNIT_PATH_PREFIX_SYSROOT = 2,
+};
+static const unsigned UnitFilePathPrefixKindBitNum = 2;
+
 typedef SmallVector<uint64_t, 64> RecordData;
 typedef SmallVectorImpl<uint64_t> RecordDataImpl;
 

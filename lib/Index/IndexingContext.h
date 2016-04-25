@@ -57,6 +57,7 @@ public:
 
   void setASTContext(ASTContext &ctx) { Ctx = &ctx; }
   void setSysrootPath(StringRef path);
+  StringRef getSysrootPath() const { return SysrootPath; }
 
   bool shouldSuppressRefs() const {
     return false;

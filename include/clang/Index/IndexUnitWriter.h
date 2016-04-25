@@ -30,6 +30,8 @@ class IndexUnitWriter {
   SmallString<64> UnitsPath;
   std::string OutputFile;
   std::string TargetTriple;
+  std::string WorkDir;
+  std::string SysrootPath;
   std::vector<const FileEntry *> Files;
   llvm::DenseMap<const FileEntry *, int> IndexByFile;
   llvm::DenseSet<const FileEntry *> SeenASTFiles;
@@ -38,7 +40,8 @@ class IndexUnitWriter {
 
 public:
   IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
-                  StringRef TargetTriple);
+                  StringRef TargetTriple,
+                  StringRef SysrootPath);
   ~IndexUnitWriter();
 
   int addFileDependency(const FileEntry *File);
@@ -53,10 +56,10 @@ public:
   static bool initIndexDirectory(StringRef StorePath, std::string &Error);
 
 private:
-  bool writeUnitInfo(llvm::BitstreamWriter &Stream, SmallString<512> &PathsBuf,
-                     std::string &Error);
-  void writeDependencies(llvm::BitstreamWriter &Stream, SmallString<512> &PathsBuf);
-  void writePaths(llvm::BitstreamWriter &Stream, SmallString<512> &PathsBuf);
+  class PathStorage;
+  void writeUnitInfo(llvm::BitstreamWriter &Stream, PathStorage &PathStore);
+  void writeDependencies(llvm::BitstreamWriter &Stream, PathStorage &PathStore);
+  void writePaths(llvm::BitstreamWriter &Stream, PathStorage &PathStore);
 };
 
 } // end namespace index

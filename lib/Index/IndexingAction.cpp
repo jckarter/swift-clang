@@ -321,7 +321,8 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
     OutputFile += ".o";
   }
 
-  IndexUnitWriter UnitWriter(DataPath, OutputFile, CI.getTargetOpts().Triple);
+  IndexUnitWriter UnitWriter(DataPath, OutputFile, CI.getTargetOpts().Triple,
+                             IndexCtx.getSysrootPath());
 
   FileManager &FileMgr = SM.getFileManager();
   for (auto &Dep : DepCollector.getDependencies()) {
