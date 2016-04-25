@@ -384,6 +384,9 @@ public:
   StringRef getOutputFile() {
     return stringFromIndexStoreStringRef(indexstore_unit_reader_get_output_file(obj));
   }
+  StringRef getSysrootPath() {
+    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_sysroot_path(obj));
+  }
   StringRef getTarget() {
     return stringFromIndexStoreStringRef(indexstore_unit_reader_get_target(obj));
   }

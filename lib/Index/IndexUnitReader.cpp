@@ -328,6 +328,10 @@ StringRef IndexUnitReader::getOutputFile() const {
   return IMPL->getOutputFile();
 }
 
+StringRef IndexUnitReader::getSysrootPath() const {
+  return IMPL->getSysrootPath();
+}
+
 StringRef IndexUnitReader::getTarget() const {
   return IMPL->getTarget();
 }
