@@ -43,6 +43,9 @@ public:
     getModificationTimeForUnit(StringRef UnitFilename, StringRef StorePath,
                                std::string &Error);
 
+  StringRef getProviderIdentifier() const;
+  StringRef getProviderVersion() const;
+
   llvm::sys::TimeValue getModificationTime() const;
   StringRef getWorkingDirectory() const;
   StringRef getOutputFile() const;

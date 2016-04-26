@@ -373,6 +373,13 @@ public:
   bool isInvalid() const { return !isValid(); }
   explicit operator bool() const { return isValid(); }
 
+  StringRef getProviderIdentifier() {
+    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_provider_identifier(obj));
+  }
+  StringRef getProviderVersion() {
+    return stringFromIndexStoreStringRef(indexstore_unit_reader_get_provider_version(obj));
+  }
+
   llvm::sys::TimeValue getModificationTime() {
     int64_t seconds, nanoseconds;
     indexstore_unit_reader_get_modification_time(obj, &seconds, &nanoseconds);

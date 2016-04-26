@@ -38,6 +38,8 @@ class IndexUnitReaderImpl {
   llvm::BitstreamReader BitReader;
 
 public:
+  StringRef ProviderIdentifier;
+  StringRef ProviderVersion;
   llvm::BitstreamCursor DependCursor;
   bool IsSystemUnit;
   StringRef WorkingDir;
@@ -49,6 +51,9 @@ public:
 
   bool init(std::unique_ptr<MemoryBuffer> Buf, sys::TimeValue ModTime,
             std::string &Error);
+
+  StringRef getProviderIdentifier() const { return ProviderIdentifier; }
+  StringRef getProviderVersion() const { return ProviderVersion; }
 
   llvm::sys::TimeValue getModificationTime() const { return ModTime; }
   StringRef getWorkingDirectory() const { return WorkingDir; }
@@ -148,7 +153,12 @@ public:
       MainFilenameOffset = Record[I++];
       MainFilenameSize = Record[I++];
 
-      Reader.Target = Blob;
+      size_t providerIdentifierSize = Record[I++];
+      size_t providerVersionSize = Record[I++];
+      Reader.ProviderIdentifier = Blob.substr(0, providerIdentifierSize);
+      Blob = Blob.drop_front(providerIdentifierSize);
+      Reader.ProviderVersion = Blob.substr(0, providerVersionSize);
+      Reader.Target = Blob.drop_front(providerVersionSize);
       break;
     }
 
@@ -352,6 +362,14 @@ IndexUnitReader::getModificationTimeForUnit(StringRef UnitFilename,
 
 IndexUnitReader::~IndexUnitReader() {
   delete IMPL;
+}
+
+StringRef IndexUnitReader::getProviderIdentifier() const {
+  return IMPL->getProviderIdentifier();
+}
+
+StringRef IndexUnitReader::getProviderVersion() const {
+  return IMPL->getProviderVersion();
 }
 
 llvm::sys::TimeValue IndexUnitReader::getModificationTime() const {

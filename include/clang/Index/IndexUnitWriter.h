@@ -27,6 +27,8 @@ namespace index {
 
 class IndexUnitWriter {
   SmallString<64> UnitsPath;
+  std::string ProviderIdentifier;
+  std::string ProviderVersion;
   std::string OutputFile;
   const FileEntry *MainFile;
   bool IsSystemUnit;
@@ -52,7 +54,9 @@ public:
   /// \param MainFile the main file for a compiled source file. This should be
   /// null for PCH and module units.
   /// \param IsSystem true for system module units, false otherwise.
-  IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
+  IndexUnitWriter(StringRef StorePath,
+                  StringRef ProviderIdentifier, StringRef ProviderVersion,
+                  StringRef OutputFile,
                   const FileEntry *MainFile, bool IsSystem,
                   StringRef TargetTriple,
                   StringRef SysrootPath);
