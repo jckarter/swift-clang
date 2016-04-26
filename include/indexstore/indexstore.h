@@ -315,6 +315,12 @@ indexstore_unit_reader_create(indexstore_t store, const char *unit_name,
 INDEXSTORE_PUBLIC void
 indexstore_unit_reader_dispose(indexstore_unit_reader_t);
 
+INDEXSTORE_PUBLIC indexstore_string_ref_t
+indexstore_unit_reader_get_provider_identifier(indexstore_unit_reader_t);
+
+INDEXSTORE_PUBLIC indexstore_string_ref_t
+indexstore_unit_reader_get_provider_version(indexstore_unit_reader_t);
+
 INDEXSTORE_PUBLIC void
 indexstore_unit_reader_get_modification_time(indexstore_unit_reader_t,
                                              int64_t *seconds,

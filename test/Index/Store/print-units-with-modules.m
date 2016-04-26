@@ -8,6 +8,7 @@
 @import ModSystem;
 
 // CHECK: ModDep.pcm
+// CHECK: provider: clang-
 // CHECK: is-system: 0
 // CHECK: has-main: 0
 // CHECK: main-path: {{$}}

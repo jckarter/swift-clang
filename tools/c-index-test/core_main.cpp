@@ -287,6 +287,7 @@ static int printUnit(StringRef Filename, raw_ostream &OS) {
     return true;
   }
 
+  OS << "provider: " << Reader->getProviderIdentifier() << '-' << Reader->getProviderVersion() << '\n';
   OS << "is-system: " << Reader->isSystemUnit() << '\n';
   OS << "has-main: " << Reader->hasMainFile() << '\n';
   OS << "main-path: " << Reader->getMainFilePath() << '\n';
@@ -328,6 +329,7 @@ static bool printStoreUnit(indexstore::IndexStore &Store, StringRef UnitName,
     return true;
   }
 
+  OS << "provider: " << Reader.getProviderIdentifier() << '-' << Reader.getProviderVersion() << '\n';
   OS << "is-system: " << Reader.isSystemUnit() << '\n';
   OS << "has-main: " << Reader.hasMainFile() << '\n';
   OS << "main-path: " << Reader.getMainFilePath() << '\n';

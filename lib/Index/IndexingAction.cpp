@@ -341,6 +341,19 @@ protected:
 
 } // anonymous namespace
 
+static std::string getClangVersion() {
+  // Try picking the version from an Apple Clang tag.
+  std::string RepositoryPath = getClangRepositoryPath();
+  StringRef BuildNumber = StringRef(RepositoryPath);
+  size_t DashOffset = BuildNumber.find('-');
+  if (BuildNumber.startswith("clang") && DashOffset != StringRef::npos) {
+    BuildNumber = BuildNumber.substr(DashOffset + 1);
+    return BuildNumber;
+  }
+  // Fallback to the generic version.
+  return CLANG_VERSION_STRING;
+}
+
 void IndexRecordActionBase::finish(CompilerInstance &CI) {
   SourceManager &SM = CI.getSourceManager();
   DiagnosticsEngine &Diag = CI.getDiagnostics();
@@ -374,7 +387,9 @@ void IndexRecordActionBase::finish(CompilerInstance &CI) {
       IsSystemUnit = Mod->IsSystem;
   }
 
-  IndexUnitWriter UnitWriter(DataPath, OutputFile,
+  IndexUnitWriter UnitWriter(DataPath,
+                             "clang", getClangVersion(),
+                             OutputFile,
                              RootFile, IsSystemUnit,
                              CI.getTargetOpts().Triple,
                              IndexCtx.getSysrootPath());

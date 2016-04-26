@@ -395,6 +395,18 @@ indexstore_unit_reader_dispose(indexstore_unit_reader_t rdr) {
   delete reader;
 }
 
+indexstore_string_ref_t
+indexstore_unit_reader_get_provider_identifier(indexstore_unit_reader_t rdr) {
+  auto reader = static_cast<IndexUnitReader*>(rdr);
+  return toIndexStoreString(reader->getProviderIdentifier());
+}
+
+indexstore_string_ref_t
+indexstore_unit_reader_get_provider_version(indexstore_unit_reader_t rdr) {
+  auto reader = static_cast<IndexUnitReader*>(rdr);
+  return toIndexStoreString(reader->getProviderVersion());
+}
+
 void
 indexstore_unit_reader_get_modification_time(indexstore_unit_reader_t rdr,
                                              int64_t *seconds,

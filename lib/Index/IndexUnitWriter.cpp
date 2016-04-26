@@ -106,12 +106,17 @@ private:
   }
 };
 
-IndexUnitWriter::IndexUnitWriter(StringRef StorePath, StringRef OutputFile,
+IndexUnitWriter::IndexUnitWriter(StringRef StorePath,
+                                 StringRef ProviderIdentifier,
+                                 StringRef ProviderVersion,
+                                 StringRef OutputFile,
                                  const FileEntry *MainFile, bool IsSystem,
                                  StringRef TargetTriple,
                                  StringRef SysrootPath) {
   this->UnitsPath = StorePath;
   store::makeUnitSubDir(this->UnitsPath);
+  this->ProviderIdentifier = ProviderIdentifier;
+  this->ProviderVersion = ProviderVersion;
   this->OutputFile = OutputFile;
   this->MainFile = MainFile;
   this->IsSystemUnit = IsSystem;
@@ -290,7 +295,9 @@ void IndexUnitWriter::writeUnitInfo(llvm::BitstreamWriter &Stream,
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 10)); // Filename offset
   Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6)); // Filename size
 
-  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // target triple
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 5)); // ProviderIdentifier size
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 5)); // ProviderVersion size
+  Abbrev->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Blob)); // ProviderIdentifier + ProviderVersion + target triple
   unsigned AbbrevCode = Stream.EmitAbbrev(Abbrev);
 
   RecordData Record;
@@ -303,7 +310,13 @@ void IndexUnitWriter::writeUnitInfo(llvm::BitstreamWriter &Stream,
   Record.push_back(PathStore.getPathOffset(SysrootPath));
   Record.push_back(SysrootPath.size());
   addFilePathToRecord(PathStore.getBitPath(MainFile), Record);
-  Stream.EmitRecordWithBlob(AbbrevCode, Record, TargetTriple);
+  Record.push_back(ProviderIdentifier.size());
+  Record.push_back(ProviderVersion.size());
+  SmallString<128> InfoStrings;
+  InfoStrings += ProviderIdentifier;
+  InfoStrings += ProviderVersion;
+  InfoStrings += TargetTriple;
+  Stream.EmitRecordWithBlob(AbbrevCode, Record, InfoStrings);
 
   Stream.ExitBlock();
 }
