@@ -252,7 +252,9 @@ IndexRecordWriter::beginRecord(StringRef Filename, hash_code RecordHash,
   if (std::error_code EC =
           fs::access(RecordPath.c_str(), fs::AccessMode::Exist)) {
     if (EC != errc::no_such_file_or_directory) {
-      Error = EC.message();
+      llvm::raw_string_ostream Err(Error);
+      Err << "could not access record '" << RecordPath
+          << "': " << EC.message();
       return Result::Failure;
     }
   } else {
@@ -297,8 +299,8 @@ IndexRecordWriter::endRecord(std::string &Error,
   TempPath += "-temp-%%%%%%%%";
   int TempFD;
   if (sys::fs::createUniqueFile(TempPath.str(), TempFD, TempPath)) {
-    Error = "failed creating temporary file: ";
-    Error += TempPath.str();
+    llvm::raw_string_ostream Err(Error);
+    Err << "failed to create temporary file: " << TempPath;
     return Result::Failure;
   }
 
@@ -309,7 +311,8 @@ IndexRecordWriter::endRecord(std::string &Error,
   // Atomically move the unique file into place.
   if (std::error_code EC =
           sys::fs::rename(TempPath.c_str(), State.RecordPath.c_str())) {
-    Error = EC.message();
+    llvm::raw_string_ostream Err(Error);
+    Err << "failed to rename '" << TempPath << "' to '" << State.RecordPath << "': " << EC.message();
     return Result::Failure;
   }
 
