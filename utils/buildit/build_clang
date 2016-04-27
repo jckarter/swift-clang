@@ -258,7 +258,7 @@ if [ "$BUILDING_HOST" = "YES" ]; then
       -DCOMPILER_RT_EXTERNALIZE_DEBUGINFO_SKIP_STRIP=On \
       -DCMAKE_OSX_DEPLOYMENT_TARGET=10.7 \
       -DDARWIN_ios_ARCHS="armv7;armv7k;armv7s;arm64" \
-      -DDARWIN_tvos_ARCHS="armv7;armv7s;arm64" \
+      -DDARWIN_tvos_ARCHS="armv7;arm64" \
       -DDARWIN_watchos_ARCHS="armv7;armv7k;arm64" \
       "$LLVM_SRCROOT/projects/compiler-rt/lib/builtins" \
       || exit 1
