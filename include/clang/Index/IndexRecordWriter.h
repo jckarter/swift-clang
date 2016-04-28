@@ -10,7 +10,6 @@
 #ifndef LLVM_CLANG_INDEX_INDEXRECORDWRITER_H
 #define LLVM_CLANG_INDEX_INDEXRECORDWRITER_H
 
-#include "indexstore/indexstore.h"
 #include "clang/Index/IndexSymbol.h"
 #include "llvm/ADT/SmallString.h"
 
@@ -32,9 +31,9 @@ typedef const void *OpaqueDecl;
 /// \note this struct is generally accompanied by a buffer that owns the string
 /// storage.  It should not be stored permanently.
 struct Symbol {
-  indexstore_symbol_kind_t Kind;
-  indexstore_symbol_language_t Lang;
-  indexstore_symbol_sub_kind_t SubKinds;
+  SymbolKind Kind;
+  SymbolLanguage Lang;
+  SymbolSubKindSet SubKinds;
   StringRef Name;
   StringRef USR;
   StringRef CodeGenName;

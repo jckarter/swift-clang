@@ -10,6 +10,7 @@
 #include "clang/Index/IndexRecordReader.h"
 #include "IndexDataStoreUtils.h"
 #include "BitstreamVisitor.h"
+#include "clang/Index/IndexDataStoreSymbolUtils.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Bitcode/BitstreamReader.h"
 #include "llvm/Support/FileSystem.h"
@@ -99,11 +100,12 @@ struct IndexRecordReader::Implementation {
 
     unsigned I = 0;
     RecD.DeclID = Index+1;
-    RecD.Kind = (SymbolKind)read(Record, I);
-    RecD.Lang = (SymbolLanguage)read(Record, I);
-    RecD.SubKinds = read(Record, I);
-    RecD.Roles = read(Record, I);
-    RecD.RelatedRoles = read(Record, I);
+    RecD.Kind = getSymbolKind((indexstore_symbol_kind_t)read(Record, I));
+    RecD.Lang =
+        getSymbolLanguage((indexstore_symbol_language_t)read(Record, I));
+    RecD.SubKinds = getSymbolSubKinds(read(Record, I));
+    RecD.Roles = getSymbolRoles(read(Record, I));
+    RecD.RelatedRoles = getSymbolRoles(read(Record, I));
     size_t NameLen = read(Record, I);
     size_t USRLen = read(Record, I);
     RecD.Name = Blob.substr(0, NameLen);
@@ -153,15 +155,15 @@ struct IndexRecordReader::Implementation {
     }
 
     RecOccur.Dcl = getDeclByID(DeclID);
-    RecOccur.Roles = read(Record, I);
+    RecOccur.Roles = getSymbolRoles(read(Record, I));
     RecOccur.Line = read(Record, I);
     RecOccur.Column = read(Record, I);
 
     unsigned NumRelated = read(Record, I);
     while (NumRelated--) {
-      SymbolRole RelRole = (SymbolRole)read(Record, I);
+      SymbolRoleSet RelRoles = getSymbolRoles(read(Record, I));
       const IndexRecordDecl *RelD = getDeclByID(read(Record, I));
-      RecOccur.Relations.emplace_back((unsigned)RelRole, RelD);
+      RecOccur.Relations.emplace_back(RelRoles, RelD);
     }
 
     return true;

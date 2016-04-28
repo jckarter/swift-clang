@@ -8,8 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "JSONAggregation.h"
-#include "IndexStoreUtils.h"
 #include "indexstore/IndexStoreCXX.h"
+#include "clang/Index/IndexDataStoreSymbolUtils.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Path.h"

@@ -9,6 +9,8 @@
 
 #include "clang/Index/IndexRecordWriter.h"
 #include "IndexDataStoreUtils.h"
+#include "indexstore/indexstore.h"
+#include "clang/Index/IndexDataStoreSymbolUtils.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -146,7 +148,7 @@ static void writeDecls(BitstreamWriter &Stream, ArrayRef<DeclInfo> Decls,
     Scratch.clear();
 
     writer::Symbol SymInfo = GetSymbolForDecl(Info.D, Scratch);
-    assert(SymInfo.Kind != INDEXSTORE_SYMBOL_KIND_UNKNOWN);
+    assert(SymInfo.Kind != SymbolKind::Unknown);
     assert(!SymInfo.USR.empty() && "Recorded decl without USR!");
 
     Blob += SymInfo.Name;
@@ -163,11 +165,11 @@ static void writeDecls(BitstreamWriter &Stream, ArrayRef<DeclInfo> Decls,
 
     Record.clear();
     Record.push_back(REC_DECLINFO);
-    Record.push_back((int)SymInfo.Kind);
-    Record.push_back((int)SymInfo.Lang);
-    Record.push_back(SymInfo.SubKinds);
-    Record.push_back(Info.Roles);
-    Record.push_back(Info.RelatedRoles);
+    Record.push_back(getIndexStoreKind(SymInfo.Kind));
+    Record.push_back(getIndexStoreLang(SymInfo.Lang));
+    Record.push_back(getIndexStoreSubKinds(SymInfo.SubKinds));
+    Record.push_back(getIndexStoreRoles(Info.Roles));
+    Record.push_back(getIndexStoreRoles(Info.RelatedRoles));
     Record.push_back(SymInfo.Name.size());
     Record.push_back(SymInfo.USR.size());
     Stream.EmitRecordWithBlob(AbbrevCode, Record, Blob);
@@ -215,12 +217,12 @@ static void writeDecls(BitstreamWriter &Stream, ArrayRef<DeclInfo> Decls,
     Record.clear();
     Record.push_back(REC_DECLOCCURRENCE);
     Record.push_back(Occur.DeclID);
-    Record.push_back(Occur.Roles);
+    Record.push_back(getIndexStoreRoles(Occur.Roles));
     Record.push_back(Occur.Line);
     Record.push_back(Occur.Column);
     Record.push_back(Occur.Related.size());
     for (auto &Rel : Occur.Related) {
-      Record.push_back(Rel.first.Roles);
+      Record.push_back(getIndexStoreRoles(Rel.first.Roles));
       Record.push_back(Rel.second);
     }
     Stream.EmitRecordWithAbbrev(AbbrevCode, Record);

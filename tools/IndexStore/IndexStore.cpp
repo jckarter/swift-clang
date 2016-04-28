@@ -13,9 +13,10 @@
 
 #include "indexstore/indexstore.h"
 #include "clang/Index/IndexDataStore.h"
+#include "clang/Index/IndexDataStoreSymbolUtils.h"
+#include "clang/Index/IndexRecordReader.h"
 #include "clang/Index/IndexUnitReader.h"
 #include "clang/Index/IndexUnitWriter.h"
-#include "clang/Index/IndexRecordReader.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallString.h"
@@ -163,29 +164,27 @@ indexstore_store_purge_stale_records(indexstore_t c_store,
 
 indexstore_symbol_kind_t
 indexstore_symbol_get_kind(indexstore_symbol_t sym) {
-  return (indexstore_symbol_kind_t)static_cast<IndexRecordDecl*>(sym)->Kind;
+  return getIndexStoreKind(static_cast<IndexRecordDecl *>(sym)->Kind);
 }
 
 indexstore_symbol_language_t
 indexstore_symbol_get_language(indexstore_symbol_t sym) {
-  return (indexstore_symbol_language_t) static_cast<IndexRecordDecl *>(sym)
-      ->Lang;
+  return getIndexStoreLang(static_cast<IndexRecordDecl *>(sym)->Lang);
 }
 
 uint64_t
 indexstore_symbol_get_sub_kinds(indexstore_symbol_t sym) {
-  return (indexstore_symbol_sub_kind_t) static_cast<IndexRecordDecl *>(sym)
-      ->SubKinds;
+  return getIndexStoreSubKinds(static_cast<IndexRecordDecl *>(sym)->SubKinds);
 }
 
 uint64_t
 indexstore_symbol_get_roles(indexstore_symbol_t sym) {
-  return static_cast<IndexRecordDecl*>(sym)->Roles;
+  return getIndexStoreRoles(static_cast<IndexRecordDecl *>(sym)->Roles);
 }
 
 uint64_t
 indexstore_symbol_get_related_roles(indexstore_symbol_t sym) {
-  return static_cast<IndexRecordDecl*>(sym)->RelatedRoles;
+  return getIndexStoreRoles(static_cast<IndexRecordDecl *>(sym)->RelatedRoles);
 }
 
 indexstore_string_ref_t
@@ -208,7 +207,7 @@ indexstore_symbol_get_codegen_name(indexstore_symbol_t sym) {
 
 uint64_t
 indexstore_symbol_relation_get_roles(indexstore_symbol_relation_t sym_rel) {
-  return static_cast<IndexRecordRelation*>(sym_rel)->Roles;
+  return getIndexStoreRoles(static_cast<IndexRecordRelation *>(sym_rel)->Roles);
 }
 
 indexstore_symbol_t
