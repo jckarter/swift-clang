@@ -7,7 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "IndexStoreUtils.h"
 #include "JSONAggregation.h"
 #include "indexstore/IndexStoreCXX.h"
 #include "clang/Frontend/ASTUnit.h"
@@ -16,6 +15,7 @@
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/Index/IndexingAction.h"
 #include "clang/Index/IndexDataConsumer.h"
+#include "clang/Index/IndexDataStoreSymbolUtils.h"
 #include "clang/Index/IndexRecordReader.h"
 #include "clang/Index/IndexUnitReader.h"
 #include "clang/Index/USRGeneration.h"
@@ -474,77 +474,6 @@ static void printSymbol(const IndexRecordOccurrence &Rec, raw_ostream &OS) {
     else
       OS << Rel.Dcl->USR;
     OS << '\n';
-  }
-}
-
-/// Map an indexstore_symbol_kind_t to a SymbolKind, handling unknown values.
-SymbolKind index::getSymbolKind(indexstore_symbol_kind_t K) {
-  switch ((uint64_t)K) {
-  default:
-  case INDEXSTORE_SYMBOL_KIND_UNKNOWN:
-    return SymbolKind::Unknown;
-  case INDEXSTORE_SYMBOL_KIND_MODULE:
-    return SymbolKind::Module;
-  case INDEXSTORE_SYMBOL_KIND_NAMESPACE:
-    return SymbolKind::Namespace;
-  case INDEXSTORE_SYMBOL_KIND_NAMESPACEALIAS:
-    return SymbolKind::NamespaceAlias;
-  case INDEXSTORE_SYMBOL_KIND_MACRO:
-    return SymbolKind::Macro;
-  case INDEXSTORE_SYMBOL_KIND_ENUM:
-    return SymbolKind::Enum;
-  case INDEXSTORE_SYMBOL_KIND_STRUCT:
-    return SymbolKind::Struct;
-  case INDEXSTORE_SYMBOL_KIND_CLASS:
-    return SymbolKind::Class;
-  case INDEXSTORE_SYMBOL_KIND_PROTOCOL:
-    return SymbolKind::Protocol;
-  case INDEXSTORE_SYMBOL_KIND_EXTENSION:
-    return SymbolKind::Extension;
-  case INDEXSTORE_SYMBOL_KIND_UNION:
-    return SymbolKind::Union;
-  case INDEXSTORE_SYMBOL_KIND_TYPEALIAS:
-    return SymbolKind::TypeAlias;
-  case INDEXSTORE_SYMBOL_KIND_FUNCTION:
-    return SymbolKind::Function;
-  case INDEXSTORE_SYMBOL_KIND_VARIABLE:
-    return SymbolKind::Variable;
-  case INDEXSTORE_SYMBOL_KIND_FIELD:
-    return SymbolKind::Field;
-  case INDEXSTORE_SYMBOL_KIND_ENUMCONSTANT:
-    return SymbolKind::EnumConstant;
-  case INDEXSTORE_SYMBOL_KIND_INSTANCEMETHOD:
-    return SymbolKind::InstanceMethod;
-  case INDEXSTORE_SYMBOL_KIND_CLASSMETHOD:
-    return SymbolKind::ClassMethod;
-  case INDEXSTORE_SYMBOL_KIND_STATICMETHOD:
-    return SymbolKind::StaticMethod;
-  case INDEXSTORE_SYMBOL_KIND_INSTANCEPROPERTY:
-    return SymbolKind::InstanceProperty;
-  case INDEXSTORE_SYMBOL_KIND_CLASSPROPERTY:
-    return SymbolKind::ClassProperty;
-  case INDEXSTORE_SYMBOL_KIND_STATICPROPERTY:
-    return SymbolKind::StaticProperty;
-  case INDEXSTORE_SYMBOL_KIND_CONSTRUCTOR:
-    return SymbolKind::Constructor;
-  case INDEXSTORE_SYMBOL_KIND_DESTRUCTOR:
-    return SymbolKind::Destructor;
-  case INDEXSTORE_SYMBOL_KIND_CONVERSIONFUNCTION:
-    return SymbolKind::ConversionFunction;
-  }
-}
-
-/// Map an indexstore_symbol_language_t to a SymbolLanguage, handling unknown
-/// values.
-SymbolLanguage index::getSymbolLanguage(indexstore_symbol_language_t L) {
-  switch ((uint64_t)L) {
-  default: // FIXME: add an unknown language?
-  case INDEXSTORE_SYMBOL_LANG_C:
-    return SymbolLanguage::C;
-  case INDEXSTORE_SYMBOL_LANG_OBJC:
-    return SymbolLanguage::ObjC;
-  case INDEXSTORE_SYMBOL_LANG_CXX:
-    return SymbolLanguage::CXX;
   }
 }
 

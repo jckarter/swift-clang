@@ -49,79 +49,6 @@ ClangIndexRecordWriter::ClangIndexRecordWriter(ASTContext &Ctx,
 
 ClangIndexRecordWriter::~ClangIndexRecordWriter() {}
 
-static indexstore_symbol_kind_t getIndexStoreKind(SymbolKind K) {
-  switch (K) {
-  case SymbolKind::Unknown:
-    return INDEXSTORE_SYMBOL_KIND_UNKNOWN;
-  case SymbolKind::Module:
-    return INDEXSTORE_SYMBOL_KIND_MODULE;
-  case SymbolKind::Namespace:
-    return INDEXSTORE_SYMBOL_KIND_NAMESPACE;
-  case SymbolKind::NamespaceAlias:
-    return INDEXSTORE_SYMBOL_KIND_NAMESPACEALIAS;
-  case SymbolKind::Macro:
-    return INDEXSTORE_SYMBOL_KIND_MACRO;
-  case SymbolKind::Enum:
-    return INDEXSTORE_SYMBOL_KIND_ENUM;
-  case SymbolKind::Struct:
-    return INDEXSTORE_SYMBOL_KIND_STRUCT;
-  case SymbolKind::Class:
-    return INDEXSTORE_SYMBOL_KIND_CLASS;
-  case SymbolKind::Protocol:
-    return INDEXSTORE_SYMBOL_KIND_PROTOCOL;
-  case SymbolKind::Extension:
-    return INDEXSTORE_SYMBOL_KIND_EXTENSION;
-  case SymbolKind::Union:
-    return INDEXSTORE_SYMBOL_KIND_UNION;
-  case SymbolKind::TypeAlias:
-    return INDEXSTORE_SYMBOL_KIND_TYPEALIAS;
-  case SymbolKind::Function:
-    return INDEXSTORE_SYMBOL_KIND_FUNCTION;
-  case SymbolKind::Variable:
-    return INDEXSTORE_SYMBOL_KIND_VARIABLE;
-  case SymbolKind::Field:
-    return INDEXSTORE_SYMBOL_KIND_FIELD;
-  case SymbolKind::EnumConstant:
-    return INDEXSTORE_SYMBOL_KIND_ENUMCONSTANT;
-  case SymbolKind::InstanceMethod:
-    return INDEXSTORE_SYMBOL_KIND_INSTANCEMETHOD;
-  case SymbolKind::ClassMethod:
-    return INDEXSTORE_SYMBOL_KIND_CLASSMETHOD;
-  case SymbolKind::StaticMethod:
-    return INDEXSTORE_SYMBOL_KIND_STATICMETHOD;
-  case SymbolKind::InstanceProperty:
-    return INDEXSTORE_SYMBOL_KIND_INSTANCEPROPERTY;
-  case SymbolKind::ClassProperty:
-    return INDEXSTORE_SYMBOL_KIND_CLASSPROPERTY;
-  case SymbolKind::StaticProperty:
-    return INDEXSTORE_SYMBOL_KIND_STATICPROPERTY;
-  case SymbolKind::Constructor:
-    return INDEXSTORE_SYMBOL_KIND_CONSTRUCTOR;
-  case SymbolKind::Destructor:
-    return INDEXSTORE_SYMBOL_KIND_DESTRUCTOR;
-  case SymbolKind::ConversionFunction:
-    return INDEXSTORE_SYMBOL_KIND_CONVERSIONFUNCTION;
-  }
-  llvm_unreachable("unexpected symbol kind");
-}
-
-static indexstore_symbol_sub_kind_t
-getIndexStoreSubKinds(SymbolSubKindSet SubKinds) {
-  return (indexstore_symbol_sub_kind_t)SubKinds;
-}
-
-static indexstore_symbol_language_t getIndexStoreLang(SymbolLanguage L) {
-  switch (L) {
-  case SymbolLanguage::C:
-    return INDEXSTORE_SYMBOL_LANG_C;
-  case SymbolLanguage::ObjC:
-    return INDEXSTORE_SYMBOL_LANG_OBJC;
-  case SymbolLanguage::CXX:
-    return INDEXSTORE_SYMBOL_LANG_CXX;
-  }
-  llvm_unreachable("unexpected symbol language");
-}
-
 bool ClangIndexRecordWriter::writeRecord(StringRef Filename,
                                          const FileIndexRecord &IdxRecord,
                                          std::string &Error,
@@ -167,9 +94,9 @@ bool ClangIndexRecordWriter::writeRecord(StringRef Filename,
     auto Info = getSymbolInfo(D);
 
     writer::Symbol Sym;
-    Sym.Kind = getIndexStoreKind(Info.Kind);
-    Sym.Lang = getIndexStoreLang(Info.Lang);
-    Sym.SubKinds = getIndexStoreSubKinds(Info.SubKinds);
+    Sym.Kind = Info.Kind;
+    Sym.Lang = Info.Lang;
+    Sym.SubKinds = Info.SubKinds;
 
     auto *ND = dyn_cast<NamedDecl>(D);
     if (ND) {
