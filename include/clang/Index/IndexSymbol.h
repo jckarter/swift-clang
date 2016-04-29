@@ -51,15 +51,24 @@ enum class SymbolKind : uint8_t {
   Constructor,
   Destructor,
   ConversionFunction,
+
+  PrefixOperator,
+  PostfixOperator,
+  InfixOperator,
+  Accessor,
+  Subscript,
+  AssociatedType,
+  GenericTypeParam,
 };
 
 enum class SymbolLanguage {
   C,
   ObjC,
   CXX,
+  Swift,
 };
 
-enum class SymbolSubKind : uint8_t {
+enum class SymbolSubKind : uint32_t {
   Generic                       = 1 << 0,
   TemplatePartialSpecialization = 1 << 1,
   TemplateSpecialization        = 1 << 2,
@@ -67,8 +76,20 @@ enum class SymbolSubKind : uint8_t {
   IBAnnotated                   = 1 << 4,
   IBOutletCollection            = 1 << 5,
   GKInspectable                 = 1 << 6,
+
+  AccessorGetter                = 1 << 7,
+  AccessorSetter                = 1 << 8,
+  AccessorWillSet               = 1 << 9,
+  AccessorDidSet                = 1 << 10,
+  AccessorAddressor             = 1 << 11,
+  AccessorMutableAddressor      = 1 << 12,
+
+  ExtensionOfStruct             = 1 << 13,
+  ExtensionOfClass              = 1 << 14,
+  ExtensionOfEnum               = 1 << 16,
+  ExtensionOfProtocol           = 1 << 17,
 };
-static const unsigned SymbolSubKindBitNum = 7;
+static const unsigned SymbolSubKindBitNum = 18;
 typedef unsigned SymbolSubKindSet;
 
 /// Set of roles that are attributed to symbol occurrences.

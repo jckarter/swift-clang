@@ -1243,6 +1243,8 @@ bool CXIndexDataConsumer::isTemplateImplicitInstantiation(const Decl *D) {
 
 static CXIdxEntityKind getEntityKindFromSymbolKind(SymbolKind K, SymbolLanguage Lang) {
   switch (K) {
+  default:
+    llvm_unreachable("unexpected symbol kind in clang index");
   case SymbolKind::Unknown:
   case SymbolKind::Module:
   case SymbolKind::Macro:
@@ -1305,6 +1307,8 @@ static CXIdxEntityLanguage getEntityLangFromSymbolLang(SymbolLanguage L) {
   case SymbolLanguage::C: return CXIdxEntityLang_C;
   case SymbolLanguage::ObjC: return CXIdxEntityLang_ObjC;
   case SymbolLanguage::CXX: return CXIdxEntityLang_CXX;
+  default:
+    llvm_unreachable("unexpected symbol language in clang index");
   }
   llvm_unreachable("invalid symbol language");
 }

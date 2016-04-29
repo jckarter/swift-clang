@@ -341,6 +341,13 @@ StringRef index::getSymbolKindString(SymbolKind K) {
   case SymbolKind::Constructor: return "constructor";
   case SymbolKind::Destructor: return "destructor";
   case SymbolKind::ConversionFunction: return "coversion-func";
+  case SymbolKind::PrefixOperator: return "prefix-operator";
+  case SymbolKind::PostfixOperator: return "postfix-operator";
+  case SymbolKind::InfixOperator: return "infix-operator";
+  case SymbolKind::Accessor: return "accessor";
+  case SymbolKind::Subscript: return "subscript";
+  case SymbolKind::AssociatedType: return "associated-type";
+  case SymbolKind::GenericTypeParam: return "generic-type-param";
   }
   llvm_unreachable("invalid symbol kind");
 }
@@ -350,6 +357,7 @@ StringRef index::getSymbolLanguageString(SymbolLanguage K) {
   case SymbolLanguage::C: return "C";
   case SymbolLanguage::ObjC: return "ObjC";
   case SymbolLanguage::CXX: return "C++";
+  case SymbolLanguage::Swift: return "Swift";
   }
   llvm_unreachable("invalid symbol language kind");
 }
@@ -367,6 +375,16 @@ void index::applyForEachSymbolSubKind(SymbolSubKindSet SubKinds,
   APPLY_FOR_SUBKIND(IBAnnotated);
   APPLY_FOR_SUBKIND(IBOutletCollection);
   APPLY_FOR_SUBKIND(GKInspectable);
+  APPLY_FOR_SUBKIND(AccessorGetter);
+  APPLY_FOR_SUBKIND(AccessorSetter);
+  APPLY_FOR_SUBKIND(AccessorWillSet);
+  APPLY_FOR_SUBKIND(AccessorDidSet);
+  APPLY_FOR_SUBKIND(AccessorAddressor);
+  APPLY_FOR_SUBKIND(AccessorMutableAddressor);
+  APPLY_FOR_SUBKIND(ExtensionOfStruct);
+  APPLY_FOR_SUBKIND(ExtensionOfClass);
+  APPLY_FOR_SUBKIND(ExtensionOfEnum);
+  APPLY_FOR_SUBKIND(ExtensionOfProtocol);
 
 #undef APPLY_FOR_SUBKIND
 }
@@ -386,6 +404,16 @@ void index::printSymbolSubKinds(SymbolSubKindSet SubKinds, raw_ostream &OS) {
     case SymbolSubKind::IBAnnotated: OS << "IB"; break;
     case SymbolSubKind::IBOutletCollection: OS << "IBColl"; break;
     case SymbolSubKind::GKInspectable: OS << "GKI"; break;
+    case SymbolSubKind::AccessorGetter: OS << "get"; break;
+    case SymbolSubKind::AccessorSetter: OS << "set"; break;
+    case SymbolSubKind::AccessorWillSet: OS << "willSet"; break;
+    case SymbolSubKind::AccessorDidSet: OS << "didSet"; break;
+    case SymbolSubKind::AccessorAddressor: OS << "addr"; break;
+    case SymbolSubKind::AccessorMutableAddressor: OS << "mutAddr"; break;
+    case SymbolSubKind::ExtensionOfStruct: OS << "extStruct"; break;
+    case SymbolSubKind::ExtensionOfClass: OS << "extClass"; break;
+    case SymbolSubKind::ExtensionOfEnum: OS << "extEnum"; break;
+    case SymbolSubKind::ExtensionOfProtocol: OS << "extProt"; break;
     }
   });
 }

@@ -71,6 +71,20 @@ static inline SymbolKind getSymbolKind(indexstore_symbol_kind_t K) {
     return SymbolKind::Destructor;
   case INDEXSTORE_SYMBOL_KIND_CONVERSIONFUNCTION:
     return SymbolKind::ConversionFunction;
+  case INDEXSTORE_SYMBOL_KIND_PREFIXOPERATOR:
+    return SymbolKind::PrefixOperator;
+  case INDEXSTORE_SYMBOL_KIND_POSTFIXOPERATOR:
+    return SymbolKind::PostfixOperator;
+  case INDEXSTORE_SYMBOL_KIND_INFIXOPERATOR:
+    return SymbolKind::InfixOperator;
+  case INDEXSTORE_SYMBOL_KIND_ACCESSOR:
+    return SymbolKind::Accessor;
+  case INDEXSTORE_SYMBOL_KIND_SUBSCRIPT:
+    return SymbolKind::Subscript;
+  case INDEXSTORE_SYMBOL_KIND_ASSOCIATEDTYPE:
+    return SymbolKind::AssociatedType;
+  case INDEXSTORE_SYMBOL_KIND_GENERICTYPEPARAM:
+    return SymbolKind::GenericTypeParam;
   }
 }
 
@@ -85,6 +99,8 @@ static inline SymbolLanguage getSymbolLanguage(indexstore_symbol_language_t L) {
     return SymbolLanguage::ObjC;
   case INDEXSTORE_SYMBOL_LANG_CXX:
     return SymbolLanguage::CXX;
+  case INDEXSTORE_SYMBOL_LANG_SWIFT:
+    return SymbolLanguage::Swift;
   }
 }
 
@@ -155,6 +171,20 @@ static inline indexstore_symbol_kind_t getIndexStoreKind(SymbolKind K) {
     return INDEXSTORE_SYMBOL_KIND_DESTRUCTOR;
   case SymbolKind::ConversionFunction:
     return INDEXSTORE_SYMBOL_KIND_CONVERSIONFUNCTION;
+  case SymbolKind::PrefixOperator:
+    return INDEXSTORE_SYMBOL_KIND_PREFIXOPERATOR;
+  case SymbolKind::PostfixOperator:
+    return INDEXSTORE_SYMBOL_KIND_POSTFIXOPERATOR;
+  case SymbolKind::InfixOperator:
+    return INDEXSTORE_SYMBOL_KIND_INFIXOPERATOR;
+  case SymbolKind::Accessor:
+    return INDEXSTORE_SYMBOL_KIND_ACCESSOR;
+  case SymbolKind::Subscript:
+    return INDEXSTORE_SYMBOL_KIND_SUBSCRIPT;
+  case SymbolKind::AssociatedType:
+    return INDEXSTORE_SYMBOL_KIND_ASSOCIATEDTYPE;
+  case SymbolKind::GenericTypeParam:
+    return INDEXSTORE_SYMBOL_KIND_GENERICTYPEPARAM;
   }
   llvm_unreachable("unexpected symbol kind");
 }
@@ -168,6 +198,8 @@ static inline indexstore_symbol_language_t getIndexStoreLang(SymbolLanguage L) {
     return INDEXSTORE_SYMBOL_LANG_OBJC;
   case SymbolLanguage::CXX:
     return INDEXSTORE_SYMBOL_LANG_CXX;
+  case SymbolLanguage::Swift:
+    return INDEXSTORE_SYMBOL_LANG_SWIFT;
   }
   llvm_unreachable("unexpected symbol language");
 }
