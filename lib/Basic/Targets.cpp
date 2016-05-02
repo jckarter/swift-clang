@@ -256,6 +256,10 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
   if (Triple.isOSDarwin())
     Builder.defineMacro("__MACH__");
 
+  // The Watch ABI uses Dwarf EH.
+  if(Triple.isWatchABI())
+    Builder.defineMacro("__ARM_DWARF_EH__");
+
   PlatformMinVersion = VersionTuple(Maj, Min, Rev);
 }
 
