@@ -1381,7 +1381,9 @@ void CodeGenFunction::EmitAutoVarCleanups(const AutoVarEmission &emission) {
   // Make sure we call @llvm.lifetime.end.  This needs to happen
   // *last*, so the cleanup needs to be pushed *first*.
   if (emission.useLifetimeMarkers()) {
-    EHStack.pushCleanup<CallLifetimeEnd>(NormalAndEHCleanup,
+    CodeGen::CleanupKind Kind =
+        CGM.getLangOpts().CPlusPlus ? NormalAndEHCleanup : NormalCleanup;
+    EHStack.pushCleanup<CallLifetimeEnd>(Kind,
                                          emission.getAllocatedAddress(),
                                          emission.getSizeForLifetimeMarkers());
     EHCleanupScope &cleanup = cast<EHCleanupScope>(*EHStack.begin());

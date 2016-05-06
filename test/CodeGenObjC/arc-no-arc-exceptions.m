@@ -77,4 +77,22 @@ void test4(void) {
     }
 }
 
+// CHECK-LABEL: define void @test5(
+// CHECK: invoke i8* (...) @test5_1()
+// CHECK:   to label %{{.*}} unwind label %[[LPAD:.*]],
+// CHECK: invoke void @objc_exception_throw(i8*
+// CHECK:   to label %{{.*}} unwind label %[[LPAD]],
+// CHECK:     landingpad {
+// CHECK-NOT: landingpad {
+
+id test5_1();
+
+void test5() {
+  @try {
+    id x = test5_1();
+    @throw @"a";
+  } @catch (...) {
+  }
+}
+
 // CHECK: attributes [[NUW]] = { nounwind }
