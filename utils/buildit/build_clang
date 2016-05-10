@@ -354,7 +354,7 @@ find $OBJECT_DIR -type f -perm +111 -exec cp -r {} $SYMROOT/ \; || exit 1
 
 # Strip the dstroot
 STRIP=`xcrun -find strip`
-find $TOOLCHAIN_USR -type f -perm +111 -exec $STRIP -Sxl {} \; || exit 1
+find $TOOLCHAIN_USR -type f -perm +111 -exec $STRIP -S {} \; || exit 1
 
 mv $SYMROOT/clang-$MAJ_MIN_VER $SYMROOT/clang
 mv $SYMROOT/clang-$MAJ_MIN_VER.dSYM $SYMROOT/clang.dSYM
