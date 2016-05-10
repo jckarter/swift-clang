@@ -2121,6 +2121,14 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
     }
   }
 
+  // FIXME: TEMPORARY HACK
+  // ignore UIRefreshControlHosting's __TVOS_PROHIBITED
+  if (II->getName() == "tvos" && IsUnavailable &&
+      isa<ObjCProtocolDecl>(D) &&
+      cast<ObjCProtocolDecl>(D)->getName() == "UIRefreshControlHosting")
+    return;
+  // END FIXME: TEMPORARY HACK
+
   AvailabilityAttr *NewAttr = S.mergeAvailabilityAttr(ND, Attr.getRange(), II,
                                                       Introduced.Version,
                                                       Deprecated.Version,
