@@ -31,7 +31,9 @@ add_llvm_external_project(clang-tools-extra extra)
 add_clang_subdirectory(libclang)
 
 # Include the clang service (Apple Internal).
-add_clang_subdirectory(clang-service)
+if(APPLE)
+  add_clang_subdirectory(clang-service)
+endif()
 
 # Include TAPI (Apple Internal).
 add_llvm_external_project(tapi)
